@@ -160,7 +160,10 @@ run(
     ];
     const failedImages = [];
     page.on("response", (response) => {
-      if (response.request().resourceType() === "image" && !response.ok()) {
+      if (
+        response.request().resourceType() === "image" &&
+        response.status() >= 400
+      ) {
         failedImages.push(`${response.status()} ${response.url()}`);
       }
     });
@@ -238,7 +241,9 @@ run(
     for (let i = 0; i < 4; i += 1) {
       await page.getByRole("button", { name: "Aantal verhogen" }).click();
     }
-    await page.evaluate(() => window.scrollTo(0, 1700));
+    await page
+      .getByRole("heading", { name: "Waarom dit product" })
+      .scrollIntoViewIfNeeded();
     const stickyBuy = page.getByRole("button", { name: "Kopen", exact: true });
     await stickyBuy.waitFor();
 
