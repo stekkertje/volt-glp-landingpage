@@ -129,16 +129,16 @@ export function LandingPage() {
                 </Link>
               )}
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
+              <div className="flex flex-col gap-2">
+                <Button size="lg" className="glow-primary w-full" asChild>
                   <a href="#producten">
                     Bekijk 6 producten
                     <ArrowRight className="size-4" />
                   </a>
                 </Button>
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
+                <Button size="lg" variant="secondary" className="w-full" asChild>
                   <Link to="/product/$slug" params={{ slug: featured.slug }}>
-                    Bestseller · {featured.name}
+                    Bestseller · 4 mg pen
                   </Link>
                 </Button>
               </div>

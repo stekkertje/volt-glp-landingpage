@@ -150,7 +150,9 @@ export const useCartStore = create<CartState>()(
       },
       pushToast: (message, detail, kind = "success") => {
         const id = ++toastSeq;
-        set((s) => ({ toasts: [...s.toasts, { id, message, detail, kind }] }));
+        set(() => ({
+          toasts: [{ id, message, detail, kind }],
+        }));
         window.setTimeout(() => get().dismissToast(id), 3800);
       },
       dismissToast: (id) =>
