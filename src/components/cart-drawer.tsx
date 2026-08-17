@@ -170,7 +170,9 @@ export function CartDrawer() {
                 )}
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
                   <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      freeShipLeft > 0 ? "bg-primary" : "bg-success"
+                    }`}
                     style={{ width: `${freeShipPct}%` }}
                   />
                 </div>

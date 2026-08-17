@@ -40,7 +40,12 @@ export function ProductGallery({
         )}
       </div>
       {images.length > 1 && (
-        <div className={cn("grid gap-2", images.length >= 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            images.length >= 5 ? "grid-cols-5" : images.length === 4 ? "grid-cols-4" : "grid-cols-3",
+          )}
+        >
           {images.map((img, i) => (
             <button
               key={img.src}

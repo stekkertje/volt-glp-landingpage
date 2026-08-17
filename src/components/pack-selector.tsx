@@ -122,7 +122,7 @@ export function PackSelector({
         </div>
       </div>
 
-      <Button size="lg" className="w-full glow-primary" onClick={onAdd}>
+      <Button id="koop-cta" size="lg" className="w-full glow-primary" onClick={onAdd}>
         {stackPct ? (
           <>
             {ctaLabel} · {formatEuro(shownTotal)}

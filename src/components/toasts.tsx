@@ -4,12 +4,17 @@ import { useCartStore } from "@/lib/cart-store";
 export function Toasts() {
   const toasts = useCartStore((s) => s.toasts);
   const dismiss = useCartStore((s) => s.dismissToast);
+  const cartOpen = useCartStore((s) => s.cartOpen);
 
   if (toasts.length === 0) return null;
 
   return (
     <div
-      className="pointer-events-none fixed right-3 z-[80] flex w-[min(100%-1.5rem,22rem)] flex-col gap-2 bottom-[calc(6.5rem+var(--volt-cookie-h,0px))] md:bottom-6 md:right-6"
+      className={`pointer-events-none fixed right-3 z-[80] flex w-[min(100%-1.5rem,22rem)] flex-col gap-2 md:right-6 ${
+        cartOpen
+          ? "top-[calc(var(--grok-banner-h,0px)+5.5rem)]"
+          : "bottom-[calc(6.5rem+var(--volt-cookie-h,0px))] md:bottom-6"
+      }`}
       aria-live="polite"
     >
       {toasts.map((t) => {

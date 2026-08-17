@@ -24,7 +24,10 @@ export function MobileStickyBar() {
 
   useEffect(() => {
     const onScroll = () => {
-      const section = document.getElementById("prijzen") ?? document.getElementById("producten");
+      const section =
+        document.getElementById("koop-cta") ??
+        document.getElementById("prijzen") ??
+        document.getElementById("producten");
       if (!section) {
         setVisible(window.scrollY > 420);
         return;
