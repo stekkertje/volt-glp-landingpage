@@ -117,7 +117,10 @@ run("cart and contact dialogs move focus inside on open", async () => {
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Menu openen" }).click();
-  await page.getByRole("button", { name: "Contact" }).click();
+  await page
+    .getByLabel("Mobiel menu")
+    .getByRole("button", { name: "Contact", exact: true })
+    .click();
   await page.waitForFunction(
     () => document.activeElement?.closest('[role="dialog"]') !== null,
   );
