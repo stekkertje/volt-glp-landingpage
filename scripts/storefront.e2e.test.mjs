@@ -14,13 +14,21 @@ after(async () => {
   await browser?.close();
 });
 
-async function withPage(viewport = { width: 1280, height: 900 }) {
+async function withPage(
+  viewport = { width: 1280, height: 900 },
+  { acceptCookies = true } = {},
+) {
   const context = await browser.newContext({ baseURL, viewport });
   const page = await context.newPage();
-  await page.addInitScript(() => {
-    localStorage.clear();
-    localStorage.setItem("volt-cookie-consent", "accepted");
-  });
+  await page.addInitScript((shouldAcceptCookies) => {
+    if (!sessionStorage.getItem("volt-e2e-initialized")) {
+      localStorage.clear();
+      sessionStorage.setItem("volt-e2e-initialized", "true");
+    }
+    if (shouldAcceptCookies) {
+      localStorage.setItem("volt-cookie-consent", "accepted");
+    }
+  }, acceptCookies);
   return { context, page };
 }
 
@@ -137,3 +145,234 @@ run("shipping promises use the workday wording", async () => {
   assert.equal(await page.getByText(/morgen verzonden/i).count(), 0);
   await context.close();
 });
+
+run(
+  "all product routes, galleries, and the product 404 render correctly",
+  async () => {
+    const { context, page } = await withPage();
+    const products = [
+      ["semaglutide-2mg", "Semaglutide 2mg"],
+      ["semaglutide-4mg-pen", "Semaglutide 4mg · Pen"],
+      ["tirzepatide-10mg", "Tirzepatide 10mg"],
+      ["tirzepatide-20mg-pen", "Tirzepatide 20mg · Pen"],
+      ["retatrutide-10mg", "Retatrutide 10mg"],
+      ["retatrutide-20mg-pen", "Retatrutide 20mg · Pen"],
+    ];
+    const failedImages = [];
+    page.on("response", (response) => {
+      if (response.request().resourceType() === "image" && !response.ok()) {
+        failedImages.push(`${response.status()} ${response.url()}`);
+      }
+    });
+
+    for (const [slug, name] of products) {
+      await go(page, `/product/${slug}`);
+      await page.getByRole("heading", { level: 1, name }).waitFor();
+      assert.match(await page.title(), new RegExp(name.split(" · ")[0]));
+    }
+    assert.deepEqual(failedImages, []);
+
+    await go(page, "/product/semaglutide-4mg-pen");
+    const firstSource = await page
+      .getByRole("img", { name: "Semaglutide 4mg pen voorkant" })
+      .getAttribute("src");
+    await page.getByRole("button", { name: "Afbeelding 2" }).click();
+    assert.notEqual(
+      await page
+        .getByRole("img", { name: "Semaglutide 4mg pen inhoud" })
+        .getAttribute("src"),
+      firstSource,
+    );
+
+    const response = await page.goto("/product/bestaat-niet");
+    assert.equal(response?.status(), 404);
+    await page
+      .getByRole("heading", { name: "Product niet gevonden" })
+      .waitFor();
+    await context.close();
+  },
+);
+
+run(
+  "desktop compound navigation filters and preserves the active selection",
+  async () => {
+    const { context, page } = await withPage();
+    await go(page, "/");
+    const nav = page.getByRole("navigation", { name: "Hoofdmenu" });
+
+    for (const [label, hash] of [
+      ["Semaglutide", "#semaglutide"],
+      ["Tirzepatide", "#tirzepatide"],
+      ["Retatrutide", "#retatrutide"],
+    ]) {
+      await nav.getByRole("link", { name: label, exact: true }).click();
+      await page.getByText("2 producten", { exact: true }).waitFor();
+      assert.equal(new URL(page.url()).hash, hash);
+    }
+
+    await nav.getByRole("link", { name: "Veelgestelde vragen" }).click();
+    assert.equal(new URL(page.url()).hash, "#faq");
+    await page.getByText("2 producten", { exact: true }).waitFor();
+
+    await page
+      .getByRole("contentinfo")
+      .getByRole("link", { name: "Beoordelingen" })
+      .click();
+    assert.equal(new URL(page.url()).hash, "#beoordelingen");
+    await page.getByText("2 producten", { exact: true }).waitFor();
+    await context.close();
+  },
+);
+
+run(
+  "mobile first-visit chrome stays usable and sticky buy keeps PDP quantity",
+  async () => {
+    const { context, page } = await withPage(
+      { width: 390, height: 844 },
+      { acceptCookies: false },
+    );
+    await go(page, "/product/semaglutide-4mg-pen");
+    const cookie = page.getByRole("region", { name: "Functionele opslag" });
+    await cookie.waitFor();
+
+    for (let i = 0; i < 4; i += 1) {
+      await page.getByRole("button", { name: "Aantal verhogen" }).click();
+    }
+    await page.evaluate(() => window.scrollTo(0, 1700));
+    const stickyBuy = page.getByRole("button", { name: "Kopen", exact: true });
+    await stickyBuy.waitFor();
+
+    const stickyBox = await stickyBuy.evaluate((element) =>
+      element.closest(".fixed")?.getBoundingClientRect().toJSON(),
+    );
+    const cookieBox = await cookie.evaluate((element) =>
+      element.getBoundingClientRect().toJSON(),
+    );
+    assert.ok(stickyBox && cookieBox);
+    assert.ok(stickyBox.bottom <= cookieBox.top + 2);
+
+    await stickyBuy.click();
+    await page.getByRole("heading", { name: /Winkelwagen\s*\(5\)/ }).waitFor();
+    await context.close();
+  },
+);
+
+run("mobile menu closes on outside click and real scroll", async () => {
+  const { context, page } = await withPage({ width: 390, height: 844 });
+  await go(page, "/");
+  const menu = page.getByLabel("Mobiel menu");
+
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  await menu.waitFor();
+  await page
+    .locator("section.hero-grid")
+    .click({ position: { x: 10, y: 500 } });
+  await page.getByRole("button", { name: "Menu openen" }).waitFor();
+
+  await page.getByRole("button", { name: "Menu openen" }).click();
+  await page.waitForTimeout(550);
+  await page.mouse.wheel(0, 300);
+  await page.getByRole("button", { name: "Menu openen" }).waitFor();
+  await context.close();
+});
+
+run(
+  "footer contact flow validates, traps focus, restores focus, and submits",
+  async () => {
+    const { context, page } = await withPage();
+    await go(page, "/");
+    const trigger = page
+      .getByRole("contentinfo")
+      .getByRole("button", { name: "Contact", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Contact" });
+    await dialog.waitFor();
+
+    for (let i = 0; i < 12; i += 1) {
+      await page.keyboard.press("Tab");
+      assert.equal(
+        await page.evaluate(
+          () => document.activeElement?.closest('[role="dialog"]') !== null,
+        ),
+        true,
+      );
+    }
+
+    await dialog.getByRole("button", { name: "Verstuur bericht" }).click();
+    for (const field of ["contact-name", "contact-email", "contact-message"]) {
+      assert.equal(
+        await page.locator(`#${field}`).getAttribute("aria-invalid"),
+        "true",
+      );
+    }
+
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(
+      () => document.activeElement?.closest('[role="dialog"]') === null,
+    );
+    assert.equal(
+      await trigger.evaluate((element) => document.activeElement === element),
+      true,
+    );
+
+    await trigger.click();
+    await page.locator("#contact-name").fill("Sanne");
+    await page.locator("#contact-email").fill("sanne@example.nl");
+    await page
+      .locator("#contact-message")
+      .fill("Ik heb een vraag over de levering van mijn bestelling.");
+    await page.getByRole("button", { name: "Verstuur bericht" }).click();
+    await page.getByText("Bericht verstuurd").waitFor();
+    await context.close();
+  },
+);
+
+run("cart persists and applies both stack discount tiers", async () => {
+  const { context, page } = await withPage();
+  await go(page, "/");
+  await page
+    .getByRole("button", { name: "In winkelwagen", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await page
+    .getByRole("button", { name: "Winkelwagen openen, 1 product" })
+    .first()
+    .click();
+
+  const increase = page.getByRole("button", {
+    name: "Aantal verhogen in winkelwagen",
+  });
+  for (let i = 0; i < 4; i += 1) await increase.click();
+  await page.getByText("Stapelkorting (10%)").waitFor();
+  for (let i = 0; i < 5; i += 1) await increase.click();
+  await page.getByText("Stapelkorting (20%)").waitFor();
+  await page.getByText("Gratis verzending bereikt").waitFor();
+  await context.close();
+});
+
+run(
+  "home and PDP have no horizontal overflow at mobile and desktop widths",
+  async () => {
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      const { context, page } = await withPage(viewport);
+      for (const path of ["/", "/product/retatrutide-20mg-pen"]) {
+        await go(page, path);
+        assert.equal(
+          await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth <=
+              document.documentElement.clientWidth,
+          ),
+          true,
+        );
+      }
+      await context.close();
+    }
+  },
+);
