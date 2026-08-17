@@ -244,7 +244,7 @@ run(
     await page
       .getByRole("heading", { name: "Waarom dit product" })
       .scrollIntoViewIfNeeded();
-  await page.evaluate(() => window.scrollBy(0, 400));
+    await page.evaluate(() => window.scrollBy(0, 400));
     const stickyBuy = page.getByRole("button", { name: "Kopen", exact: true });
     await stickyBuy.waitFor();
 
@@ -314,11 +314,8 @@ run(
 
     await page.keyboard.press("Escape");
     await page.waitForFunction(
-      () => document.activeElement?.closest('[role="dialog"]') === null,
-    );
-    assert.equal(
-      await trigger.evaluate((element) => document.activeElement === element),
-      true,
+      (element) => document.activeElement === element,
+      await trigger.elementHandle(),
     );
 
     await trigger.click();
