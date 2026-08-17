@@ -12,6 +12,7 @@ import {
 } from "@/lib/product";
 
 export const FREE_SHIPPING_CENTS = SITE.freeShippingCents;
+export const MAX_LINE_QTY = 10;
 
 export type CartLine = {
   slug: ProductSlug;
@@ -82,7 +83,7 @@ export const useCartStore = create<CartState>()(
       },
       setSelectedOption: (optionId) => set({ selectedOptionId: optionId }),
       setSelectedQty: (qty) =>
-        set({ selectedQty: Math.min(10, Math.max(1, qty)) }),
+        set({ selectedQty: Math.min(MAX_LINE_QTY, Math.max(1, qty)) }),
       addToCart: (slug, optionId, qty) => {
         const product = getProduct(slug ?? get().selectedSlug);
         if (!product) return;
@@ -93,13 +94,17 @@ export const useCartStore = create<CartState>()(
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
           );
+          const nextQty = Math.min(
+            MAX_LINE_QTY,
+            (existing?.qty ?? 0) + addQty,
+          );
           const lines = existing
             ? s.lines.map((l) =>
                 lineKey(l.slug, l.optionId) === lineKey(product.slug, opt)
-                  ? { ...l, qty: l.qty + addQty }
+                  ? { ...l, qty: nextQty }
                   : l,
               )
-            : [...s.lines, { slug: product.slug, optionId: opt, qty: addQty }];
+            : [...s.lines, { slug: product.slug, optionId: opt, qty: nextQty }];
           return {
             lines,
             cartOpen: true,
@@ -119,7 +124,9 @@ export const useCartStore = create<CartState>()(
           }
           return {
             lines: s.lines.map((l) =>
-              l.slug === slug && l.optionId === optionId ? { ...l, qty } : l,
+              l.slug === slug && l.optionId === optionId
+                ? { ...l, qty: Math.min(MAX_LINE_QTY, Math.max(1, qty)) }
+                : l,
             ),
           };
         });

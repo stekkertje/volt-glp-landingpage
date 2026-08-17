@@ -5,7 +5,12 @@ import {
   unitPriceCents,
   type Product,
 } from "@/lib/product";
-import { useCartStore, cartCount, stackDiscountPct } from "@/lib/cart-store";
+import {
+  MAX_LINE_QTY,
+  useCartStore,
+  cartCount,
+  stackDiscountPct,
+} from "@/lib/cart-store";
 import { formatEuro, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeliveryPromise } from "@/components/delivery-promise";
@@ -132,8 +137,9 @@ export function PackSelector({
           </span>
           <button
             type="button"
-            className="flex size-10 items-center justify-center text-muted hover:text-fg"
+            className="flex size-10 items-center justify-center text-muted hover:text-fg disabled:opacity-40"
             onClick={() => setSelectedQty(qty + 1)}
+            disabled={qty >= MAX_LINE_QTY}
             aria-label="Aantal verhogen"
           >
             <Plus className="size-4" />
