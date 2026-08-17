@@ -92,7 +92,7 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 - Foto's wissen of terugzetten
 - `GROK.md` terugzetten naar pre-workout
 - e10e `cutoff.ts` (main's cutoff is slimmer: echte volgende werkdag)
-- `scripts/shop-qa.mjs` van e10e (zoekt knop "Accepterer", UI zegt "Begrepen")
+- `scripts/shop-qa.mjs` van e10e (zoekt knop "Accepteren", UI zegt "Begrepen")
 - `cursor/setup-dev-environment-ddd5`, `fbac`, `ef11`, `8cfd`
 
 ### Check
