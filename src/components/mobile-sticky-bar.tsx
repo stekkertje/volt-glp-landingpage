@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
 import { useCartStore, cartCount } from "@/lib/cart-store";
-import { getProduct, unitPriceCents } from "@/lib/product";
+import { getProduct, productsBySubcat, unitPriceCents } from "@/lib/product";
+import { useCatalogFilter } from "@/lib/catalog-filter";
 import { formatEuro } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +19,15 @@ export function MobileStickyBar() {
   const [visible, setVisible] = useState(false);
 
   const onProduct = pathname.startsWith("/product/");
-  const product = getProduct(selectedSlug);
+  const filter = useCatalogFilter((s) => s.filter);
+  const selected = getProduct(selectedSlug);
+  const filtered = onProduct ? [] : productsBySubcat(filter);
+  const product =
+    onProduct || !selected
+      ? selected
+      : filter !== "all" && selected.subcat !== filter
+        ? (filtered[0] ?? selected)
+        : selected;
   const count = cartCount(lines);
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import { formatEuro } from "@/lib/utils";
 import { Stars } from "@/components/stars";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/cart-store";
-import { getDefaultOptionId, type Product } from "@/lib/product";
+import { getDefaultOptionId, pricePerWeekCents, type Product } from "@/lib/product";
 
 export function ProductCard({ product }: { product: Product }) {
   const addToCart = useCartStore((s) => s.addToCart);
@@ -66,6 +66,12 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
         <p className="text-xs text-dim">{product.unit}</p>
+        <p className="mt-1 text-xs text-muted">
+          ±{product.weeksAtStart} weken bij startdosis · {formatEuro(pricePerWeekCents(product))}/week
+        </p>
+        {product.form === "vial" && (
+          <p className="mt-1 text-xs text-dim">Bac water inbegrepen · spuiten optioneel</p>
+        )}
         <div className="mt-4 flex gap-2">
           <Button asChild variant="secondary" size="sm" className="flex-1">
             <Link to="/product/$slug" params={{ slug: product.slug }}>
@@ -75,7 +81,7 @@ export function ProductCard({ product }: { product: Product }) {
           <Button
             size="sm"
             className="flex-1"
-            onClick={() => addToCart(product.slug, getDefaultOptionId(product))}
+            onClick={() => addToCart(product.slug, getDefaultOptionId(product), 1)}
           >
             In winkelwagen
           </Button>

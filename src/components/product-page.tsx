@@ -3,6 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { Truck, MapPinned, Package, Headphones, Check, ShieldCheck, RotateCcw } from "lucide-react";
 import {
   relatedProducts,
+  siblingProduct,
+  reviewsForProduct,
   type Product,
   getDefaultOptionId,
   unitPriceCents,
@@ -26,12 +28,13 @@ export function ProductPage({ product }: { product: Product }) {
 
   useEffect(() => {
     setSelected(product.slug, getDefaultOptionId(product));
-  }, [product.slug, setSelected]);
+  }, [product, setSelected]);
 
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);
   const related = relatedProducts(product.slug, 3);
-  const sibling = related.find((p) => p.subcat === product.subcat);
+  const sibling = siblingProduct(product);
+  const productReviews = reviewsForProduct(product);
 
   return (
     <SiteShell>
@@ -66,7 +69,7 @@ export function ProductPage({ product }: { product: Product }) {
               <p className="mt-2 text-sm text-muted">{product.listing}</p>
 
               <a
-                href="/#beoordelingen"
+                href="#reviews"
                 className="mt-3 flex flex-wrap items-center gap-2 rounded-full w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Stars rating={product.rating} />
@@ -189,10 +192,54 @@ export function ProductPage({ product }: { product: Product }) {
         </div>
       </section>
 
+      {productReviews.length > 0 && (
+        <section id="reviews" className="border-t border-border scroll-mt-28">
+          <div className="container-max section-pad py-16">
+            <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-extrabold tracking-tight">Beoordelingen</h2>
+                <p className="mt-1 text-sm text-muted">
+                  {product.rating} · {product.reviewCount} beoordelingen voor {product.subcat}
+                </p>
+              </div>
+              <a href="/#beoordelingen" className="text-sm font-semibold text-primary hover:underline">
+                Alle ervaringen →
+              </a>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {productReviews.map((r) => (
+                <article
+                  key={r.name}
+                  className="flex flex-col rounded-xl border border-border bg-surface p-6 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold tracking-tight text-fg">{r.name}</p>
+                      <p className="text-xs text-muted">{r.role}</p>
+                    </div>
+                    {r.verified && (
+                      <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-success">
+                        Geverifieerd
+                      </span>
+                    )}
+                  </div>
+                  <Stars rating={r.rating} size="sm" className="mt-3" />
+                  <h3 className="mt-3 text-base font-bold tracking-tight text-fg">“{r.title}”</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{r.text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {related.length > 0 && (
         <section className="border-t border-border bg-bg-elevated">
           <div className="container-max section-pad py-16">
-            <h2 className="text-2xl font-extrabold tracking-tight mb-6">Andere sterkte / vorm</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">Andere sterkte / vorm</h2>
+            <p className="mt-1 mb-6 text-sm text-muted">
+              Zelfde stof in een andere vorm, plus andere GLP-1 opties om te vergelijken.
+            </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((p) => (
                 <ProductCard key={p.slug} product={p} />

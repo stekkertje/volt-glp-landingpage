@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function ProductGallery({
@@ -9,6 +9,11 @@ export function ProductGallery({
   className?: string;
 }) {
   const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    setActive(0);
+  }, [images]);
+
   const current = images[active] ?? images[0];
   if (!current) return null;
 
@@ -40,19 +45,19 @@ export function ProductGallery({
         )}
       </div>
       {images.length > 1 && (
-        <div className={cn("grid gap-2", images.length >= 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {images.map((img, i) => (
             <button
               key={img.src}
               type="button"
               onClick={() => setActive(i)}
               className={cn(
-                "overflow-hidden rounded-lg border-2 transition",
+                "size-16 shrink-0 overflow-hidden rounded-lg border-2 transition sm:size-20",
                 i === active ? "border-primary" : "border-transparent opacity-80 hover:opacity-100",
               )}
               aria-label={`Toon ${img.alt}`}
             >
-              <img src={img.src} alt="" className="aspect-square w-full object-cover" />
+              <img src={img.src} alt="" className="size-full object-cover" />
             </button>
           ))}
         </div>

@@ -169,12 +169,16 @@ export function SiteHeader() {
 
   return (
     <>
-      <div style={{ height: headerH }} aria-hidden className="shrink-0" />
+      <div
+        style={{ height: `calc(${headerH}px + var(--grok-banner-h, 0px))` }}
+        aria-hidden
+        className="shrink-0"
+      />
 
       <div
         ref={chromeRef}
         className={cn(
-          "fixed left-0 right-0 top-0 z-50 transition-transform duration-300 ease-out will-change-transform",
+          "fixed left-0 right-0 top-[var(--grok-banner-h,0px)] z-50 transition-transform duration-300 ease-out will-change-transform",
           hidden && !open ? "-translate-y-full pointer-events-none" : "translate-y-0",
         )}
       >

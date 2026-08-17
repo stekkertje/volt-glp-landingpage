@@ -63,6 +63,19 @@ export const SUBCATS: { id: Subcat | "all"; label: string; hash: string }[] = [
   { id: "Retatrutide", label: "Retatrutide", hash: "retatrutide" },
 ];
 
+export const PRODUCT_HASHES = new Set(SUBCATS.map((s) => s.hash));
+
+export const SYRINGE_PACK_COUNT = 10;
+
+export function hashToFilter(hash: string): Subcat | "all" | null {
+  const h = hash.replace("#", "").toLowerCase();
+  if (h === "semaglutide") return "Semaglutide";
+  if (h === "tirzepatide") return "Tirzepatide";
+  if (h === "retatrutide") return "Retatrutide";
+  if (h === "producten") return "all";
+  return null;
+}
+
 function imgs(slug: string, files: string[], alts: string[]) {
   return files.map((file, i) => ({
     src: `/images/producten/${file}`,
@@ -117,7 +130,7 @@ const PRODUCT_LIST: Product[] = [
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "10 insulinespuiten",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -226,7 +239,7 @@ const PRODUCT_LIST: Product[] = [
     weeksAtStart: 8,
     options: [
       { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 8750 },
     ],
   },
   {
@@ -319,7 +332,7 @@ const PRODUCT_LIST: Product[] = [
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 9650 },
     ],
   },
   {
@@ -421,6 +434,10 @@ export function relatedProducts(slug: ProductSlug, limit = 3): Product[] {
   const same = PRODUCTS.filter((p) => p.slug !== slug && p.subcat === current.subcat);
   const rest = PRODUCTS.filter((p) => p.slug !== slug && p.subcat !== current.subcat);
   return [...same, ...rest].slice(0, limit);
+}
+
+export function siblingProduct(product: Product): Product | undefined {
+  return PRODUCTS.find((p) => p.slug !== product.slug && p.subcat === product.subcat);
 }
 
 export const COMPOUNDS = [
@@ -544,6 +561,16 @@ export const REVIEWS: Review[] = [
   },
 ];
 
+export function reviewsForProduct(product: Product): Review[] {
+  const sub = product.subcat.toLowerCase();
+  const formHint = product.form === "pen" ? "pen" : product.unit.toLowerCase();
+  const bySub = REVIEWS.filter((r) => r.role.toLowerCase().includes(sub));
+  const exact = bySub.filter((r) => r.role.toLowerCase().includes(formHint));
+  if (exact.length) return exact;
+  if (bySub.length) return bySub;
+  return REVIEWS.slice(0, 2);
+}
+
 export const RATING_BREAKDOWN = [
   { stars: 5, pct: 78 },
   { stars: 4, pct: 16 },
@@ -574,10 +601,10 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Alleen bij vials: Geen extra's, of Insuline spuiten",
-          "Retatrutide 10mg: extra's + €2,00",
-          "Semaglutide 2mg en Tirzepatide 10mg: extra's + €2,50",
-          "Pennen hebben geen extra-optie",
+          "Alleen bij vials: Geen extra's, of 10 insulinespuiten",
+          "Retatrutide 10mg: 10 spuiten + €2,00",
+          "Semaglutide 2mg en Tirzepatide 10mg: 10 spuiten + €2,50",
+          "Pennen hebben geen extra-optie. Bac water zit bij elke vial.",
         ],
       },
     ],

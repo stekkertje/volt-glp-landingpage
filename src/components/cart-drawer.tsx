@@ -10,6 +10,8 @@ import {
   stackDiscountPct,
   lineLabel,
   FREE_SHIPPING_CENTS,
+  MAX_LINE_QTY,
+  DISCOUNT_CODE,
 } from "@/lib/cart-store";
 import { getProduct, unitPriceCents } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
@@ -136,6 +138,7 @@ export function CartDrawer() {
                             type="button"
                             className="flex size-9 items-center justify-center text-muted hover:text-fg"
                             onClick={() => setLineQty(line.slug, line.optionId, line.qty + 1)}
+                            disabled={line.qty >= MAX_LINE_QTY}
                             aria-label="Aantal verhogen in winkelwagen"
                           >
                             <Plus className="size-3.5" />
@@ -206,6 +209,11 @@ export function CartDrawer() {
                       Toepassen
                     </Button>
                   </form>
+                )}
+                {discountApplied && (
+                  <p className="mt-2 text-xs font-semibold text-success">
+                    {DISCOUNT_CODE} is actief · 10% extra op je subtotaal
+                  </p>
                 )}
               </div>
 

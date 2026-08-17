@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Truck,
@@ -21,6 +21,8 @@ import {
   FAQS,
   RATING_BREAKDOWN,
   productsBySubcat,
+  hashToFilter,
+  PRODUCT_HASHES,
   type Subcat,
 } from "@/lib/product";
 import { formatEuro, cn } from "@/lib/utils";
@@ -36,21 +38,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useContactStore } from "@/lib/contact-store";
-
-const PRODUCT_HASHES = new Set(["semaglutide", "tirzepatide", "retatrutide", "producten"]);
-
-function hashToFilter(hash: string): Subcat | "all" | null {
-  const h = hash.replace("#", "").toLowerCase();
-  if (h === "semaglutide") return "Semaglutide";
-  if (h === "tirzepatide") return "Tirzepatide";
-  if (h === "retatrutide") return "Retatrutide";
-  if (h === "producten") return "all";
-  return null;
-}
+import { useCatalogFilter } from "@/lib/catalog-filter";
 
 export function LandingPage() {
   const openContact = useContactStore((s) => s.openContact);
-  const [filter, setFilter] = useState<Subcat | "all">("all");
+  const filter = useCatalogFilter((s) => s.filter);
+  const setFilter = useCatalogFilter((s) => s.setFilter);
 
   useEffect(() => {
     const apply = () => {
@@ -66,7 +59,7 @@ export function LandingPage() {
     apply();
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
-  }, []);
+  }, [setFilter]);
 
   const setFilterAndHash = (id: Subcat | "all") => {
     setFilter(id);
@@ -183,6 +176,9 @@ export function LandingPage() {
               <img
                 src={featured.images[0]?.src}
                 alt={featured.images[0]?.alt ?? featured.name}
+                width={640}
+                height={640}
+                fetchPriority="high"
                 className="relative z-10 mx-auto w-full max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md"
               />
               <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
@@ -190,8 +186,11 @@ export function LandingPage() {
                   Bestseller
                 </p>
                 <p className="text-sm font-bold tracking-tight">{featured.name}</p>
-                <p className="text-sm font-extrabold tabular-nums text-fg">
-                  {formatEuro(featured.priceCents)}
+                <p className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-extrabold tabular-nums text-fg">
+                    {formatEuro(featured.priceCents)}
+                  </span>
+                  <span className="text-xs font-semibold text-primary">Bekijk product →</span>
                 </p>
               </div>
             </Link>

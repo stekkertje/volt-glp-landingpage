@@ -1,11 +1,25 @@
-const ITEMS = [
+import { useEffect, useState } from "react";
+import { isPastCutoff } from "@/lib/cutoff";
+
+const ITEMS_OPEN = [
   "Gratis verzending vanaf €100",
   "Voor 23:00 besteld, morgen verzonden",
   "Discreet verpakt",
 ] as const;
 
+const ITEMS_CLOSED = [
+  "Gratis verzending vanaf €100",
+  "Na 23:00: verzending volgende werkdag",
+  "Discreet verpakt",
+] as const;
+
 export function AnnounceBar() {
-  const track = [...ITEMS, ...ITEMS, ...ITEMS, ...ITEMS];
+  const [items, setItems] = useState<readonly string[]>(ITEMS_OPEN);
+  const track = [...items, ...items, ...items, ...items];
+
+  useEffect(() => {
+    setItems(isPastCutoff() ? ITEMS_CLOSED : ITEMS_OPEN);
+  }, []);
 
   return (
     <div className="relative overflow-hidden bg-fg text-bg">

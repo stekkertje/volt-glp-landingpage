@@ -3,12 +3,14 @@ import {
   getDefaultOptionId,
   getOption,
   unitPriceCents,
+  SYRINGE_PACK_COUNT,
   type Product,
 } from "@/lib/product";
 import {
   useCartStore,
   cartCount,
   stackDiscountPct,
+  MAX_LINE_QTY,
 } from "@/lib/cart-store";
 import { formatEuro, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,8 +49,8 @@ export function PackSelector({
       {product.options.length > 0 && (
         <>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te injecteren. Kies of je
-            die extra wilt meenemen.
+            Bac water zit bij de vial. Om te injecteren heb je insulinespuiten nodig. Het extraatje
+            is een set van {SYRINGE_PACK_COUNT} stuks.
           </p>
           <div className="grid gap-2.5" role="radiogroup" aria-label="Kies extra's">
             {product.options.map((p) => {
@@ -114,6 +116,7 @@ export function PackSelector({
             type="button"
             className="flex size-10 items-center justify-center text-muted hover:text-fg"
             onClick={() => setSelectedQty(qty + 1)}
+            disabled={qty >= MAX_LINE_QTY}
             aria-label="Aantal verhogen"
           >
             <Plus className="size-4" />

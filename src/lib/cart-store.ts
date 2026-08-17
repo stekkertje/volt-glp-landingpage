@@ -12,6 +12,8 @@ import {
 } from "@/lib/product";
 
 export const FREE_SHIPPING_CENTS = SITE.freeShippingCents;
+export const MAX_LINE_QTY = 10;
+export const DISCOUNT_CODE = "VOLT10";
 
 export type CartLine = {
   slug: ProductSlug;
@@ -81,12 +83,12 @@ export const useCartStore = create<CartState>()(
         }));
       },
       setSelectedOption: (optionId) => set({ selectedOptionId: optionId }),
-      setSelectedQty: (qty) => set({ selectedQty: Math.min(10, Math.max(1, qty)) }),
+      setSelectedQty: (qty) => set({ selectedQty: Math.min(MAX_LINE_QTY, Math.max(1, qty)) }),
       addToCart: (slug, optionId, qty) => {
         const product = getProduct(slug ?? get().selectedSlug);
         if (!product) return;
         const opt = optionId ?? get().selectedOptionId ?? getDefaultOptionId(product);
-        const addQty = qty ?? get().selectedQty ?? 1;
+        const addQty = Math.min(MAX_LINE_QTY, Math.max(1, qty ?? 1));
         set((s) => {
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
@@ -94,7 +96,7 @@ export const useCartStore = create<CartState>()(
           const lines = existing
             ? s.lines.map((l) =>
                 lineKey(l.slug, l.optionId) === lineKey(product.slug, opt)
-                  ? { ...l, qty: l.qty + addQty }
+                  ? { ...l, qty: Math.min(MAX_LINE_QTY, l.qty + addQty) }
                   : l,
               )
             : [...s.lines, { slug: product.slug, optionId: opt, qty: addQty }];
@@ -116,9 +118,10 @@ export const useCartStore = create<CartState>()(
           if (qty <= 0) {
             return { lines: s.lines.filter((l) => !(l.slug === slug && l.optionId === optionId)) };
           }
+          const next = Math.min(MAX_LINE_QTY, qty);
           return {
             lines: s.lines.map((l) =>
-              l.slug === slug && l.optionId === optionId ? { ...l, qty } : l,
+              l.slug === slug && l.optionId === optionId ? { ...l, qty: next } : l,
             ),
           };
         });
@@ -134,10 +137,13 @@ export const useCartStore = create<CartState>()(
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
-        if (code === "VOLT10") {
-          set({ discountApplied: true });
+        if (code === DISCOUNT_CODE) {
+          set({ discountApplied: true, discountCode: DISCOUNT_CODE });
           get().pushToast("Kortingscode toegepast", "10% extra op je subtotaal");
           return true;
+        }
+        if (get().discountApplied) {
+          set({ discountCode: DISCOUNT_CODE });
         }
         get().pushToast("Code niet geldig", "Probeer VOLT10 voor 10% korting", "error");
         return false;
@@ -152,6 +158,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "volt-cart",
+      skipHydration: true,
       partialize: (s) => ({
         lines: s.lines,
         discountCode: s.discountCode,
