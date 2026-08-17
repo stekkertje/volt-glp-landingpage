@@ -83,17 +83,17 @@ export function LandingPage() {
   return (
     <SiteShell>
       <section className="hero-grid relative overflow-hidden">
-        <div className="container-max section-pad grid items-center gap-10 py-10 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
+        <div className="container-max section-pad grid items-center gap-8 py-8 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
           <div className="order-1 space-y-6 min-w-0">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 {SITE.category}
               </p>
-              <h1 className="text-4xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
+              <h1 className="text-3xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
                 GLP-1 afvallen.
                 <span className="text-primary"> Vial of pen.</span>
               </h1>
-              <p className="max-w-lg text-base text-muted sm:text-lg sm:leading-relaxed">
+              <p className="max-w-lg text-sm text-muted sm:text-lg sm:leading-relaxed">
                 {SITE.shortPitch}
               </p>
             </div>
@@ -178,21 +178,26 @@ export function LandingPage() {
             <Link
               to="/product/$slug"
               params={{ slug: featured.slug }}
-              className="relative mx-auto block max-w-md md:max-w-none"
+              className="relative mx-auto block max-w-sm sm:max-w-md md:max-w-none group"
             >
               <img
                 src={featured.images[0]?.src}
                 alt={featured.images[0]?.alt ?? featured.name}
-                className="relative z-10 mx-auto w-full max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md"
+                className="relative z-10 mx-auto w-full max-w-xs sm:max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md transition group-hover:ring-primary/40"
               />
-              <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                  Bestseller
-                </p>
-                <p className="text-sm font-bold tracking-tight">{featured.name}</p>
-                <p className="text-sm font-extrabold tabular-nums text-fg">
-                  {formatEuro(featured.priceCents)}
-                </p>
+              <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 z-20 flex items-center justify-between rounded-xl border border-border bg-surface/95 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md backdrop-blur-sm">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                    Bestseller
+                  </p>
+                  <p className="truncate text-xs sm:text-sm font-bold tracking-tight">{featured.name}</p>
+                  <p className="text-xs sm:text-sm font-extrabold tabular-nums text-fg">
+                    {formatEuro(featured.priceCents)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-primary group-hover:underline">
+                  Bekijk product →
+                </span>
               </div>
             </Link>
           </div>

@@ -242,7 +242,7 @@ export function CartDrawer() {
         </div>
 
         {count > 0 && (
-          <div className="shrink-0 space-y-2 border-t border-border bg-surface px-5 py-4">
+          <div className="shrink-0 space-y-2.5 border-t border-border bg-surface px-5 py-4">
             <Button
               className="w-full glow-primary"
               size="lg"
@@ -253,13 +253,20 @@ export function CartDrawer() {
                   setCheckingOut(false);
                   useCartStore
                     .getState()
-                    .pushToast("Demo-checkout", "Geen echte betaling in deze preview");
+                    .pushToast("Bestelling geplaatst (demo)", "Geen echte betaling in deze preview");
                 }, 900);
               }}
             >
-              {checkingOut ? "Bezig…" : "Veilig afrekenen"}
+              {checkingOut ? "Bezig met verwerken…" : "Veilig afrekenen"}
             </Button>
-            <Button variant="ghost" className="w-full" onClick={clear}>
+            <div className="flex items-center justify-center gap-4 text-[11px] text-dim">
+              <span>SSL Beveiligd</span>
+              <span>·</span>
+              <span>1–2 werkdagen</span>
+              <span>·</span>
+              <span>Discreet verzonden</span>
+            </div>
+            <Button variant="ghost" size="sm" className="w-full text-xs text-muted hover:text-danger" onClick={clear}>
               Winkelwagen legen
             </Button>
           </div>

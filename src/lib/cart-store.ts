@@ -85,8 +85,8 @@ export const useCartStore = create<CartState>()(
       addToCart: (slug, optionId, qty) => {
         const product = getProduct(slug ?? get().selectedSlug);
         if (!product) return;
-        const opt = optionId ?? get().selectedOptionId ?? getDefaultOptionId(product);
-        const addQty = qty ?? get().selectedQty ?? 1;
+        const opt = optionId ?? (get().selectedSlug === product.slug ? get().selectedOptionId : getDefaultOptionId(product));
+        const addQty = qty ?? (get().selectedSlug === product.slug ? get().selectedQty : 1);
         set((s) => {
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
@@ -156,8 +156,6 @@ export const useCartStore = create<CartState>()(
         lines: s.lines,
         discountCode: s.discountCode,
         discountApplied: s.discountApplied,
-        selectedSlug: s.selectedSlug,
-        selectedOptionId: s.selectedOptionId,
       }),
     },
   ),

@@ -26,7 +26,7 @@ export function ProductPage({ product }: { product: Product }) {
 
   useEffect(() => {
     setSelected(product.slug, getDefaultOptionId(product));
-  }, [product.slug, setSelected]);
+  }, [product.slug, product, setSelected]);
 
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);
@@ -102,13 +102,17 @@ export function ProductPage({ product }: { product: Product }) {
               <p className="text-sm text-muted">{product.unit} per verpakking</p>
               <p className="mt-1 text-sm text-muted">
                 Ongeveer {product.weeksAtStart} weken bij startdosis
-                <span className="block tabular-nums">
-                  {formatEuro(pricePerWeekCents(product, selectedOptionId))}/week
+                <span className="ml-1.5 font-medium text-fg tabular-nums">
+                  ({formatEuro(pricePerWeekCents(product, selectedOptionId))}/week)
                 </span>
               </p>
-              {price < SITE.freeShippingCents && (
+              {price < SITE.freeShippingCents ? (
                 <p className="mt-2 text-sm text-muted">
-                  + €4,95 verzending · gratis vanaf {formatEuro(SITE.freeShippingCents)}
+                  + €4,95 verzending · <span className="font-medium text-fg">gratis vanaf {formatEuro(SITE.freeShippingCents)}</span>
+                </p>
+              ) : (
+                <p className="mt-2 text-sm font-medium text-success">
+                  Gratis verzending inbegrepen (vanaf {formatEuro(SITE.freeShippingCents)})
                 </p>
               )}
 
@@ -118,7 +122,7 @@ export function ProductPage({ product }: { product: Product }) {
                 <PackSelector key={`${product.slug}-buy`} product={product} />
               </div>
               {sibling && (
-                <p className="mt-3 text-sm text-muted">
+                <p className="mt-4 text-sm text-muted">
                   Liever {sibling.form === "pen" ? "een kant-en-klare pen" : "een vial"}?{" "}
                   <Link
                     to="/product/$slug"

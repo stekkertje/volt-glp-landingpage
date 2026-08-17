@@ -111,13 +111,13 @@ const PRODUCT_LIST: Product[] = [
     options: [
       {
         id: "none",
-        label: "Geen extra's",
+        label: "Geen extra's (incl. 2 ml bac water)",
         priceCents: 7760,
         compareAtCents: 9700,
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "Insuline spuiten (10 stuks + €2,00)",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -225,8 +225,8 @@ const PRODUCT_LIST: Product[] = [
     frequency: "1 injectie per week",
     weeksAtStart: 8,
     options: [
-      { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      { id: "none", label: "Geen extra's (incl. 2 ml bac water)", priceCents: 8500 },
+      { id: "syringes", label: "Insuline spuiten (10 stuks + €2,50)", priceCents: 8750 },
     ],
   },
   {
@@ -315,11 +315,11 @@ const PRODUCT_LIST: Product[] = [
     options: [
       {
         id: "none",
-        label: "Geen extra's",
+        label: "Geen extra's (incl. 2 ml bac water)",
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      { id: "syringes", label: "Insuline spuiten (10 stuks + €2,50)", priceCents: 9650 },
     ],
   },
   {
