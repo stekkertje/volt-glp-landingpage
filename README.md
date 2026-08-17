@@ -48,58 +48,47 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 | `src/components/mobile-sticky-bar.tsx` | Mobiele koopbalk |
 | `src/components/cart-drawer.tsx` | Winkelwagen-drawer |
 | `public/images/producten/` | Productfoto's |
+| `scripts/storefront.test.mjs` | Browserregressies |
 
-## Open gaten (niet mergen, overnemen)
+## Open gaten
 
-`main` is `cursor/complete-shop-audit-d2b5`. De 16 reviewpunten zitten erin. Andere takken niet heel mergen. Alleen deze gaten:
-
-### P1
+Niet hele branches mergen. Alleen deze vijf punten. Filter-sticky, 5-thumbs-rij en de meeste e2e-flows zitten al in `main`.
 
 1. **Cart-persist zonder SSR-flikker**
    Bron: `cursor/volt-glp-shop-fixes-e10e`
    `src/lib/cart-store.ts` + nieuw `src/components/cart-hydrate.tsx`
-   Main heeft `persist`, mist `skipHydration: true` en `CartHydrate` (`rehydrate()` in `useEffect`).
+   Zet `skipHydration: true` en roep `useCartStore.persist.rehydrate()` in `useEffect` aan.
 
-2. **Max 10 stuks per regel**
+2. **Max 10 stuks ook in addToCart en setLineQty**
    Bron: e10e, `src/lib/cart-store.ts`
-   Stepper is begrensd, `addToCart` / `setLineQty` niet. Zet `MAX_LINE_QTY = 10` op add + setLineQty. Plus-knop disabled bij 10.
+   De stepper is begrensd. `addToCart` / `setLineQty` nog niet. `MAX_LINE_QTY = 10`. Plus-knop disabled bij 10.
 
 3. **Gerelateerd alleen dezelfde stof**
    Bron: `cursor/complete-conversion-review-0cd3`, `relatedProducts()` in `src/lib/product.ts`
-   Main toont daarna ook andere GLP-1's. Kop nu: "Vergelijk meer producten". Moet: alleen zelfde `subcat`, kop "Andere sterkte / vorm".
+   Nu: zusje + andere GLP-1's, kop "Vergelijk meer producten".
+   Moet: alleen zelfde `subcat`, kop "Andere sterkte / vorm".
 
-4. **Sticky balk volgt het stof-filter**
-   Bron: e10e
-   `src/lib/catalog-filter.ts`, `landing-page.tsx`, `mobile-sticky-bar.tsx`
-   Filter is nu lokale state. Sticky toont `selectedSlug` (vaak Semaglutide-pen) ook als je op Retatrutide filtert.
-
-### P2
-
-5. **Aantal spuiten in de copy**
+4. **Exact aantal spuiten in de copy**
    Bron: e10e, `SYRINGE_PACK_COUNT` in `product.ts` + `pack-selector.tsx`
+   Nu: "set voor injecties". Moet: set van X stuks.
 
-6. **5 gallery-thumbs op 1 rij**
-   Bron: `cursor/volt-glp-shop-afronding-b099`, `product-gallery.tsx`
-   Retatrutide-pen heeft 5 foto's.
-
-7. **Dialog-focus strakker**
+5. **Dialog-focus strakker**
    Bron: 0cd3, `src/lib/use-dialog-focus.ts`
-   Alleen overnemen: `body { overflow: hidden }`, `requestAnimationFrame` voor focus, `[data-dialog-autofocus]`.
+   Alleen toevoegen: `body { overflow: hidden }`, `requestAnimationFrame` voor focus, `[data-dialog-autofocus]`.
 
 ### Niet doen
 
 - Hele branches mergen
 - Foto's wissen of terugzetten
 - `GROK.md` overschrijven
-- e10e `cutoff.ts` (main's cutoff is slimmer: echte volgende werkdag)
-- `scripts/shop-qa.mjs` van e10e (zoekt knop "Accepteren", UI zegt "Begrepen")
-- `cursor/setup-dev-environment-ddd5`, `fbac`, `ef11`, `8cfd`
+- e10e `cutoff.ts` (main is slimmer: echte volgende werkdag)
+- `scripts/shop-qa.mjs` van e10e
+- Filter-store, gallery-grid of extra e2e overnemen. Dat zit al in `main`.
 
 ### Check
 
-- Refresh: winkelwagen blijft, geen hydration-fout
+- Refresh: winkelwagen blijft, geen hydration-fout in de console
 - 11x toevoegen blijft op 10
-- Semaglutide-PDP toont alleen het Semaglutide-zusje
-- Home + filter Retatrutide + scroll: sticky toont Retatrutide
+- Semaglutide-PDP toont alleen het Semaglutide-zusje, geen andere stof
 - Spuiten-optie noemt het aantal
-- 5 thumbs op de Retatrutide-pen op 1 rij
+- Contact/cart: body-scroll lock, focus na open, Escape sluit
