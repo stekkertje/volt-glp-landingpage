@@ -121,6 +121,7 @@ export function ContactDialog() {
               onChange={(e) => setName(e.target.value)}
               className="h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2"
               placeholder="Je naam"
+              autoFocus
             />
             {errors.name && <p className="text-xs text-danger">{errors.name}</p>}
           </div>

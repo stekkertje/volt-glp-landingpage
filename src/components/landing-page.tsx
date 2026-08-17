@@ -20,6 +20,8 @@ import {
   REVIEWS,
   FAQS,
   RATING_BREAKDOWN,
+  PRODUCT_HASHES,
+  hashToFilter,
   productsBySubcat,
   type Subcat,
 } from "@/lib/product";
@@ -36,17 +38,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useContactStore } from "@/lib/contact-store";
-
-const PRODUCT_HASHES = new Set(["semaglutide", "tirzepatide", "retatrutide", "producten"]);
-
-function hashToFilter(hash: string): Subcat | "all" | null {
-  const h = hash.replace("#", "").toLowerCase();
-  if (h === "semaglutide") return "Semaglutide";
-  if (h === "tirzepatide") return "Tirzepatide";
-  if (h === "retatrutide") return "Retatrutide";
-  if (h === "producten") return "all";
-  return null;
-}
+import { useCartStore } from "@/lib/cart-store";
 
 export function LandingPage() {
   const openContact = useContactStore((s) => s.openContact);
@@ -64,9 +56,32 @@ export function LandingPage() {
       }
     };
     apply();
+    const onClick = (e: MouseEvent) => {
+      const link = (e.target as HTMLElement | null)?.closest?.("a");
+      if (!link) return;
+      const href = link.getAttribute("href") ?? "";
+      const hashIdx = href.indexOf("#");
+      if (hashIdx === -1) return;
+      const raw = href.slice(hashIdx + 1).toLowerCase();
+      if (!PRODUCT_HASHES.has(raw)) return;
+      window.setTimeout(apply, 0);
+    };
     window.addEventListener("hashchange", apply);
-    return () => window.removeEventListener("hashchange", apply);
+    document.addEventListener("click", onClick);
+    return () => {
+      window.removeEventListener("hashchange", apply);
+      document.removeEventListener("click", onClick);
+    };
   }, []);
+
+  useEffect(() => {
+    const list = productsBySubcat(filter);
+    if (list.length === 0) return;
+    const current = useCartStore.getState().selectedSlug;
+    if (!list.some((p) => p.slug === current)) {
+      useCartStore.getState().setSelected(list[0]!.slug);
+    }
+  }, [filter]);
 
   const setFilterAndHash = (id: Subcat | "all") => {
     setFilter(id);
@@ -193,6 +208,7 @@ export function LandingPage() {
                 <p className="text-sm font-extrabold tabular-nums text-fg">
                   {formatEuro(featured.priceCents)}
                 </p>
+                <p className="mt-1 text-xs font-semibold text-primary">Bekijk bestseller →</p>
               </div>
             </Link>
           </div>

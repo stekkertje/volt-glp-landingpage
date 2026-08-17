@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -86,7 +87,9 @@ export const useCartStore = create<CartState>()(
         const product = getProduct(slug ?? get().selectedSlug);
         if (!product) return;
         const opt = optionId ?? get().selectedOptionId ?? getDefaultOptionId(product);
-        const addQty = qty ?? get().selectedQty ?? 1;
+        const addQty =
+          qty ??
+          (get().selectedSlug === product.slug ? (get().selectedQty ?? 1) : 1);
         set((s) => {
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
@@ -130,7 +133,12 @@ export const useCartStore = create<CartState>()(
       openCart: () => set({ cartOpen: true }),
       closeCart: () => set({ cartOpen: false }),
       clearCart: () =>
-        set({ lines: [], cartOpen: false, discountApplied: false }),
+        set({
+          lines: [],
+          cartOpen: false,
+          discountApplied: false,
+          discountCode: "",
+        }),
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
@@ -194,6 +202,20 @@ export function cartCodeDiscountCents(subtotalAfterStack: number, applied: boole
 
 export function cartShippingCents(subtotalAfterDiscount: number) {
   return subtotalAfterDiscount >= FREE_SHIPPING_CENTS ? 0 : 495;
+}
+
+export function useHasCartHydrated() {
+  const [hydrated, setHydrated] = useState(() =>
+    typeof window === "undefined" ? false : useCartStore.persist.hasHydrated(),
+  );
+
+  useEffect(() => {
+    const finish = () => setHydrated(true);
+    if (useCartStore.persist.hasHydrated()) finish();
+    return useCartStore.persist.onFinishHydration(finish);
+  }, []);
+
+  return hydrated;
 }
 
 export function lineLabel(line: CartLine) {

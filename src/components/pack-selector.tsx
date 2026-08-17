@@ -47,8 +47,8 @@ export function PackSelector({
       {product.options.length > 0 && (
         <>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te injecteren. Kies of je
-            die extra wilt meenemen.
+            Bac water (2 ml) zit bij de vial. Om te injecteren heb je insulinespuiten nodig. De
+            extra-optie is {product.syringeCount ?? 10} stuks, genoeg voor de startdosis.
           </p>
           <div className="grid gap-2.5" role="radiogroup" aria-label="Kies extra's">
             {product.options.map((p) => {

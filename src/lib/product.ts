@@ -41,6 +41,7 @@ export type Product = {
   doseAdvanced: string;
   frequency: string;
   weeksAtStart: number;
+  syringeCount?: number;
   options: ProductOption[];
 };
 
@@ -62,6 +63,17 @@ export const SUBCATS: { id: Subcat | "all"; label: string; hash: string }[] = [
   { id: "Tirzepatide", label: "Tirzepatide", hash: "tirzepatide" },
   { id: "Retatrutide", label: "Retatrutide", hash: "retatrutide" },
 ];
+
+export const PRODUCT_HASHES = new Set(SUBCATS.map((s) => s.hash));
+
+export function hashToFilter(hash: string): Subcat | "all" | null {
+  const h = hash.replace("#", "").toLowerCase();
+  if (h === "semaglutide") return "Semaglutide";
+  if (h === "tirzepatide") return "Tirzepatide";
+  if (h === "retatrutide") return "Retatrutide";
+  if (h === "producten") return "all";
+  return null;
+}
 
 function imgs(slug: string, files: string[], alts: string[]) {
   return files.map((file, i) => ({
@@ -108,6 +120,7 @@ const PRODUCT_LIST: Product[] = [
     doseAdvanced: "5 mg per week",
     frequency: "1 injectie per week",
     weeksAtStart: 4,
+    syringeCount: 10,
     options: [
       {
         id: "none",
@@ -117,7 +130,7 @@ const PRODUCT_LIST: Product[] = [
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "10 insulinespuiten",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -224,9 +237,10 @@ const PRODUCT_LIST: Product[] = [
     doseAdvanced: "0,75 mg per week",
     frequency: "1 injectie per week",
     weeksAtStart: 8,
+    syringeCount: 10,
     options: [
       { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 8750 },
     ],
   },
   {
@@ -312,6 +326,7 @@ const PRODUCT_LIST: Product[] = [
     doseAdvanced: "5 mg per week",
     frequency: "1 injectie per week",
     weeksAtStart: 4,
+    syringeCount: 10,
     options: [
       {
         id: "none",
@@ -319,7 +334,7 @@ const PRODUCT_LIST: Product[] = [
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 9650 },
     ],
   },
   {
@@ -423,6 +438,20 @@ export function relatedProducts(slug: ProductSlug, limit = 3): Product[] {
   return [...same, ...rest].slice(0, limit);
 }
 
+export function siblingProduct(slug: ProductSlug): Product | undefined {
+  const current = getProduct(slug);
+  if (!current) return undefined;
+  return PRODUCTS.find((p) => p.slug !== slug && p.subcat === current.subcat);
+}
+
+export function reviewsForProduct(product: Product, limit = 2): Review[] {
+  const matched = REVIEWS.filter(
+    (r) => r.subcat === product.subcat || r.slugs?.includes(product.slug),
+  );
+  const rest = REVIEWS.filter((r) => !matched.includes(r));
+  return [...matched, ...rest].slice(0, limit);
+}
+
 export const COMPOUNDS = [
   {
     name: "Semaglutide",
@@ -507,6 +536,8 @@ export type Review = {
   title: string;
   text: string;
   verified: boolean;
+  subcat: Subcat;
+  slugs?: ProductSlug[];
 };
 
 export const REVIEWS: Review[] = [
@@ -517,6 +548,8 @@ export const REVIEWS: Review[] = [
     title: "Eindelijk een vast ritme",
     text: "Pen is duidelijk, één keer per week. Honger is stiller. Geen gedoe met vials.",
     verified: true,
+    subcat: "Semaglutide",
+    slugs: ["semaglutide-4mg-pen"],
   },
   {
     name: "Thomas B.",
@@ -525,6 +558,8 @@ export const REVIEWS: Review[] = [
     title: "Cravings zijn een stuk stiller",
     text: "Na twee weken merk ik het vooral 's avonds. Porties kleiner, geen late snacks meer.",
     verified: true,
+    subcat: "Tirzepatide",
+    slugs: ["tirzepatide-20mg-pen"],
   },
   {
     name: "Nora K.",
@@ -533,6 +568,8 @@ export const REVIEWS: Review[] = [
     title: "Sterk, dus rustig opbouwen",
     text: "Weekdeal gepakt met extra spuiten. Eerste dagen wat misselijk. Daarna stabieler.",
     verified: true,
+    subcat: "Retatrutide",
+    slugs: ["retatrutide-10mg"],
   },
   {
     name: "Mark V.",
@@ -541,6 +578,8 @@ export const REVIEWS: Review[] = [
     title: "Goede instap",
     text: "Begonnen met de vial om te kijken of het bevalt. Duidelijke inhoud, netjes verpakt.",
     verified: true,
+    subcat: "Semaglutide",
+    slugs: ["semaglutide-2mg"],
   },
 ];
 
@@ -574,10 +613,10 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Alleen bij vials: Geen extra's, of Insuline spuiten",
-          "Retatrutide 10mg: extra's + €2,00",
-          "Semaglutide 2mg en Tirzepatide 10mg: extra's + €2,50",
-          "Pennen hebben geen extra-optie",
+          "Alleen bij vials: Geen extra's, of 10 insulinespuiten",
+          "Retatrutide 10mg: 10 spuiten + €2,00",
+          "Semaglutide 2mg en Tirzepatide 10mg: 10 spuiten + €2,50",
+          "Pennen hebben geen extra-optie. Naalden zitten bij de pen.",
         ],
       },
     ],

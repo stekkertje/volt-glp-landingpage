@@ -1,6 +1,6 @@
 const ITEMS = [
   "Gratis verzending vanaf €100",
-  "Voor 23:00 besteld, morgen verzonden",
+  "Voor 23:00 besteld, volgende werkdag verzonden",
   "Discreet verpakt",
 ] as const;
 

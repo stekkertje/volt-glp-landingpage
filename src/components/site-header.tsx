@@ -1,7 +1,7 @@
 import { ShoppingBag, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useCartStore, cartCount } from "@/lib/cart-store";
+import { useCartStore, cartCount, useHasCartHydrated } from "@/lib/cart-store";
 import { useContactStore } from "@/lib/contact-store";
 import { cn } from "@/lib/utils";
 import { AnnounceBar } from "@/components/announce-bar";
@@ -19,7 +19,8 @@ export function SiteHeader() {
   const [hidden, setHidden] = useState(false);
   const [headerH, setHeaderH] = useState(108);
   const lines = useCartStore((s) => s.lines);
-  const count = cartCount(lines);
+  const hydrated = useHasCartHydrated();
+  const count = hydrated ? cartCount(lines) : 0;
   const openCart = useCartStore((s) => s.openCart);
   const openContact = useContactStore((s) => s.openContact);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function ProductGallery({
@@ -9,6 +9,11 @@ export function ProductGallery({
   className?: string;
 }) {
   const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    setActive((i) => (i >= images.length ? 0 : i));
+  }, [images]);
+
   const current = images[active] ?? images[0];
   if (!current) return null;
 
@@ -40,7 +45,16 @@ export function ProductGallery({
         )}
       </div>
       {images.length > 1 && (
-        <div className={cn("grid gap-2", images.length >= 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            images.length >= 5
+              ? "grid-cols-5"
+              : images.length === 4
+                ? "grid-cols-4"
+                : "grid-cols-3",
+          )}
+        >
           {images.map((img, i) => (
             <button
               key={img.src}

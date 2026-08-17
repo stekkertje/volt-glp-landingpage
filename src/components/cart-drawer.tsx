@@ -187,6 +187,11 @@ export function CartDrawer() {
                     aria-hidden
                   />
                 </button>
+                {discountApplied && (
+                  <p className="mt-2 text-xs font-semibold text-success">
+                    VOLT10 actief · 10% extra op je subtotaal
+                  </p>
+                )}
                 {showCode && (
                   <form
                     className="mt-2 flex gap-2"
