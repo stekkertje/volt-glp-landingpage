@@ -1,0 +1,52 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
+
+export const Route = createFileRoute("/login")({
+  component: LoginPage,
+});
+
+function LoginPage() {
+  return (
+    <main className="grid min-h-dvh place-items-center bg-bg px-5 py-12 text-fg">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <Link to="/" className="inline-flex items-center gap-2">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-fg text-sm font-extrabold">
+              V
+            </span>
+            <span className="text-xl font-extrabold tracking-tight">
+              VOLT<span className="text-primary">.</span>
+            </span>
+          </Link>
+          <h1 className="mt-6 text-2xl font-extrabold tracking-tight">Inloggen</h1>
+          <p className="mt-2 text-sm text-muted">
+            Log in om je bestellingen en account te beheren.
+          </p>
+        </div>
+
+        {authEnabled ? (
+          <div className="space-y-3">
+            {GROK_PROVIDERS.map((p) => (
+              <button
+                key={p.providerId}
+                type="button"
+                onClick={() => signIn(p.providerId, { callbackURL: "/" })}
+                className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
+              >
+                Doorgaan met {p.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-sm text-muted">Inloggen is uitgeschakeld.</p>
+        )}
+
+        <p className="text-center text-sm text-dim">
+          <Link to="/" className="font-medium text-primary hover:underline">
+            Terug naar de winkel
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}
