@@ -460,3 +460,70 @@ test("every catalog product route loads its gallery image", async () => {
     await context.close();
   }
 });
+
+test("adding to cart does not show a redundant toast over mobile checkout", async () => {
+  const { context, page } = await newPage({ width: 390, height: 844 });
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+
+    const toast = page
+      .getByRole("status")
+      .filter({ hasText: "Toegevoegd aan winkelwagen" });
+    assert.equal(await toast.count(), 0);
+    await page.getByRole("button", { name: "Veilig afrekenen" }).waitFor({
+      state: "visible",
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("the mobile menu closes with Escape and navigates to a compound", async () => {
+  const { context, page } = await newPage({ width: 390, height: 844 });
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const menu = page.getByRole("button", { name: "Menu openen" });
+    await menu.click();
+    await page.keyboard.press("Escape");
+    assert.equal(await menu.getAttribute("aria-expanded"), "false");
+
+    await menu.click();
+    await page
+      .getByRole("navigation", { name: "Mobiel menu" })
+      .getByRole("link", {
+        name: "Tirzepatide",
+      })
+      .click();
+    await page.waitForTimeout(350);
+    assert.equal(await page.evaluate(() => location.hash), "#tirzepatide");
+    assert.equal(await page.locator("#producten article").count(), 2);
+  } finally {
+    await context.close();
+  }
+});
+
+test("demo checkout completes without leaving the cart", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Veilig afrekenen" }).click();
+    await page.getByText("Demo-checkout").waitFor({ state: "visible" });
+    await page
+      .getByRole("dialog", { name: "Winkelwagen" })
+      .waitFor({ state: "visible" });
+  } finally {
+    await context.close();
+  }
+});

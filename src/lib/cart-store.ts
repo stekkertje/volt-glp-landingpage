@@ -81,11 +81,13 @@ export const useCartStore = create<CartState>()(
         }));
       },
       setSelectedOption: (optionId) => set({ selectedOptionId: optionId }),
-      setSelectedQty: (qty) => set({ selectedQty: Math.min(10, Math.max(1, qty)) }),
+      setSelectedQty: (qty) =>
+        set({ selectedQty: Math.min(10, Math.max(1, qty)) }),
       addToCart: (slug, optionId, qty) => {
         const product = getProduct(slug ?? get().selectedSlug);
         if (!product) return;
-        const opt = optionId ?? get().selectedOptionId ?? getDefaultOptionId(product);
+        const opt =
+          optionId ?? get().selectedOptionId ?? getDefaultOptionId(product);
         const addQty = qty ?? get().selectedQty ?? 1;
         set((s) => {
           const existing = s.lines.find(
@@ -105,16 +107,15 @@ export const useCartStore = create<CartState>()(
             selectedOptionId: opt,
           };
         });
-        const option = getOption(product, opt);
-        get().pushToast(
-          "Toegevoegd aan winkelwagen",
-          option ? `${product.name} · ${option.label}` : product.name,
-        );
       },
       setLineQty: (slug, optionId, qty) => {
         set((s) => {
           if (qty <= 0) {
-            return { lines: s.lines.filter((l) => !(l.slug === slug && l.optionId === optionId)) };
+            return {
+              lines: s.lines.filter(
+                (l) => !(l.slug === slug && l.optionId === optionId),
+              ),
+            };
           }
           return {
             lines: s.lines.map((l) =>
@@ -125,7 +126,9 @@ export const useCartStore = create<CartState>()(
       },
       removeLine: (slug, optionId) =>
         set((s) => ({
-          lines: s.lines.filter((l) => !(l.slug === slug && l.optionId === optionId)),
+          lines: s.lines.filter(
+            (l) => !(l.slug === slug && l.optionId === optionId),
+          ),
         })),
       openCart: () => set({ cartOpen: true }),
       closeCart: () => set({ cartOpen: false }),
@@ -136,7 +139,10 @@ export const useCartStore = create<CartState>()(
         const code = get().discountCode.trim().toUpperCase();
         if (code === "VOLT10") {
           set({ discountApplied: true });
-          get().pushToast("Kortingscode toegepast", "10% extra op je subtotaal");
+          get().pushToast(
+            "Kortingscode toegepast",
+            "10% extra op je subtotaal",
+          );
           return true;
         }
         const alreadyApplied = get().discountApplied;
@@ -195,7 +201,10 @@ export function cartStackDiscountCents(subtotal: number, qty: number) {
   return Math.round(subtotal * (pct / 100));
 }
 
-export function cartCodeDiscountCents(subtotalAfterStack: number, applied: boolean) {
+export function cartCodeDiscountCents(
+  subtotalAfterStack: number,
+  applied: boolean,
+) {
   if (!applied) return 0;
   return Math.round(subtotalAfterStack * 0.1);
 }
