@@ -274,7 +274,9 @@ test("vial options state the extra cost before purchase", async () => {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    const syringeOption = page.getByRole("radio", { name: /Insuline spuiten/ });
+    const syringeOption = page.getByRole("radio", {
+      name: /10 insulinespuiten/,
+    });
     assert.match(await syringeOption.innerText(), /\+ €\s?2,50/);
   } finally {
     await context.close();

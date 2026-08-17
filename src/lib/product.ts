@@ -44,6 +44,8 @@ export type Product = {
   options: ProductOption[];
 };
 
+export const SYRINGE_PACK_COUNT = 10;
+
 export const SITE = {
   brand: "VOLT",
   category: "GLP-1 Afvallen",
@@ -117,7 +119,7 @@ const PRODUCT_LIST: Product[] = [
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "10 insulinespuiten",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -226,7 +228,7 @@ const PRODUCT_LIST: Product[] = [
     weeksAtStart: 8,
     options: [
       { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 8750 },
     ],
   },
   {
@@ -319,7 +321,7 @@ const PRODUCT_LIST: Product[] = [
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      { id: "syringes", label: "10 insulinespuiten", priceCents: 9650 },
     ],
   },
   {
@@ -574,7 +576,7 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Alleen bij vials: Geen extra's, of Insuline spuiten",
+          "Alleen bij vials: Geen extra's, of een set van 10 insulinespuiten",
           "Retatrutide 10mg: extra's + €2,00",
           "Semaglutide 2mg en Tirzepatide 10mg: extra's + €2,50",
           "Pennen hebben geen extra-optie",

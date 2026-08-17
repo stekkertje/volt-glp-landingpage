@@ -1,5 +1,6 @@
 import { Check, Minus, Plus } from "lucide-react";
 import {
+  SYRINGE_PACK_COUNT,
   getDefaultOptionId,
   getOption,
   unitPriceCents,
@@ -96,7 +97,7 @@ export function PackSelector({
                     </span>
                     <span className="block text-xs text-muted">
                       {extraCost > 0
-                        ? `+ ${formatEuro(extraCost)} · set voor injecties`
+                        ? `+ ${formatEuro(extraCost)} · set van ${SYRINGE_PACK_COUNT} stuks`
                         : "Bac water inbegrepen"}
                     </span>
                   </div>
