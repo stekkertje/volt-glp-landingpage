@@ -40,7 +40,18 @@ export function ProductGallery({
         )}
       </div>
       {images.length > 1 && (
-        <div className={cn("grid gap-2", images.length >= 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            images.length >= 5
+              ? "grid-cols-5"
+              : images.length === 4
+                ? "grid-cols-4"
+                : images.length === 3
+                  ? "grid-cols-3"
+                  : "grid-cols-2",
+          )}
+        >
           {images.map((img, i) => (
             <button
               key={img.src}
@@ -48,11 +59,17 @@ export function ProductGallery({
               onClick={() => setActive(i)}
               className={cn(
                 "overflow-hidden rounded-lg border-2 transition",
-                i === active ? "border-primary" : "border-transparent opacity-80 hover:opacity-100",
+                i === active
+                  ? "border-primary"
+                  : "border-transparent opacity-80 hover:opacity-100",
               )}
               aria-label={`Toon ${img.alt}`}
             >
-              <img src={img.src} alt="" className="aspect-square w-full object-cover" />
+              <img
+                src={img.src}
+                alt=""
+                className="aspect-square w-full object-cover"
+              />
             </button>
           ))}
         </div>

@@ -5,11 +5,7 @@ import {
   unitPriceCents,
   type Product,
 } from "@/lib/product";
-import {
-  useCartStore,
-  cartCount,
-  stackDiscountPct,
-} from "@/lib/cart-store";
+import { useCartStore, cartCount, stackDiscountPct } from "@/lib/cart-store";
 import { formatEuro, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeliveryPromise } from "@/components/delivery-promise";
@@ -23,9 +19,13 @@ export function PackSelector({
 }) {
   const addToCart = useCartStore((s) => s.addToCart);
   const selectedOptionId = useCartStore((s) =>
-    s.selectedSlug === product.slug ? s.selectedOptionId : getDefaultOptionId(product),
+    s.selectedSlug === product.slug
+      ? s.selectedOptionId
+      : getDefaultOptionId(product),
   );
-  const qty = useCartStore((s) => (s.selectedSlug === product.slug ? s.selectedQty : 1));
+  const qty = useCartStore((s) =>
+    s.selectedSlug === product.slug ? s.selectedQty : 1,
+  );
   const setSelected = useCartStore((s) => s.setSelected);
   const setSelectedQty = useCartStore((s) => s.setSelectedQty);
   const lines = useCartStore((s) => s.lines);
@@ -36,7 +36,10 @@ export function PackSelector({
   const futureQty = cartCount(lines) + qty;
   const stackPct = stackDiscountPct(futureQty);
   const rawTotal = price * qty;
-  const shownTotal = stackPct ? rawTotal - Math.round(rawTotal * (stackPct / 100)) : rawTotal;
+  const shownTotal = stackPct
+    ? rawTotal - Math.round(rawTotal * (stackPct / 100))
+    : rawTotal;
+  const baseOptionPrice = product.options[0]?.priceCents ?? product.priceCents;
 
   const onAdd = () => {
     addToCart(product.slug, optionId, qty);
@@ -47,12 +50,17 @@ export function PackSelector({
       {product.options.length > 0 && (
         <>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te injecteren. Kies of je
-            die extra wilt meenemen.
+            Bac water zit bij de vial. Insulinespuiten heb je nodig om te
+            injecteren. Kies of je die extra wilt meenemen.
           </p>
-          <div className="grid gap-2.5" role="radiogroup" aria-label="Kies extra's">
+          <div
+            className="grid gap-2.5"
+            role="radiogroup"
+            aria-label="Kies extra's"
+          >
             {product.options.map((p) => {
               const active = optionId === p.id;
+              const extraCost = Math.max(0, p.priceCents - baseOptionPrice);
               return (
                 <button
                   key={p.id}
@@ -70,13 +78,22 @@ export function PackSelector({
                   <span
                     className={cn(
                       "flex size-5 shrink-0 items-center justify-center rounded-full border-2",
-                      active ? "border-primary bg-primary text-primary-fg" : "border-dim",
+                      active
+                        ? "border-primary bg-primary text-primary-fg"
+                        : "border-dim",
                     )}
                   >
                     {active && <Check className="size-3" strokeWidth={3} />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <span className="font-semibold tracking-tight text-fg">{p.label}</span>
+                    <span className="font-semibold tracking-tight text-fg">
+                      {p.label}
+                    </span>
+                    <span className="block text-xs text-muted">
+                      {extraCost > 0
+                        ? `+ ${formatEuro(extraCost)} · set voor injecties`
+                        : "Bac water inbegrepen"}
+                    </span>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-extrabold tracking-tight tabular-nums text-fg">
@@ -107,7 +124,10 @@ export function PackSelector({
           >
             <Minus className="size-4" />
           </button>
-          <span className="min-w-8 text-center text-sm font-bold tabular-nums" aria-live="polite">
+          <span
+            className="min-w-8 text-center text-sm font-bold tabular-nums"
+            aria-live="polite"
+          >
             {qty}
           </span>
           <button
@@ -125,7 +145,9 @@ export function PackSelector({
         {stackPct ? (
           <>
             {ctaLabel} · {formatEuro(shownTotal)}
-            <span className="text-xs font-semibold opacity-90">−{stackPct}% stapel</span>
+            <span className="text-xs font-semibold opacity-90">
+              −{stackPct}% stapel
+            </span>
           </>
         ) : (
           <>
@@ -146,14 +168,19 @@ export function PackSelector({
       <DeliveryPromise />
 
       <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
-        <p className="font-semibold text-fg tracking-tight leading-snug">Stapelkorting</p>
+        <p className="font-semibold text-fg tracking-tight leading-snug">
+          Stapelkorting
+        </p>
         <p className="mt-1 text-xs text-muted leading-relaxed">
-          5+ stuks: 10% extra · 10+ stuks: 20% extra. Korting zie je in de winkelwagen.
+          5+ stuks: 10% extra · 10+ stuks: 20% extra. Korting zie je in de
+          winkelwagen.
         </p>
       </div>
 
       {option && (
-        <p className="text-center text-xs text-dim">Gekozen extra: {option.label}</p>
+        <p className="text-center text-xs text-dim">
+          Gekozen extra: {option.label}
+        </p>
       )}
     </div>
   );

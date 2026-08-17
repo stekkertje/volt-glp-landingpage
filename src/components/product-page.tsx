@@ -1,6 +1,14 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Truck, MapPinned, Package, Headphones, Check, ShieldCheck, RotateCcw } from "lucide-react";
+import {
+  Truck,
+  MapPinned,
+  Package,
+  Headphones,
+  Check,
+  ShieldCheck,
+  RotateCcw,
+} from "lucide-react";
 import {
   relatedProducts,
   type Product,
@@ -20,13 +28,14 @@ import { useCartStore } from "@/lib/cart-store";
 
 export function ProductPage({ product }: { product: Product }) {
   const setSelected = useCartStore((s) => s.setSelected);
+  const defaultOptionId = getDefaultOptionId(product);
   const selectedOptionId = useCartStore((s) =>
-    s.selectedSlug === product.slug ? s.selectedOptionId : getDefaultOptionId(product),
+    s.selectedSlug === product.slug ? s.selectedOptionId : defaultOptionId,
   );
 
   useEffect(() => {
-    setSelected(product.slug, getDefaultOptionId(product));
-  }, [product.slug, setSelected]);
+    setSelected(product.slug, defaultOptionId);
+  }, [defaultOptionId, product.slug, setSelected]);
 
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);
@@ -46,7 +55,10 @@ export function ProductPage({ product }: { product: Product }) {
               GLP-1 Afvallen
             </a>
             <span className="mx-1.5">/</span>
-            <a href={`/#${product.subcat.toLowerCase()}`} className="hover:text-fg">
+            <a
+              href={`/#${product.subcat.toLowerCase()}`}
+              className="hover:text-fg"
+            >
               {product.subcat}
             </a>
             <span className="mx-1.5">/</span>
@@ -54,7 +66,10 @@ export function ProductPage({ product }: { product: Product }) {
           </nav>
 
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-16 items-start">
-            <ProductGallery key={`${product.slug}-gallery`} images={product.images} />
+            <ProductGallery
+              key={`${product.slug}-gallery`}
+              images={product.images}
+            />
 
             <div id="prijzen" className="min-w-0 scroll-mt-28">
               <p className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -70,7 +85,9 @@ export function ProductPage({ product }: { product: Product }) {
                 className="mt-3 flex flex-wrap items-center gap-2 rounded-full w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Stars rating={product.rating} />
-                <span className="text-sm font-semibold tabular-nums">{product.rating}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {product.rating}
+                </span>
                 <span className="text-sm text-muted underline-offset-2 hover:underline">
                   · {product.reviewCount} beoordelingen
                 </span>
@@ -99,27 +116,37 @@ export function ProductPage({ product }: { product: Product }) {
                   </p>
                 )}
               </div>
-              <p className="text-sm text-muted">{product.unit} per verpakking</p>
+              <p className="text-sm text-muted">
+                {product.unit} per verpakking
+              </p>
               <p className="mt-1 text-sm text-muted">
                 Ongeveer {product.weeksAtStart} weken bij startdosis
                 <span className="block tabular-nums">
-                  {formatEuro(pricePerWeekCents(product, selectedOptionId))}/week
+                  {formatEuro(pricePerWeekCents(product, selectedOptionId))}
+                  /week
                 </span>
               </p>
               {price < SITE.freeShippingCents && (
                 <p className="mt-2 text-sm text-muted">
-                  + €4,95 verzending · gratis vanaf {formatEuro(SITE.freeShippingCents)}
+                  + €4,95 verzending · gratis vanaf{" "}
+                  {formatEuro(SITE.freeShippingCents)}
                 </p>
               )}
 
-              <p className="mt-4 text-sm leading-relaxed text-muted">{product.shortPitch}</p>
+              <p className="mt-4 text-sm leading-relaxed text-muted">
+                {product.shortPitch}
+              </p>
 
               <div className="mt-6 rounded-xl border border-border bg-surface p-5 sm:p-7 shadow-sm">
                 <PackSelector key={`${product.slug}-buy`} product={product} />
               </div>
               {sibling && (
                 <p className="mt-3 text-sm text-muted">
-                  Liever {sibling.form === "pen" ? "een kant-en-klare pen" : "een vial"}?{" "}
+                  Liever{" "}
+                  {sibling.form === "pen"
+                    ? "een kant-en-klare pen"
+                    : "een vial"}
+                  ?{" "}
                   <Link
                     to="/product/$slug"
                     params={{ slug: sibling.slug }}
@@ -143,7 +170,10 @@ export function ProductPage({ product }: { product: Product }) {
                     key={x.t}
                     className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 text-muted"
                   >
-                    <x.icon className="size-4 text-primary shrink-0" aria-hidden />
+                    <x.icon
+                      className="size-4 text-primary shrink-0"
+                      aria-hidden
+                    />
                     <span>{x.t}</span>
                   </li>
                 ))}
@@ -156,11 +186,16 @@ export function ProductPage({ product }: { product: Product }) {
       <section className="container-max section-pad py-16 md:py-20">
         <div className="grid gap-10 lg:grid-cols-2">
           <div>
-            <h2 className="text-2xl font-extrabold tracking-tight">Waarom dit product</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">
+              Waarom dit product
+            </h2>
             <ul className="mt-4 space-y-3">
               {product.highlights.map((h) => (
                 <li key={h} className="flex items-start gap-3 text-sm text-fg">
-                  <Check className="size-4 shrink-0 text-primary mt-0.5" strokeWidth={2.75} />
+                  <Check
+                    className="size-4 shrink-0 text-primary mt-0.5"
+                    strokeWidth={2.75}
+                  />
                   {h}
                 </li>
               ))}
@@ -173,9 +208,14 @@ export function ProductPage({ product }: { product: Product }) {
             </div>
             <div className="divide-y divide-border px-5">
               {product.composition.map((row) => (
-                <div key={row.label} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between gap-3 py-3 text-sm"
+                >
                   <span className="text-muted">{row.label}</span>
-                  <span className="font-semibold tabular-nums text-fg">{row.value}</span>
+                  <span className="font-semibold tabular-nums text-fg">
+                    {row.value}
+                  </span>
                 </div>
               ))}
             </div>
@@ -192,7 +232,9 @@ export function ProductPage({ product }: { product: Product }) {
       {related.length > 0 && (
         <section className="border-t border-border bg-bg-elevated">
           <div className="container-max section-pad py-16">
-            <h2 className="text-2xl font-extrabold tracking-tight mb-6">Andere sterkte / vorm</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight mb-6">
+              Vergelijk meer producten
+            </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((p) => (
                 <ProductCard key={p.slug} product={p} />

@@ -5,12 +5,24 @@ function pastCutoff(now = new Date()) {
   return now.getHours() >= 23;
 }
 
-function msUntilCutoff() {
-  const now = new Date();
+function msUntilCutoff(now = new Date()) {
   const cutoff = new Date(now);
   cutoff.setHours(23, 0, 0, 0);
   if (now >= cutoff) return 0;
   return cutoff.getTime() - now.getTime();
+}
+
+function nextWorkdayLabel(now = new Date()) {
+  const next = new Date(now);
+  next.setDate(next.getDate() + 1);
+  while (next.getDay() === 0 || next.getDay() === 6) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next.toLocaleDateString("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }
 
 function formatCountdown(ms: number) {
@@ -24,11 +36,14 @@ function formatCountdown(ms: number) {
 export function DeliveryPromise() {
   const [ms, setMs] = useState<number | null>(null);
   const [closed, setClosed] = useState(false);
+  const [shippingDay, setShippingDay] = useState("");
 
   useEffect(() => {
     const tick = () => {
-      setClosed(pastCutoff());
-      setMs(msUntilCutoff());
+      const now = new Date();
+      setClosed(pastCutoff(now));
+      setMs(msUntilCutoff(now));
+      setShippingDay(nextWorkdayLabel(now));
     };
     tick();
     const id = window.setInterval(tick, 1000);
@@ -44,7 +59,9 @@ export function DeliveryPromise() {
             <p className="font-semibold text-fg tracking-tight">
               Bestelvenster voor vandaag is gesloten
             </p>
-            <p className="text-xs text-muted">Volgende verzending: eerstvolgende werkdag</p>
+            <p className="text-xs text-muted">
+              Volgende verzending: {shippingDay || "eerstvolgende werkdag"}
+            </p>
           </>
         ) : (
           <>
@@ -54,7 +71,10 @@ export function DeliveryPromise() {
                 {ms === null ? "--:--:--" : formatCountdown(ms)}
               </span>
             </p>
-            <p className="text-xs text-muted">Voor 23:00 besteld = morgen verzonden</p>
+            <p className="text-xs text-muted">
+              Voor 23:00 besteld · verzending{" "}
+              {shippingDay || "volgende werkdag"}
+            </p>
           </>
         )}
       </div>

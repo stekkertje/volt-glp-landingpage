@@ -72,13 +72,23 @@ export function ProductCard({ product }: { product: Product }) {
               Bekijk
             </Link>
           </Button>
-          <Button
-            size="sm"
-            className="flex-1"
-            onClick={() => addToCart(product.slug, getDefaultOptionId(product), 1)}
-          >
-            In winkelwagen
-          </Button>
+          {product.options.length > 0 ? (
+            <Button asChild size="sm" className="flex-1">
+              <Link to="/product/$slug" params={{ slug: product.slug }}>
+                Kies extra&apos;s
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={() =>
+                addToCart(product.slug, getDefaultOptionId(product), 1)
+              }
+            >
+              In winkelwagen
+            </Button>
+          )}
         </div>
       </div>
     </article>

@@ -20,6 +20,7 @@ import {
   REVIEWS,
   FAQS,
   RATING_BREAKDOWN,
+  DEFAULT_PRODUCT_SLUG,
   productsBySubcat,
   type Subcat,
 } from "@/lib/product";
@@ -36,8 +37,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useContactStore } from "@/lib/contact-store";
+import { useCartStore } from "@/lib/cart-store";
 
-const PRODUCT_HASHES = new Set(["semaglutide", "tirzepatide", "retatrutide", "producten"]);
+const PRODUCT_HASHES = new Set([
+  "semaglutide",
+  "tirzepatide",
+  "retatrutide",
+  "producten",
+]);
 
 function hashToFilter(hash: string): Subcat | "all" | null {
   const h = hash.replace("#", "").toLowerCase();
@@ -50,26 +57,39 @@ function hashToFilter(hash: string): Subcat | "all" | null {
 
 export function LandingPage() {
   const openContact = useContactStore((s) => s.openContact);
+  const setSelected = useCartStore((s) => s.setSelected);
   const [filter, setFilter] = useState<Subcat | "all">("all");
 
   useEffect(() => {
     const apply = () => {
       const raw = window.location.hash.replace("#", "").toLowerCase();
       const next = hashToFilter(window.location.hash);
-      if (next !== null) setFilter(next);
+      if (next !== null) {
+        setFilter(next);
+        const stickyProduct =
+          next === "all"
+            ? DEFAULT_PRODUCT_SLUG
+            : productsBySubcat(next)[0]?.slug;
+        if (stickyProduct) setSelected(stickyProduct);
+      }
       if (PRODUCT_HASHES.has(raw)) {
         requestAnimationFrame(() => {
-          document.getElementById("producten")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          document
+            .getElementById("producten")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
     };
     apply();
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
-  }, []);
+  }, [setSelected]);
 
   const setFilterAndHash = (id: Subcat | "all") => {
     setFilter(id);
+    const stickyProduct =
+      id === "all" ? DEFAULT_PRODUCT_SLUG : productsBySubcat(id)[0]?.slug;
+    if (stickyProduct) setSelected(stickyProduct);
     const item = SUBCATS.find((s) => s.id === id);
     if (item) {
       history.replaceState(null, "", `/#${item.hash}`);
@@ -78,7 +98,8 @@ export function LandingPage() {
 
   const visible = useMemo(() => productsBySubcat(filter), [filter]);
   const weekdeal = PRODUCTS.find((p) => p.weekdeal);
-  const featured = PRODUCTS.find((p) => p.slug === "semaglutide-4mg-pen") ?? PRODUCTS[0]!;
+  const featured =
+    PRODUCTS.find((p) => p.slug === "semaglutide-4mg-pen") ?? PRODUCTS[0]!;
 
   return (
     <SiteShell>
@@ -104,7 +125,9 @@ export function LandingPage() {
                 className="flex flex-wrap items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Stars rating={SITE.rating} />
-                <span className="text-sm font-semibold tabular-nums">{SITE.rating}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {SITE.rating}
+                </span>
                 <span className="text-sm text-muted underline-offset-2 hover:underline">
                   · {SITE.reviewCount.toLocaleString("nl-NL")} beoordelingen
                 </span>
@@ -122,7 +145,9 @@ export function LandingPage() {
                     <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
                       Weekdeal · −20%
                     </p>
-                    <p className="text-sm font-bold tracking-tight text-fg">{weekdeal.name}</p>
+                    <p className="text-sm font-bold tracking-tight text-fg">
+                      {weekdeal.name}
+                    </p>
                     <p className="text-xs text-success font-semibold">
                       {formatEuro(weekdeal.priceCents)}
                       {weekdeal.compareAtCents ? (
@@ -132,18 +157,29 @@ export function LandingPage() {
                       ) : null}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs font-semibold text-primary">Bekijk deal →</span>
+                  <span className="shrink-0 text-xs font-semibold text-primary">
+                    Bekijk deal →
+                  </span>
                 </Link>
               )}
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
+                <Button
+                  size="lg"
+                  className="glow-primary w-full sm:w-auto"
+                  asChild
+                >
                   <a href="#producten">
                     Bekijk 6 producten
                     <ArrowRight className="size-4" />
                   </a>
                 </Button>
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  asChild
+                >
                   <Link to="/product/$slug" params={{ slug: featured.slug }}>
                     Bestseller · {featured.name}
                   </Link>
@@ -153,19 +189,22 @@ export function LandingPage() {
 
             <div className="flex flex-nowrap items-center gap-x-2.5 overflow-x-auto text-[11px] text-dim sm:gap-x-5 sm:text-xs whitespace-nowrap">
               <span className="inline-flex shrink-0 items-center gap-1">
-                <Truck className="size-3.5 text-muted" aria-hidden /> 1–2 werkdagen
+                <Truck className="size-3.5 text-muted" aria-hidden /> 1–2
+                werkdagen
               </span>
               <span className="text-border shrink-0" aria-hidden>
                 ·
               </span>
               <span className="inline-flex shrink-0 items-center gap-1">
-                <Package className="size-3.5 text-muted" aria-hidden /> Discreet verzonden
+                <Package className="size-3.5 text-muted" aria-hidden /> Discreet
+                verzonden
               </span>
               <span className="text-border shrink-0" aria-hidden>
                 ·
               </span>
               <span className="inline-flex shrink-0 items-center gap-1">
-                <ShieldCheck className="size-3.5 text-muted" aria-hidden /> Labgetest
+                <ShieldCheck className="size-3.5 text-muted" aria-hidden />{" "}
+                Labgetest
               </span>
             </div>
           </div>
@@ -189,7 +228,9 @@ export function LandingPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                   Bestseller
                 </p>
-                <p className="text-sm font-bold tracking-tight">{featured.name}</p>
+                <p className="text-sm font-bold tracking-tight">
+                  {featured.name}
+                </p>
                 <p className="text-sm font-extrabold tabular-nums text-fg">
                   {formatEuro(featured.priceCents)}
                 </p>
@@ -256,7 +297,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="voordelen" className="container-max section-pad py-16 md:py-24">
+      <section
+        id="voordelen"
+        className="container-max section-pad py-16 md:py-24"
+      >
         <div className="mx-auto max-w-2xl text-center mb-12">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
             Waarom deze lijn
@@ -278,12 +322,19 @@ export function LandingPage() {
                 <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-fg transition-colors sm:bg-primary/10 sm:text-primary sm:group-hover:bg-primary sm:group-hover:text-primary-fg">
                   <BenefitIcon name={b.icon} className="size-5" />
                 </div>
-                <span className="text-xs font-bold tabular-nums text-primary" aria-hidden>
+                <span
+                  className="text-xs font-bold tabular-nums text-primary"
+                  aria-hidden
+                >
                   {String(i + 1).padStart(2, "0")}
                 </span>
               </div>
-              <h3 className="text-lg font-bold tracking-tight text-fg">{b.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{b.description}</p>
+              <h3 className="text-lg font-bold tracking-tight text-fg">
+                {b.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {b.description}
+              </p>
             </article>
           ))}
         </div>
@@ -306,8 +357,14 @@ export function LandingPage() {
               </p>
               <ul className="space-y-3">
                 {FORM_COMPARE.pen.map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-sm font-medium text-white">
-                    <Check className="size-4 shrink-0 text-success mt-0.5" strokeWidth={2.75} />
+                  <li
+                    key={item}
+                    className="flex items-start gap-3 text-sm font-medium text-white"
+                  >
+                    <Check
+                      className="size-4 shrink-0 text-success mt-0.5"
+                      strokeWidth={2.75}
+                    />
                     {item}
                   </li>
                 ))}
@@ -319,8 +376,14 @@ export function LandingPage() {
               </p>
               <ul className="space-y-3">
                 {FORM_COMPARE.vial.map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-sm text-bg/80">
-                    <Check className="size-4 shrink-0 text-primary mt-0.5" strokeWidth={2.75} />
+                  <li
+                    key={item}
+                    className="flex items-start gap-3 text-sm text-bg/80"
+                  >
+                    <Check
+                      className="size-4 shrink-0 text-primary mt-0.5"
+                      strokeWidth={2.75}
+                    />
                     {item}
                   </li>
                 ))}
@@ -348,8 +411,12 @@ export function LandingPage() {
               <span className="text-3xl font-extrabold tracking-tight text-primary tabular-nums">
                 {step.n}
               </span>
-              <h3 className="mt-3 text-lg font-bold tracking-tight">{step.title}</h3>
-              <p className="mt-2 text-sm text-muted leading-relaxed">{step.detail}</p>
+              <h3 className="mt-3 text-lg font-bold tracking-tight">
+                {step.title}
+              </h3>
+              <p className="mt-2 text-sm text-muted leading-relaxed">
+                {step.detail}
+              </p>
             </article>
           ))}
         </div>
@@ -367,7 +434,10 @@ export function LandingPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {COMPOUNDS.map((c, i) => (
-              <article key={c.name} className="rounded-xl border border-border bg-surface p-5">
+              <article
+                key={c.name}
+                className="rounded-xl border border-border bg-surface p-5"
+              >
                 <span className="text-[10px] font-bold tabular-nums text-primary">
                   {String(i + 1).padStart(2, "0")}
                 </span>
@@ -378,7 +448,9 @@ export function LandingPage() {
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
                   {c.role}
                 </p>
-                <p className="mt-2 text-sm text-muted leading-relaxed">{c.detail}</p>
+                <p className="mt-2 text-sm text-muted leading-relaxed">
+                  {c.detail}
+                </p>
                 <a
                   href={`/#${c.name.toLowerCase()}`}
                   className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
@@ -391,7 +463,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="beoordelingen" className="container-max section-pad py-16 md:py-24">
+      <section
+        id="beoordelingen"
+        className="container-max section-pad py-16 md:py-24"
+      >
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
             Ervaringen
@@ -415,11 +490,18 @@ export function LandingPage() {
           <div className="rounded-xl border border-border bg-surface px-5 py-4 shadow-sm space-y-1.5">
             {RATING_BREAKDOWN.map((row) => (
               <div key={row.stars} className="flex items-center gap-2 text-xs">
-                <span className="w-3 tabular-nums text-muted font-medium">{row.stars}</span>
+                <span className="w-3 tabular-nums text-muted font-medium">
+                  {row.stars}
+                </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
-                  <div className="h-full rounded-full bg-star" style={{ width: `${row.pct}%` }} />
+                  <div
+                    className="h-full rounded-full bg-star"
+                    style={{ width: `${row.pct}%` }}
+                  />
                 </div>
-                <span className="w-8 text-right tabular-nums text-dim">{row.pct}%</span>
+                <span className="w-8 text-right tabular-nums text-dim">
+                  {row.pct}%
+                </span>
               </div>
             ))}
           </div>
@@ -432,7 +514,9 @@ export function LandingPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold tracking-tight text-fg">{r.name}</p>
+                  <p className="font-semibold tracking-tight text-fg">
+                    {r.name}
+                  </p>
                   <p className="text-xs text-muted">{r.role}</p>
                 </div>
                 {r.verified && (
@@ -442,8 +526,12 @@ export function LandingPage() {
                 )}
               </div>
               <Stars rating={r.rating} size="sm" className="mt-3" />
-              <h3 className="mt-3 text-base font-bold tracking-tight text-fg">“{r.title}”</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{r.text}</p>
+              <h3 className="mt-3 text-base font-bold tracking-tight text-fg">
+                “{r.title}”
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {r.text}
+              </p>
             </article>
           ))}
         </div>
@@ -487,8 +575,12 @@ export function LandingPage() {
             <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary">
               <Rocket className="size-5" aria-hidden />
             </div>
-            <h3 className="text-xl font-extrabold tracking-tight">Klaar om te kiezen?</h3>
-            <p className="mt-2 text-sm text-muted">Gratis verzending vanaf €100.</p>
+            <h3 className="text-xl font-extrabold tracking-tight">
+              Klaar om te kiezen?
+            </h3>
+            <p className="mt-2 text-sm text-muted">
+              Gratis verzending vanaf €100.
+            </p>
             <Button size="lg" className="mt-5 glow-primary" asChild>
               <a href="#producten">
                 Naar de producten

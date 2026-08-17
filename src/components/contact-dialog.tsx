@@ -1,9 +1,10 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { X, Loader2, Mail } from "lucide-react";
 import { useContactStore } from "@/lib/contact-store";
 import { useCartStore } from "@/lib/cart-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export function ContactDialog() {
   const open = useContactStore((s) => s.open);
@@ -14,21 +15,24 @@ export function ContactDialog() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({});
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    message?: string;
+  }>({});
+  const panelRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useDialogFocus(open, close, panelRef, nameInputRef);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, close]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -63,10 +67,7 @@ export function ContactDialog() {
     window.setTimeout(() => {
       setSending(false);
       close();
-      pushToast(
-        "Bericht verstuurd",
-        "We reageren binnen 24 uur op werkdagen.",
-      );
+      pushToast("Bericht verstuurd", "We reageren binnen 24 uur op werkdagen.");
     }, 600);
   };
 
@@ -79,6 +80,7 @@ export function ContactDialog() {
         onClick={close}
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -92,10 +94,15 @@ export function ContactDialog() {
               <Mail className="size-4" aria-hidden />
             </span>
             <div className="min-w-0">
-              <h2 id={titleId} className="text-base font-extrabold tracking-tight text-fg">
+              <h2
+                id={titleId}
+                className="text-base font-extrabold tracking-tight text-fg"
+              >
                 Contact
               </h2>
-              <p className="text-xs text-muted">Reactie binnen 24 uur op werkdagen</p>
+              <p className="text-xs text-muted">
+                Reactie binnen 24 uur op werkdagen
+              </p>
             </div>
           </div>
           <button
@@ -108,25 +115,45 @@ export function ContactDialog() {
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+        <form
+          onSubmit={onSubmit}
+          className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5"
+        >
           <div className="space-y-1.5">
-            <label htmlFor="contact-name" className="text-xs font-semibold text-fg">
+            <label
+              htmlFor="contact-name"
+              className="text-xs font-semibold text-fg"
+            >
               Naam
             </label>
             <input
+              ref={nameInputRef}
               id="contact-name"
               name="name"
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={errors.name ? "contact-name-error" : undefined}
               className="h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2"
               placeholder="Je naam"
             />
-            {errors.name && <p className="text-xs text-danger">{errors.name}</p>}
+            {errors.name && (
+              <p
+                id="contact-name-error"
+                role="alert"
+                className="text-xs text-danger"
+              >
+                {errors.name}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="contact-email" className="text-xs font-semibold text-fg">
+            <label
+              htmlFor="contact-email"
+              className="text-xs font-semibold text-fg"
+            >
               E-mail
             </label>
             <input
@@ -137,14 +164,29 @@ export function ContactDialog() {
               inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={
+                errors.email ? "contact-email-error" : undefined
+              }
               className="h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2"
               placeholder="naam@email.nl"
             />
-            {errors.email && <p className="text-xs text-danger">{errors.email}</p>}
+            {errors.email && (
+              <p
+                id="contact-email-error"
+                role="alert"
+                className="text-xs text-danger"
+              >
+                {errors.email}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="contact-message" className="text-xs font-semibold text-fg">
+            <label
+              htmlFor="contact-message"
+              className="text-xs font-semibold text-fg"
+            >
               Bericht
             </label>
             <textarea
@@ -153,10 +195,22 @@ export function ContactDialog() {
               rows={4}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              aria-invalid={Boolean(errors.message)}
+              aria-describedby={
+                errors.message ? "contact-message-error" : undefined
+              }
               className="w-full resize-y rounded-xl border border-border bg-bg px-3.5 py-3 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2 min-h-[6.5rem]"
               placeholder="Waar kunnen we je mee helpen?"
             />
-            {errors.message && <p className="text-xs text-danger">{errors.message}</p>}
+            {errors.message && (
+              <p
+                id="contact-message-error"
+                role="alert"
+                className="text-xs text-danger"
+              >
+                {errors.message}
+              </p>
+            )}
           </div>
 
           <p className="text-[11px] text-dim leading-relaxed">
@@ -170,7 +224,12 @@ export function ContactDialog() {
           </p>
 
           <div className="mt-auto flex flex-col gap-2 pt-1 sm:flex-row-reverse">
-            <Button type="submit" className="w-full sm:flex-1" disabled={sending} aria-busy={sending}>
+            <Button
+              type="submit"
+              className="w-full sm:flex-1"
+              disabled={sending}
+              aria-busy={sending}
+            >
               {sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden />
