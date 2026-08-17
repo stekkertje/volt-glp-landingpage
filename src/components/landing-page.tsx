@@ -76,6 +76,11 @@ export function LandingPage() {
     }
   };
 
+  const setFilterAll = () => {
+    setFilter("all");
+    history.replaceState(null, "", "/#producten");
+  };
+
   const visible = useMemo(() => productsBySubcat(filter), [filter]);
   const weekdeal = PRODUCTS.find((p) => p.weekdeal);
   const featured = PRODUCTS.find((p) => p.slug === "semaglutide-4mg-pen") ?? PRODUCTS[0]!;
@@ -96,6 +101,15 @@ export function LandingPage() {
               <p className="max-w-lg text-base text-muted sm:text-lg sm:leading-relaxed">
                 {SITE.shortPitch}
               </p>
+            </div>
+
+            <div className="sm:hidden">
+              <Button size="lg" className="glow-primary w-full" asChild>
+                <a href="#producten">
+                  Bekijk 6 producten
+                  <ArrowRight className="size-4" />
+                </a>
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -137,7 +151,7 @@ export function LandingPage() {
               )}
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
+                <Button size="lg" className="glow-primary hidden w-full sm:inline-flex sm:w-auto" asChild>
                   <a href="#producten">
                     Bekijk 6 producten
                     <ArrowRight className="size-4" />
@@ -234,7 +248,7 @@ export function LandingPage() {
                   type="button"
                   role="tab"
                   aria-selected={filter === s.id}
-                  onClick={() => setFilterAndHash(s.id)}
+                  onClick={() => (s.id === "all" ? setFilterAll() : setFilterAndHash(s.id))}
                   className={cn(
                     "rounded-full border px-3.5 py-2 text-sm font-semibold transition",
                     filter === s.id

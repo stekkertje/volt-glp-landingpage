@@ -26,7 +26,7 @@ export function ProductPage({ product }: { product: Product }) {
 
   useEffect(() => {
     setSelected(product.slug, getDefaultOptionId(product));
-  }, [product.slug, setSelected]);
+  }, [product.slug, product, setSelected]);
 
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);

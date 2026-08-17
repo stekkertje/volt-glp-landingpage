@@ -66,6 +66,11 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
         <p className="text-xs text-dim">{product.unit}</p>
+        {product.form === "vial" && (
+          <p className="mt-1 text-[11px] text-muted leading-snug">
+            Spuiten optioneel op de productpagina
+          </p>
+        )}
         <div className="mt-4 flex gap-2">
           <Button asChild variant="secondary" size="sm" className="flex-1">
             <Link to="/product/$slug" params={{ slug: product.slug }}>
