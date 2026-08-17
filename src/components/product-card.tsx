@@ -65,7 +65,14 @@ export function ProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
-        <p className="text-xs text-dim">{product.unit}</p>
+        <p className="text-xs text-dim">
+          {product.unit} · ±{product.weeksAtStart} weken bij start
+        </p>
+        {product.form === "vial" ? (
+          <p className="mt-1 text-xs text-dim">Bac water inbegrepen · 10 spuiten optioneel</p>
+        ) : (
+          <p className="mt-1 text-xs text-dim">Kant-en-klare pen · naalden inbegrepen</p>
+        )}
         <div className="mt-4 flex gap-2">
           <Button asChild variant="secondary" size="sm" className="flex-1">
             <Link to="/product/$slug" params={{ slug: product.slug }}>

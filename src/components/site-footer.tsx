@@ -1,4 +1,5 @@
 import { useContactStore } from "@/lib/contact-store";
+import { handleShopHashClick } from "@/lib/hash-nav";
 import { SITE } from "@/lib/product";
 
 export function SiteFooter() {
@@ -27,22 +28,22 @@ export function SiteFooter() {
               <p className="font-semibold tracking-tight text-bg mb-3">Product</p>
               <ul className="space-y-2 text-bg/60">
                 <li>
-                  <a href="/#producten" className="hover:text-bg">
+                  <a href="/#producten" onClick={handleShopHashClick("/#producten")} className="hover:text-bg">
                     Alle producten
                   </a>
                 </li>
                 <li>
-                  <a href="/#semaglutide" className="hover:text-bg">
+                  <a href="/#semaglutide" onClick={handleShopHashClick("/#semaglutide")} className="hover:text-bg">
                     Semaglutide
                   </a>
                 </li>
                 <li>
-                  <a href="/#tirzepatide" className="hover:text-bg">
+                  <a href="/#tirzepatide" onClick={handleShopHashClick("/#tirzepatide")} className="hover:text-bg">
                     Tirzepatide
                   </a>
                 </li>
                 <li>
-                  <a href="/#retatrutide" className="hover:text-bg">
+                  <a href="/#retatrutide" onClick={handleShopHashClick("/#retatrutide")} className="hover:text-bg">
                     Retatrutide
                   </a>
                 </li>

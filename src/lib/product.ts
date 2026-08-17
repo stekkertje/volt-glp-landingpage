@@ -11,6 +11,7 @@ export type Subcat = "Semaglutide" | "Tirzepatide" | "Retatrutide";
 export type ProductOption = {
   id: string;
   label: string;
+  hint?: string;
   priceCents: number;
   compareAtCents?: number;
 };
@@ -112,12 +113,14 @@ const PRODUCT_LIST: Product[] = [
       {
         id: "none",
         label: "Geen extra's",
+        hint: "Bac water inbegrepen",
         priceCents: 7760,
         compareAtCents: 9700,
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "Insuline spuiten · 10 stuks",
+        hint: "Nodig om te injecteren",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -225,8 +228,13 @@ const PRODUCT_LIST: Product[] = [
     frequency: "1 injectie per week",
     weeksAtStart: 8,
     options: [
-      { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      { id: "none", label: "Geen extra's", hint: "Bac water inbegrepen", priceCents: 8500 },
+      {
+        id: "syringes",
+        label: "Insuline spuiten · 10 stuks",
+        hint: "Nodig om te injecteren",
+        priceCents: 8750,
+      },
     ],
   },
   {
@@ -316,10 +324,16 @@ const PRODUCT_LIST: Product[] = [
       {
         id: "none",
         label: "Geen extra's",
+        hint: "Bac water inbegrepen",
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      {
+        id: "syringes",
+        label: "Insuline spuiten · 10 stuks",
+        hint: "Nodig om te injecteren",
+        priceCents: 9650,
+      },
     ],
   },
   {
@@ -544,6 +558,12 @@ export const REVIEWS: Review[] = [
   },
 ];
 
+export function reviewsForProduct(product: Product): Review[] {
+  const key = product.subcat.toLowerCase();
+  const matched = REVIEWS.filter((r) => r.role.toLowerCase().includes(key));
+  return matched.length > 0 ? matched : REVIEWS.slice(0, 2);
+}
+
 export const RATING_BREAKDOWN = [
   { stars: 5, pct: 78 },
   { stars: 4, pct: 16 },
@@ -574,10 +594,10 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Alleen bij vials: Geen extra's, of Insuline spuiten",
-          "Retatrutide 10mg: extra's + €2,00",
-          "Semaglutide 2mg en Tirzepatide 10mg: extra's + €2,50",
-          "Pennen hebben geen extra-optie",
+          "Alleen bij vials: Geen extra's, of 10 insulinespuiten",
+          "Retatrutide 10mg: 10 spuiten + €2,00",
+          "Semaglutide 2mg en Tirzepatide 10mg: 10 spuiten + €2,50",
+          "Pennen hebben geen extra-optie. Bac water zit bij elke vial.",
         ],
       },
     ],

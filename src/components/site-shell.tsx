@@ -11,7 +11,10 @@ import { DocumentTitleBadge } from "@/components/document-title-badge";
 
 export function SiteShell({ children }: { children: ReactNode }) {
   return (
-    <div id="top" className="min-h-screen bg-bg text-fg pb-24 md:pb-0">
+    <div
+      id="top"
+      className="min-h-screen bg-bg text-fg pb-[calc(6.5rem+var(--volt-cookie-h,0px))] md:pb-0"
+    >
       <DocumentTitleBadge />
       <SiteHeader />
       <CartDrawer />

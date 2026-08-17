@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -36,6 +37,7 @@ type CartState = {
   lines: CartLine[];
   discountCode: string;
   discountApplied: boolean;
+  appliedCode: string;
   toasts: Toast[];
   setSelected: (slug: ProductSlug, optionId?: string) => void;
   setSelectedOption: (optionId: string) => void;
@@ -70,6 +72,7 @@ export const useCartStore = create<CartState>()(
       lines: [],
       discountCode: "",
       discountApplied: false,
+      appliedCode: "",
       toasts: [],
       setSelected: (slug, optionId) => {
         const product = getProduct(slug);
@@ -130,14 +133,24 @@ export const useCartStore = create<CartState>()(
       openCart: () => set({ cartOpen: true }),
       closeCart: () => set({ cartOpen: false }),
       clearCart: () =>
-        set({ lines: [], cartOpen: false, discountApplied: false }),
+        set({
+          lines: [],
+          cartOpen: false,
+          discountApplied: false,
+          appliedCode: "",
+          discountCode: "",
+        }),
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
         if (code === "VOLT10") {
-          set({ discountApplied: true });
+          set({ discountApplied: true, appliedCode: "VOLT10", discountCode: "VOLT10" });
           get().pushToast("Kortingscode toegepast", "10% extra op je subtotaal");
           return true;
+        }
+        const previous = get().appliedCode;
+        if (previous) {
+          set({ discountCode: previous });
         }
         get().pushToast("Code niet geldig", "Probeer VOLT10 voor 10% korting", "error");
         return false;
@@ -156,12 +169,32 @@ export const useCartStore = create<CartState>()(
         lines: s.lines,
         discountCode: s.discountCode,
         discountApplied: s.discountApplied,
+        appliedCode: s.appliedCode,
         selectedSlug: s.selectedSlug,
         selectedOptionId: s.selectedOptionId,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (state.discountApplied && !state.appliedCode) {
+          const code = state.discountCode.trim().toUpperCase();
+          state.appliedCode = code === "VOLT10" ? "VOLT10" : "";
+          if (!state.appliedCode) state.discountApplied = false;
+        }
+      },
     },
   ),
 );
+
+export function useCartHydrated() {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const done = () => setHydrated(true);
+    const unsub = useCartStore.persist.onFinishHydration(done);
+    if (useCartStore.persist.hasHydrated()) done();
+    return unsub;
+  }, []);
+  return hydrated;
+}
 
 export function cartCount(lines: CartLine[]) {
   return lines.reduce((n, l) => n + l.qty, 0);

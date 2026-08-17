@@ -1,11 +1,29 @@
-const ITEMS = [
+import { useEffect, useState } from "react";
+
+const ITEMS_OPEN = [
   "Gratis verzending vanaf €100",
   "Voor 23:00 besteld, morgen verzonden",
   "Discreet verpakt",
 ] as const;
 
+const ITEMS_CLOSED = [
+  "Gratis verzending vanaf €100",
+  "Na 23:00: volgende werkdag verzonden",
+  "Discreet verpakt",
+] as const;
+
 export function AnnounceBar() {
-  const track = [...ITEMS, ...ITEMS, ...ITEMS, ...ITEMS];
+  const [afterCutoff, setAfterCutoff] = useState(false);
+
+  useEffect(() => {
+    const tick = () => setAfterCutoff(new Date().getHours() >= 23);
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const items = afterCutoff ? ITEMS_CLOSED : ITEMS_OPEN;
+  const track = [...items, ...items, ...items, ...items];
 
   return (
     <div className="relative overflow-hidden bg-fg text-bg">

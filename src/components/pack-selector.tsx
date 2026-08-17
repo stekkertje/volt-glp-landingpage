@@ -47,8 +47,8 @@ export function PackSelector({
       {product.options.length > 0 && (
         <>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te injecteren. Kies of je
-            die extra wilt meenemen.
+            Bac water zit bij de vial. Om te injecteren heb je insulinespuiten nodig. De extra
+            optie is een set van 10 stuks.
           </p>
           <div className="grid gap-2.5" role="radiogroup" aria-label="Kies extra's">
             {product.options.map((p) => {
@@ -77,6 +77,7 @@ export function PackSelector({
                   </span>
                   <div className="min-w-0 flex-1">
                     <span className="font-semibold tracking-tight text-fg">{p.label}</span>
+                    {p.hint && <p className="mt-0.5 text-xs text-muted">{p.hint}</p>}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-lg font-extrabold tracking-tight tabular-nums text-fg">

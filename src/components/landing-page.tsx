@@ -36,8 +36,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useContactStore } from "@/lib/contact-store";
-
-const PRODUCT_HASHES = new Set(["semaglutide", "tirzepatide", "retatrutide", "producten"]);
+import { PRODUCT_HASHES, handleShopHashClick } from "@/lib/hash-nav";
 
 function hashToFilter(hash: string): Subcat | "all" | null {
   const h = hash.replace("#", "").toLowerCase();
@@ -83,17 +82,17 @@ export function LandingPage() {
   return (
     <SiteShell>
       <section className="hero-grid relative overflow-hidden">
-        <div className="container-max section-pad grid items-center gap-10 py-10 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
-          <div className="order-1 space-y-6 min-w-0">
-            <div className="space-y-3">
+        <div className="container-max section-pad grid items-center gap-8 py-7 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
+          <div className="order-1 space-y-5 min-w-0">
+            <div className="space-y-2.5">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 {SITE.category}
               </p>
-              <h1 className="text-4xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
+              <h1 className="text-[2rem] font-extrabold tracking-tight text-fg leading-[1.1] sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
                 GLP-1 afvallen.
                 <span className="text-primary"> Vial of pen.</span>
               </h1>
-              <p className="max-w-lg text-base text-muted sm:text-lg sm:leading-relaxed">
+              <p className="max-w-lg text-sm text-muted sm:text-lg sm:leading-relaxed">
                 {SITE.shortPitch}
               </p>
             </div>
@@ -109,6 +108,20 @@ export function LandingPage() {
                   · {SITE.reviewCount.toLocaleString("nl-NL")} beoordelingen
                 </span>
               </a>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
+                <a href="#producten">
+                  Bekijk 6 producten
+                  <ArrowRight className="size-4" />
+                </a>
+              </Button>
+              <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
+                <Link to="/product/$slug" params={{ slug: featured.slug }}>
+                  Bestseller · {featured.name}
+                </Link>
+              </Button>
             </div>
 
             <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 space-y-4">
@@ -135,20 +148,6 @@ export function LandingPage() {
                   <span className="shrink-0 text-xs font-semibold text-primary">Bekijk deal →</span>
                 </Link>
               )}
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
-                  <a href="#producten">
-                    Bekijk 6 producten
-                    <ArrowRight className="size-4" />
-                  </a>
-                </Button>
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
-                  <Link to="/product/$slug" params={{ slug: featured.slug }}>
-                    Bestseller · {featured.name}
-                  </Link>
-                </Button>
-              </div>
             </div>
 
             <div className="flex flex-nowrap items-center gap-x-2.5 overflow-x-auto text-[11px] text-dim sm:gap-x-5 sm:text-xs whitespace-nowrap">
@@ -184,15 +183,19 @@ export function LandingPage() {
                 src={featured.images[0]?.src}
                 alt={featured.images[0]?.alt ?? featured.name}
                 className="relative z-10 mx-auto w-full max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md"
+                fetchPriority="high"
               />
               <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                   Bestseller
                 </p>
                 <p className="text-sm font-bold tracking-tight">{featured.name}</p>
-                <p className="text-sm font-extrabold tabular-nums text-fg">
-                  {formatEuro(featured.priceCents)}
-                </p>
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <p className="text-sm font-extrabold tabular-nums text-fg">
+                    {formatEuro(featured.priceCents)}
+                  </p>
+                  <span className="text-xs font-semibold text-primary">Bekijk →</span>
+                </div>
               </div>
             </Link>
           </div>
@@ -381,6 +384,7 @@ export function LandingPage() {
                 <p className="mt-2 text-sm text-muted leading-relaxed">{c.detail}</p>
                 <a
                   href={`/#${c.name.toLowerCase()}`}
+                  onClick={handleShopHashClick(`/#${c.name.toLowerCase()}`)}
                   className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
                 >
                   {c.count} producten →

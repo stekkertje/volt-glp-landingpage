@@ -24,6 +24,7 @@ export function CartDrawer() {
   const clear = useCartStore((s) => s.clearCart);
   const discountCode = useCartStore((s) => s.discountCode);
   const discountApplied = useCartStore((s) => s.discountApplied);
+  const appliedCode = useCartStore((s) => s.appliedCode);
   const setDiscountCode = useCartStore((s) => s.setDiscountCode);
   const applyDiscount = useCartStore((s) => s.applyDiscount);
   const [showCode, setShowCode] = useState(false);
@@ -187,6 +188,11 @@ export function CartDrawer() {
                     aria-hidden
                   />
                 </button>
+                {discountApplied && (
+                  <p className="mt-1 text-xs font-semibold text-success">
+                    Code {appliedCode || "VOLT10"} is actief
+                  </p>
+                )}
                 {showCode && (
                   <form
                     className="mt-2 flex gap-2"
@@ -198,7 +204,7 @@ export function CartDrawer() {
                     <input
                       value={discountCode}
                       onChange={(e) => setDiscountCode(e.target.value)}
-                      placeholder="Code"
+                      placeholder="VOLT10"
                       className="h-10 min-w-0 flex-1 rounded-full border border-border bg-bg-elevated px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                       aria-label="Kortingscode"
                     />

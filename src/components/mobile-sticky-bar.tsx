@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
-import { useCartStore, cartCount } from "@/lib/cart-store";
+import { useCartStore, cartCount, useCartHydrated } from "@/lib/cart-store";
 import { getProduct, unitPriceCents } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,13 @@ export function MobileStickyBar() {
   const openCart = useCartStore((s) => s.openCart);
   const cartOpen = useCartStore((s) => s.cartOpen);
   const lines = useCartStore((s) => s.lines);
+  const hydrated = useCartHydrated();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [visible, setVisible] = useState(false);
 
   const onProduct = pathname.startsWith("/product/");
   const product = getProduct(selectedSlug);
-  const count = cartCount(lines);
+  const count = hydrated ? cartCount(lines) : 0;
 
   useEffect(() => {
     const onScroll = () => {

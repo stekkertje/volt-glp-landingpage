@@ -1,8 +1,9 @@
 import { ShoppingBag, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useCartStore, cartCount } from "@/lib/cart-store";
+import { useCartStore, cartCount, useCartHydrated } from "@/lib/cart-store";
 import { useContactStore } from "@/lib/contact-store";
+import { handleShopHashClick } from "@/lib/hash-nav";
 import { cn } from "@/lib/utils";
 import { AnnounceBar } from "@/components/announce-bar";
 
@@ -19,7 +20,8 @@ export function SiteHeader() {
   const [hidden, setHidden] = useState(false);
   const [headerH, setHeaderH] = useState(108);
   const lines = useCartStore((s) => s.lines);
-  const count = cartCount(lines);
+  const hydrated = useCartHydrated();
+  const count = hydrated ? cartCount(lines) : 0;
   const openCart = useCartStore((s) => s.openCart);
   const openContact = useContactStore((s) => s.openContact);
 
@@ -201,6 +203,7 @@ export function SiteHeader() {
                   <a
                     key={l.href}
                     href={l.href}
+                    onClick={handleShopHashClick(l.href)}
                     className="rounded-full px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     {l.label}
@@ -260,7 +263,7 @@ export function SiteHeader() {
                   <a
                     key={l.href}
                     href={l.href}
-                    onClick={() => setMenuOpen(false)}
+                    onClick={handleShopHashClick(l.href, () => setMenuOpen(false))}
                     tabIndex={open ? 0 : -1}
                     className="rounded-lg px-3 py-3 text-sm font-medium text-fg hover:bg-bg-elevated"
                   >
