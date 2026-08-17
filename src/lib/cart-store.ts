@@ -166,6 +166,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "volt-cart",
+      skipHydration: true,
       partialize: (s) => ({
         lines: s.lines,
         discountCode: s.discountCode,
