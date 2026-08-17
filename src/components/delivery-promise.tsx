@@ -44,7 +44,9 @@ export function DeliveryPromise() {
             <p className="font-semibold text-fg tracking-tight">
               Bestelvenster voor vandaag is gesloten
             </p>
-            <p className="text-xs text-muted">Volgende verzending: eerstvolgende werkdag</p>
+            <p className="text-xs text-muted">
+              Volgende verzending: eerstvolgende werkdag
+            </p>
           </>
         ) : (
           <>
@@ -54,7 +56,9 @@ export function DeliveryPromise() {
                 {ms === null ? "--:--:--" : formatCountdown(ms)}
               </span>
             </p>
-            <p className="text-xs text-muted">Voor 23:00 besteld = morgen verzonden</p>
+            <p className="text-xs text-muted">
+              Voor 23:00 besteld = volgende werkdag verzonden
+            </p>
           </>
         )}
       </div>

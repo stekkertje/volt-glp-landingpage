@@ -20,6 +20,8 @@ export function ProductCard({ product }: { product: Product }) {
           <img
             src={cover.src}
             alt={cover.alt}
+            width={800}
+            height={800}
             className="aspect-square w-full object-cover"
             loading="lazy"
           />
@@ -66,6 +68,11 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
         <p className="text-xs text-dim">{product.unit}</p>
+        <p className="mt-1 min-h-8 text-[11px] leading-snug text-muted">
+          {product.form === "vial"
+            ? "Bac water inbegrepen · spuiten kies je op de productpagina"
+            : "Gebruiksklaar · naalden inbegrepen"}
+        </p>
         <div className="mt-4 flex gap-2">
           <Button asChild variant="secondary" size="sm" className="flex-1">
             <Link to="/product/$slug" params={{ slug: product.slug }}>
@@ -75,7 +82,9 @@ export function ProductCard({ product }: { product: Product }) {
           <Button
             size="sm"
             className="flex-1"
-            onClick={() => addToCart(product.slug, getDefaultOptionId(product))}
+            onClick={() =>
+              addToCart(product.slug, getDefaultOptionId(product), 1)
+            }
           >
             In winkelwagen
           </Button>

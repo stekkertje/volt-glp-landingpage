@@ -91,7 +91,10 @@
   /* Offset for fixed header + marquee when using in-page anchors */
   section[id],
   #top,
-  #prijzen {
+  #prijzen,
+  #semaglutide,
+  #tirzepatide,
+  #retatrutide {
     scroll-margin-top: 7rem;
   }
 }

@@ -19,6 +19,10 @@ export function ProductGallery({
           key={current.src}
           src={current.src}
           alt={current.alt}
+          width={800}
+          height={800}
+          fetchPriority={active === 0 ? "high" : "auto"}
+          decoding="async"
           className="aspect-square w-full max-h-[420px] object-cover object-center"
         />
         {images.length > 1 && (
@@ -40,7 +44,12 @@ export function ProductGallery({
         )}
       </div>
       {images.length > 1 && (
-        <div className={cn("grid gap-2", images.length >= 4 ? "grid-cols-4" : "grid-cols-3")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            images.length >= 4 ? "grid-cols-4" : "grid-cols-3",
+          )}
+        >
           {images.map((img, i) => (
             <button
               key={img.src}
@@ -48,11 +57,21 @@ export function ProductGallery({
               onClick={() => setActive(i)}
               className={cn(
                 "overflow-hidden rounded-lg border-2 transition",
-                i === active ? "border-primary" : "border-transparent opacity-80 hover:opacity-100",
+                i === active
+                  ? "border-primary"
+                  : "border-transparent opacity-80 hover:opacity-100",
               )}
               aria-label={`Toon ${img.alt}`}
             >
-              <img src={img.src} alt="" className="aspect-square w-full object-cover" />
+              <img
+                src={img.src}
+                alt=""
+                width={800}
+                height={800}
+                loading="lazy"
+                decoding="async"
+                className="aspect-square w-full object-cover"
+              />
             </button>
           ))}
         </div>

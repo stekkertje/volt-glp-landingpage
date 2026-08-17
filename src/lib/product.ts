@@ -376,13 +376,15 @@ const CATALOG_ORDER: ProductSlug[] = [
   "retatrutide-20mg-pen",
 ];
 
-export const PRODUCTS: Product[] = CATALOG_ORDER.map(
-  (slug) => PRODUCT_LIST.find((p) => p.slug === slug)!,
+export const PRODUCTS: Product[] = CATALOG_ORDER.map((slug) =>
+  PRODUCT_LIST.find((p) => p.slug === slug)!,
 );
 
 export const DEFAULT_PRODUCT_SLUG: ProductSlug = "semaglutide-4mg-pen";
 
-export function getProduct(slug: string | undefined | null): Product | undefined {
+export function getProduct(
+  slug: string | undefined | null,
+): Product | undefined {
   if (!slug) return undefined;
   return PRODUCTS.find((p) => p.slug === slug);
 }
@@ -391,22 +393,34 @@ export function getDefaultOptionId(product: Product): string {
   return product.options[0]?.id ?? "default";
 }
 
-export function getOption(product: Product, optionId?: string | null): ProductOption | undefined {
+export function getOption(
+  product: Product,
+  optionId?: string | null,
+): ProductOption | undefined {
   if (!product.options.length) return undefined;
   return product.options.find((o) => o.id === optionId) ?? product.options[0];
 }
 
-export function unitPriceCents(product: Product, optionId?: string | null): number {
+export function unitPriceCents(
+  product: Product,
+  optionId?: string | null,
+): number {
   const opt = getOption(product, optionId);
   return opt?.priceCents ?? product.priceCents;
 }
 
-export function compareAtCents(product: Product, optionId?: string | null): number | undefined {
+export function compareAtCents(
+  product: Product,
+  optionId?: string | null,
+): number | undefined {
   const opt = getOption(product, optionId);
   return opt?.compareAtCents ?? product.compareAtCents;
 }
 
-export function pricePerWeekCents(product: Product, optionId?: string | null): number {
+export function pricePerWeekCents(
+  product: Product,
+  optionId?: string | null,
+): number {
   return Math.round(unitPriceCents(product, optionId) / product.weeksAtStart);
 }
 
@@ -418,28 +432,31 @@ export function productsBySubcat(subcat: Subcat | "all"): Product[] {
 export function relatedProducts(slug: ProductSlug, limit = 3): Product[] {
   const current = getProduct(slug);
   if (!current) return PRODUCTS.slice(0, limit);
-  const same = PRODUCTS.filter((p) => p.slug !== slug && p.subcat === current.subcat);
-  const rest = PRODUCTS.filter((p) => p.slug !== slug && p.subcat !== current.subcat);
-  return [...same, ...rest].slice(0, limit);
+  return PRODUCTS.filter(
+    (p) => p.slug !== slug && p.subcat === current.subcat,
+  ).slice(0, limit);
 }
 
 export const COMPOUNDS = [
   {
     name: "Semaglutide",
     role: "GLP-1",
-    detail: "Eetlustremming en een vast wekelijks ritme. Instap via 2 mg vial of 4 mg pen.",
+    detail:
+      "Eetlustremming en een vast wekelijks ritme. Instap via 2 mg vial of 4 mg pen.",
     count: 2,
   },
   {
     name: "Tirzepatide",
     role: "GLP-1 + GIP",
-    detail: "Dubbele agonist. Meer controle over cravings, als vial of als 20 mg pen.",
+    detail:
+      "Dubbele agonist. Meer controle over cravings, als vial of als 20 mg pen.",
     count: 2,
   },
   {
     name: "Retatrutide",
     role: "GLP-1 + GIP + glucagon",
-    detail: "Triple agonist. Voor wie plateaus wil doorbreken, als weekdeal-vial of als pen.",
+    detail:
+      "Triple agonist. Voor wie plateaus wil doorbreken, als weekdeal-vial of als pen.",
     count: 2,
   },
 ] as const;
@@ -452,17 +469,20 @@ export const BENEFITS = [
   },
   {
     title: "Minder eetlust",
-    description: "GLP-1 ondersteunt verzadiging zodat porties kleiner en rustiger worden.",
+    description:
+      "GLP-1 ondersteunt verzadiging zodat porties kleiner en rustiger worden.",
     icon: "focus",
   },
   {
     title: "Vial of pen",
-    description: "Zelf mengen met bac water, of een kant-en-klare pen met naalden.",
+    description:
+      "Zelf mengen met bac water, of een kant-en-klare pen met naalden.",
     icon: "capsule",
   },
   {
     title: "Labgetest en discreet",
-    description: "Batchcontrole, verzending NL en BE, track en trace, neutrale verpakking.",
+    description:
+      "Batchcontrole, verzending NL en BE, track en trace, neutrale verpakking.",
     icon: "shield",
   },
 ] as const;
@@ -471,17 +491,20 @@ export const USAGE_STEPS = [
   {
     n: "01",
     title: "Kies je vorm",
-    detail: "Vial plus bac water, of een gevulde pen. Extra insulinespuiten alleen bij vials.",
+    detail:
+      "Vial plus bac water, of een gevulde pen. Extra insulinespuiten alleen bij vials.",
   },
   {
     n: "02",
     title: "Start laag",
-    detail: "Eén keer per week. Begin met de laagste dosering en bouw rustig op.",
+    detail:
+      "Eén keer per week. Begin met de laagste dosering en bouw rustig op.",
   },
   {
     n: "03",
     title: "Houd het vol",
-    detail: "Vaste dag, vaste dosis. Resultaat zit in herhaling, niet in een eenmalige piek.",
+    detail:
+      "Vaste dag, vaste dosis. Resultaat zit in herhaling, niet in een eenmalige piek.",
   },
 ] as const;
 
@@ -552,7 +575,8 @@ export const RATING_BREAKDOWN = [
   { stars: 1, pct: 0 },
 ] as const;
 
-export type FaqBlock = { type: "p"; text: string } | { type: "ul"; items: string[] };
+export type FaqBlock =
+  { type: "p"; text: string } | { type: "ul"; items: string[] };
 
 export const FAQS: { q: string; body: FaqBlock[] }[] = [
   {

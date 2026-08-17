@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { X, ShoppingBag, Minus, Plus, Trash2, ChevronDown } from "lucide-react";
 import {
   useCartStore,
@@ -14,6 +14,7 @@ import {
 import { getProduct, unitPriceCents } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export function CartDrawer() {
   const open = useCartStore((s) => s.cartOpen);
@@ -28,6 +29,9 @@ export function CartDrawer() {
   const applyDiscount = useCartStore((s) => s.applyDiscount);
   const [showCode, setShowCode] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const discountStatusId = useId();
 
   const count = cartCount(lines);
   const subtotal = cartSubtotalCents(lines);
@@ -39,40 +43,40 @@ export function CartDrawer() {
   const shipping = cartShippingCents(afterDiscount);
   const total = afterDiscount + shipping;
   const freeShipLeft = Math.max(0, FREE_SHIPPING_CENTS - afterDiscount);
-  const freeShipPct = Math.min(100, Math.round((afterDiscount / FREE_SHIPPING_CENTS) * 100));
+  const freeShipPct = Math.min(
+    100,
+    Math.round((afterDiscount / FREE_SHIPPING_CENTS) * 100),
+  );
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open, close]);
+  useDialogFocus(open, close, panelRef);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Winkelwagen">
+    <div className="fixed inset-0 z-[70]">
       <button
         type="button"
         className="absolute inset-0 bg-fg/25 backdrop-blur-sm"
         onClick={close}
         aria-label="Achtergrond sluiten"
       />
-      <div className="absolute inset-x-0 bottom-0 mx-auto flex h-[min(92vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:mx-0 sm:h-full sm:max-h-none sm:max-w-sm sm:rounded-none sm:rounded-l-2xl sm:border-y-0 sm:border-r-0">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="absolute inset-x-0 bottom-0 mx-auto flex h-[min(92vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:mx-0 sm:h-full sm:max-h-none sm:max-w-sm sm:rounded-none sm:rounded-l-2xl sm:border-y-0 sm:border-r-0"
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <ShoppingBag className="size-5 text-primary" aria-hidden />
-            <h2 className="text-lg font-bold tracking-tight">
+            <h2 id={titleId} className="text-lg font-bold tracking-tight">
               Winkelwagen
               {count > 0 && (
-                <span className="ml-2 text-sm font-medium text-muted">({count})</span>
+                <span className="ml-2 text-sm font-medium text-muted">
+                  ({count})
+                </span>
               )}
             </h2>
           </div>
@@ -81,6 +85,7 @@ export function CartDrawer() {
             onClick={close}
             className="flex size-10 items-center justify-center rounded-full border border-border text-muted hover:text-fg"
             aria-label="Winkelwagen sluiten"
+            data-dialog-autofocus
           >
             <X className="size-5" />
           </button>
@@ -90,7 +95,12 @@ export function CartDrawer() {
           {count === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm text-muted">Je winkelwagen is leeg.</p>
-              <Button className="mt-4" variant="secondary" onClick={close} asChild>
+              <Button
+                className="mt-4"
+                variant="secondary"
+                onClick={close}
+                asChild
+              >
                 <a href="/#producten">Bekijk producten</a>
               </Button>
             </div>
@@ -110,11 +120,15 @@ export function CartDrawer() {
                       <img
                         src={cover.src}
                         alt=""
+                        width={800}
+                        height={800}
                         className="size-16 shrink-0 rounded-lg object-cover"
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold tracking-tight text-fg text-sm">{product.name}</p>
+                      <p className="font-semibold tracking-tight text-fg text-sm">
+                        {product.name}
+                      </p>
                       <p className="text-xs text-muted">{lineLabel(line)}</p>
                       <p className="mt-1 text-sm font-bold tabular-nums text-primary">
                         {formatEuro(unit)}
@@ -124,7 +138,9 @@ export function CartDrawer() {
                           <button
                             type="button"
                             className="flex size-9 items-center justify-center text-muted hover:text-fg"
-                            onClick={() => setLineQty(line.slug, line.optionId, line.qty - 1)}
+                            onClick={() =>
+                              setLineQty(line.slug, line.optionId, line.qty - 1)
+                            }
                             aria-label="Aantal verlagen in winkelwagen"
                           >
                             <Minus className="size-3.5" />
@@ -135,7 +151,9 @@ export function CartDrawer() {
                           <button
                             type="button"
                             className="flex size-9 items-center justify-center text-muted hover:text-fg"
-                            onClick={() => setLineQty(line.slug, line.optionId, line.qty + 1)}
+                            onClick={() =>
+                              setLineQty(line.slug, line.optionId, line.qty + 1)
+                            }
                             aria-label="Aantal verhogen in winkelwagen"
                           >
                             <Plus className="size-3.5" />
@@ -161,11 +179,16 @@ export function CartDrawer() {
               <div className="rounded-xl border border-border bg-surface p-3">
                 {freeShipLeft > 0 ? (
                   <p className="text-xs text-muted">
-                    Nog <strong className="text-fg">{formatEuro(freeShipLeft)}</strong> tot gratis
-                    verzending
+                    Nog{" "}
+                    <strong className="text-fg">
+                      {formatEuro(freeShipLeft)}
+                    </strong>{" "}
+                    tot gratis verzending
                   </p>
                 ) : (
-                  <p className="text-xs font-semibold text-success">Gratis verzending bereikt</p>
+                  <p className="text-xs font-semibold text-success">
+                    Gratis verzending bereikt
+                  </p>
                 )}
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
                   <div
@@ -180,6 +203,8 @@ export function CartDrawer() {
                   type="button"
                   onClick={() => setShowCode((v) => !v)}
                   className="flex w-full items-center justify-between text-sm font-medium text-muted hover:text-fg"
+                  aria-expanded={showCode}
+                  aria-controls="cart-discount-code"
                 >
                   Heb je een kortingscode?
                   <ChevronDown
@@ -188,31 +213,47 @@ export function CartDrawer() {
                   />
                 </button>
                 {showCode && (
-                  <form
-                    className="mt-2 flex gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      applyDiscount();
-                    }}
-                  >
-                    <input
-                      value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value)}
-                      placeholder="Code"
-                      className="h-10 min-w-0 flex-1 rounded-full border border-border bg-bg-elevated px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                      aria-label="Kortingscode"
-                    />
-                    <Button type="submit" size="sm" variant="secondary">
-                      Toepassen
-                    </Button>
-                  </form>
+                  <div id="cart-discount-code" className="mt-2 space-y-2">
+                    {discountApplied && (
+                      <p
+                        id={discountStatusId}
+                        className="text-xs font-semibold text-success"
+                        role="status"
+                      >
+                        VOLT10 actief · 10% extra korting
+                      </p>
+                    )}
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        applyDiscount();
+                      }}
+                    >
+                      <input
+                        value={discountCode}
+                        onChange={(e) => setDiscountCode(e.target.value)}
+                        placeholder="Code"
+                        className="h-10 min-w-0 flex-1 rounded-full border border-border bg-bg-elevated px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        aria-label="Kortingscode"
+                        aria-describedby={
+                          discountApplied ? discountStatusId : undefined
+                        }
+                      />
+                      <Button type="submit" size="sm" variant="secondary">
+                        Toepassen
+                      </Button>
+                    </form>
+                  </div>
                 )}
               </div>
 
               <div className="space-y-2 border-t border-border pt-4 text-sm">
                 <div className="flex justify-between text-muted">
                   <span>Subtotaal</span>
-                  <span className="tabular-nums text-fg">{formatEuro(subtotal)}</span>
+                  <span className="tabular-nums text-fg">
+                    {formatEuro(subtotal)}
+                  </span>
                 </div>
                 {stack > 0 && (
                   <div className="flex justify-between text-success">
@@ -234,7 +275,9 @@ export function CartDrawer() {
                 </div>
                 <div className="flex justify-between border-t border-border pt-2 text-base font-extrabold tracking-tight">
                   <span>Totaal</span>
-                  <span className="tabular-nums text-primary">{formatEuro(total)}</span>
+                  <span className="tabular-nums text-primary">
+                    {formatEuro(total)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -253,7 +296,10 @@ export function CartDrawer() {
                   setCheckingOut(false);
                   useCartStore
                     .getState()
-                    .pushToast("Demo-checkout", "Geen echte betaling in deze preview");
+                    .pushToast(
+                      "Demo-checkout",
+                      "Geen echte betaling in deze preview",
+                    );
                 }, 900);
               }}
             >
