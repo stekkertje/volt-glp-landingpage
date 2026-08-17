@@ -271,7 +271,7 @@ test("the mobile cookie offset matches the rendered banner height", async () => 
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     const banner = page.locator("div.fixed").filter({
-      hasText: "We gebruiken functionele cookies",
+      hasText: "We gebruiken alleen functionele cookies",
     });
     const bannerHeight = await banner.evaluate(
       (element) => element.getBoundingClientRect().height,
@@ -293,11 +293,33 @@ test("the mobile cookie offset matches the rendered banner height", async () => 
   }
 });
 
+test("the functional-cookie notice offers one unambiguous action", async () => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    assert.equal(
+      await page.getByRole("button", { name: "Begrepen" }).count(),
+      1,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "Accepteren" }).count(),
+      0,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("the home sticky product follows the active compound filter", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    await page.getByRole("tab", { name: "Retatrutide" }).click();
+    await page
+      .getByRole("button", { name: "Retatrutide", pressed: false })
+      .click();
     await page.locator("#faq").scrollIntoViewIfNeeded();
     await page.waitForTimeout(350);
 
@@ -390,6 +412,42 @@ test("compound hashes filter the catalog without FAQ resetting it", async () => 
   }
 });
 
+test("catalog filters use button semantics and expose their active state", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const filters = page.getByRole("group", { name: "Filter op stof" });
+    const retatrutide = filters.getByRole("button", { name: "Retatrutide" });
+    assert.equal(await retatrutide.getAttribute("aria-pressed"), "false");
+    await retatrutide.click();
+    assert.equal(await retatrutide.getAttribute("aria-pressed"), "true");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the announcement marquee is decorative for screen readers", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    assert.equal(
+      await page.locator(".announce-marquee").getAttribute("aria-hidden"),
+      "true",
+    );
+    assert.equal(
+      await page
+        .getByText(
+          "Gratis verzending vanaf €100. Voor 23:00 besteld, volgende werkdag verzonden. Discreet verpakt.",
+          { exact: true },
+        )
+        .count(),
+      1,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("cart quantities and discounts survive a reload", async () => {
   const { context, page } = await newPage();
   try {
@@ -456,6 +514,21 @@ test("every catalog product route loads its gallery image", async () => {
         ),
       );
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("unknown product routes return an HTTP 404", async () => {
+  const { context, page } = await newPage();
+  try {
+    const response = await page.goto(`${BASE_URL}/product/bestaat-niet`, {
+      waitUntil: "networkidle",
+    });
+    assert.equal(response?.status(), 404);
+    await page.getByRole("heading", { name: "Product niet gevonden" }).waitFor({
+      state: "visible",
+    });
   } finally {
     await context.close();
   }

@@ -55,18 +55,13 @@ export function CookieBanner() {
     >
       <div className="container-max flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted max-w-2xl">
-          We gebruiken functionele cookies om je winkelwagen en voorkeuren te
-          onthouden.{" "}
-          <span className="text-fg">Geen tracking zonder toestemming.</span>
+          We gebruiken alleen functionele cookies om je winkelwagen en
+          voorkeuren te onthouden.{" "}
+          <span className="text-fg">We plaatsen geen trackingcookies.</span>
         </p>
-        <div className="flex shrink-0 gap-2">
-          <Button size="sm" variant="secondary" onClick={accept}>
-            Alleen functioneel
-          </Button>
-          <Button size="sm" onClick={accept}>
-            Accepteren
-          </Button>
-        </div>
+        <Button size="sm" className="shrink-0" onClick={accept}>
+          Begrepen
+        </Button>
       </div>
     </div>
   );

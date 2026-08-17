@@ -222,6 +222,9 @@ export function LandingPage() {
               <img
                 src={featured.images[0]?.src}
                 alt={featured.images[0]?.alt ?? featured.name}
+                width={800}
+                height={800}
+                fetchPriority="high"
                 className="relative z-10 mx-auto w-full max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md"
               />
               <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
@@ -266,15 +269,14 @@ export function LandingPage() {
             </div>
             <div
               className="flex flex-wrap gap-2"
-              role="tablist"
+              role="group"
               aria-label="Filter op stof"
             >
               {SUBCATS.map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  role="tab"
-                  aria-selected={filter === s.id}
+                  aria-pressed={filter === s.id}
                   onClick={() => setFilterAndHash(s.id)}
                   className={cn(
                     "rounded-full border px-3.5 py-2 text-sm font-semibold transition",

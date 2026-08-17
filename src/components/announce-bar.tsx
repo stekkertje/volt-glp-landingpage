@@ -9,8 +9,15 @@ export function AnnounceBar() {
 
   return (
     <div className="relative overflow-hidden bg-fg text-bg">
+      <p className="sr-only">
+        Gratis verzending vanaf €100. Voor 23:00 besteld, volgende werkdag
+        verzonden. Discreet verpakt.
+      </p>
       <div className="relative flex h-9 items-center">
-        <div className="announce-marquee flex min-w-max items-center gap-8 text-[11px] font-semibold tracking-wide sm:text-xs">
+        <div
+          className="announce-marquee flex min-w-max items-center gap-8 text-[11px] font-semibold tracking-wide sm:text-xs"
+          aria-hidden="true"
+        >
           {track.map((item, i) => (
             <span
               key={`${item}-${i}`}

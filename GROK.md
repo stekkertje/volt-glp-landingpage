@@ -1,4 +1,4 @@
-# VOLT Pre-workout — briefing voor Grok Build CLI
+# VOLT GLP-1 webshop · projectbriefing
 
 Lees dit bestand **eerst**. Dit is de volledige context van het project.
 Werk verder op de bestaande code. **Niet opnieuw scaffolden.**
@@ -8,10 +8,10 @@ Werk verder op de bestaande code. **Niet opnieuw scaffolden.**
 ## STARTPROMPT (plak dit als eerste bericht)
 
 ```
-Je werkt in de VOLT Pre-workout landingspagina. Lees GROK.md volledig.
+Je werkt in de VOLT GLP-1 webshop. Lees GROK.md volledig.
 
-Dit is een bestaande, bijna-af conversie-landingspagina (Nederlands) voor een
-premium pre-workout in capsules. Niet opnieuw bouwen.
+Dit is een bestaande, bijna-af Nederlandse webshop met zes GLP-1 producten.
+Niet opnieuw bouwen.
 
 Regels:
 - Volledig Nederlands in UI en copy.
@@ -19,7 +19,8 @@ Regels:
 - Lichte, koele, premium look. Inter / system-ui. Geen beige, geen donker theme.
 - Lettertype strak en duidelijk, geen sierletters.
 - Preview/dev: 0.0.0.0:8080. Niet vragen om lokaal te runnen.
-- Single-product e-commerce LP: doel = directe aankoop.
+- Catalogus met zes producten en afzonderlijke productpagina's.
+- Primair doel: een passende vorm kiezen en direct toevoegen.
 - Cart, contactformulier en checkout zijn DEMO (geen echte betaling/mail).
 - Wijzig alleen wat gevraagd wordt. Geen extra features zonder opdracht.
 
@@ -30,34 +31,34 @@ Bevestig kort dat je GROK.md hebt gelezen en wacht op de volgende opdracht.
 
 ## Wat is dit
 
-Single-product e-commerce **landingspagina** voor **VOLT Pre-workout capsules**.
-Positionering: krachtig, premium, modern. Inname overdag of vóór training.
-Geen poeder, geen shaker: 3 capsules.
+Nederlandse **GLP-1 webshop** voor Semaglutide, Tirzepatide en Retatrutide.
+Elke stof is beschikbaar als vial of kant-en-klare pen.
 
 Merk: **VOLT**  
-Tagline: *Pure energie. Geen poeder. Geen excuses.*  
+Categorie: **GLP-1 Afvallen**
 Taal: **volledig Nederlands**
 
-Primair doel: de bezoeker overtuigen om direct te kopen.
+Primair doel: bezoekers helder laten vergelijken en zonder twijfel laten kopen.
 
 ---
 
-## Product & prijzen
+## Producten & prijzen
 
-| | |
-|---|---|
-| Vorm | Capsules |
-| Per dosering | 3 capsules, 200 mg cafeïne |
-| Per verpakking | 90 capsules = 30 doseringen |
-| Standaardprijs | €39,95 |
-| 2 packs | €69,95 (was €79,90) — Bespaar €9,95 |
-| 3 packs (beste deal) | €94,95 (was €119,85) — Bespaar €24,90 · €1,06/dosering |
-| Verzending | Gratis vanaf €50 |
-| Levering | NL & BE, 1–2 werkdagen, discreet, track & trace |
-| Social proof | 4.9 / 1.284 beoordelingen |
-| Nep-schaarste | Nog 47 stuks van deze batch |
+| Product           | Vorm |             Prijs |
+| ----------------- | ---- | ----------------: |
+| Semaglutide 2 mg  | vial |            €85,00 |
+| Semaglutide 4 mg  | pen  |           €169,00 |
+| Tirzepatide 10 mg | vial |            €94,00 |
+| Tirzepatide 20 mg | pen  |           €190,00 |
+| Retatrutide 10 mg | vial | €77,60 (weekdeal) |
+| Retatrutide 20 mg | pen  |           €199,00 |
 
-Default geselecteerde pack: **trio** (beste deal).
+- Gratis verzending vanaf €100, anders €4,95.
+- Levering in Nederland en België, 1–2 werkdagen, discreet en met track & trace.
+- Vials bevatten bac water. Insulinespuiten zijn een expliciete extra-keuze.
+- Stapelkorting: 5+ stuks 10%, 10+ stuks 20%.
+- Kortingscode `VOLT10`: 10% extra na stapelkorting.
+- Default uitgelicht product: **Semaglutide 4 mg pen**.
 
 ---
 
@@ -75,23 +76,25 @@ React 19, TypeScript, Vite 8, TanStack Start/Router, Tailwind v4, Zustand, Lucid
 
 ## Belangrijkste bestanden
 
-| Bestand | Rol |
-|---|---|
-| `src/components/landing-page.tsx` | Hele landingspagina + footer |
-| `src/lib/product.ts` | Productdata, packs, FAQ, formule, copy |
-| `src/lib/cart-store.ts` | Winkelwagen (client-only, demo) |
-| `src/lib/contact-store.ts` | Contactmodal open/dicht |
-| `src/components/pack-selector.tsx` | Packkeuze, aantal, CTA |
-| `src/components/site-header.tsx` | Sticky header + marquee + hide-on-scroll + mobiel menu |
-| `src/components/announce-bar.tsx` | Altijd zichtbare marquee (niet sluitbaar) |
-| `src/components/cart-drawer.tsx` | Winkelwagen-drawer |
-| `src/components/contact-dialog.tsx` | Contactformulier (alleen na klik, demo-submit) |
-| `src/components/delivery-promise.tsx` | Countdown tot 23:00 |
-| `src/components/product-gallery.tsx` | Hero / capsules / 3-pack foto |
-| `src/components/mobile-sticky-bar.tsx` | Mobiele sticky koopbalk |
-| `src/styles.css` | Design tokens, licht thema |
-| `public/images/` | product-hero, product-capsules, product-trio, product-lifestyle |
-| `vite.config.ts` | Host 8080, nitro alleen bij build |
+| Bestand                                | Rol                                                    |
+| -------------------------------------- | ------------------------------------------------------ |
+| `src/components/landing-page.tsx`      | Homepage en productcatalogus                           |
+| `src/components/product-page.tsx`      | Productdetailpagina                                    |
+| `src/lib/product.ts`                   | Productdata, opties, FAQ, reviews en copy              |
+| `src/lib/cart-store.ts`                | Winkelwagen (client-only, demo)                        |
+| `src/lib/contact-store.ts`             | Contactmodal open/dicht                                |
+| `src/components/pack-selector.tsx`     | Extra-keuze, aantal, korting en CTA                    |
+| `src/components/site-header.tsx`       | Sticky header + marquee + hide-on-scroll + mobiel menu |
+| `src/components/announce-bar.tsx`      | Altijd zichtbare marquee (niet sluitbaar)              |
+| `src/components/cart-drawer.tsx`       | Winkelwagen-drawer                                     |
+| `src/components/contact-dialog.tsx`    | Contactformulier (alleen na klik, demo-submit)         |
+| `src/components/delivery-promise.tsx`  | Countdown tot 23:00                                    |
+| `src/components/product-gallery.tsx`   | Productafbeeldingen en thumbnails                      |
+| `src/components/mobile-sticky-bar.tsx` | Mobiele sticky koopbalk                                |
+| `src/styles.css`                       | Design tokens, licht thema                             |
+| `public/images/producten/`             | Productafbeeldingen                                    |
+| `scripts/storefront.test.mjs`          | Browserregressies voor de winkelstromen                |
+| `vite.config.ts`                       | Host 8080, nitro alleen bij build                      |
 
 ---
 
@@ -104,48 +107,49 @@ React 19, TypeScript, Vite 8, TanStack Start/Router, Tailwind v4, Zustand, Lucid
 - Marquee altijd zichtbaar, **geen kruisje**
 - Header: hide bij omlaag scrollen, show bij omhoog / stilstand
 - Mobiel menu: overlay (geen layout-shift), sluit bij tik buiten / echte scroll / link
-- Geen Klarna
+- Geen Klarna of betaalproviderlogo's
 - Geen “incl. btw” bij prijs
 - Geen em-dash `—` ergens in copy
 
 ---
 
-## Pagina-opbouw (volgorde)
+## Pagina-opbouw
 
-1. Marquee: Gratis verzending vanaf €50 · Voor 23:00 besteld, morgen verzonden · Discreet verpakt
-2. Header: logo, ankers, winkelwagen, Nu kopen
-3. Hero: productfoto, waardepropositie, prijs €39,95 + klikbare 3-pack deal, CTA’s
-4. Benefits (4 kaarten) — icons op mobiel altijd oranje (niet alleen hover)
-5. Capsules vs poeder (pluspunten Volt eerst, daarna minpunten poeder)
-6. Kies jouw voordeel: 1/2 packs compact + oranje 3-pack card met trio-foto
-7. Zo gebruik je VOLT (01 02 03)
-8. Formule + supplement facts
-9. Reviews
-10. Bestellen: gallery + pack selector (`#prijzen` = packprijzen, **niet** de foto)
-11. FAQ (alinea’s of bullets, geen muur van 1 regel)
-12. Klaar om harder te trainen? (raket-icoon) + contact-link
-13. Footer: Product → Levering → Service (onder elkaar, links), e-mail op 1 regel
+Homepage:
 
-Ankers `#bestellen` / “Bestellen” / “Nu kopen” / “Beste deal” / “Bekijk jouw voordeel” → **`#prijzen`**.
+1. Marquee: gratis verzending, volgende werkdag, discreet verpakt
+2. Header: logo, stoffen, FAQ, winkelwagen en Nu kopen
+3. Hero: waardepropositie, weekdeal en bestseller
+4. Filterbare productcatalogus
+5. Voordelen en vergelijking vial versus pen
+6. Gebruik in drie stappen
+7. Stoffenoverzicht
+8. Reviews
+9. FAQ en contact
+10. Footer
+
+Productpagina:
+
+1. Broodkruimel en productgalerij
+2. Prijs, weken bij startdosis, verzendkosten en reviews
+3. Extra-keuze, aantal, voorraad, levering en stapelkorting
+4. Vertrouwenselementen en samenstelling
+5. Alternatieve vorm en vergelijkbare producten
 
 ---
 
-## UX-regels die de eigenaar al afdwong
+## UX-regels
 
-- Hero-USP’s op 1 regel mobiel: `1–2 werkdagen · Discreet verzonden · Batch-getest`
-- Samenstelling / dosering / aanbevolen gebruik: **onder elkaar** op mobiel
-- Prijs per dosering op **eigen regel**, nooit een `·` vooraan na wrap
-- “In winkelwagen” **direct onder Aantal**
-- Pack-optie “In winkelwagen” vs “Nu kopen”: winkelwagen-CTA in hero wijst naar 3-pack
-- Footer Levering:
-  - Nederland & België
-  - 1–2 werkdagen
-  - Gratis levering vanaf €50 (1 regel)
-  - Geen “Discreet verpakt” in footer
-- Copyright past op 1 regel op 360–390px
-- Cart: geen “Incl. btw · NL & BE”, geen Apple Pay / PayPal / iDEAL-knoppen in drawer
-- Contact: alleen via klik (menu, footer, FAQ). Modal, geen altijd-zichtbaar formulier
-- Lifestyle-sectie “potje op tafel” is **verwijderd**
+- Homefilters wijzigen de catalogus en de mobiele sticky productkeuze.
+- Andere hashes, zoals FAQ en beoordelingen, wissen het actieve filter niet.
+- Vial-kaarten sturen eerst naar de extra-keuze en voegen niet stil “Geen extra's” toe.
+- “In winkelwagen” staat direct onder Aantal.
+- Mobiele sticky “Kopen” gebruikt hetzelfde aantal en dezelfde optie als de productselector.
+- Cookiebanner en sticky koopbalk mogen elkaar nooit overlappen.
+- Footer Levering: Nederland & België, 1–2 werkdagen, gratis vanaf €100.
+- Cart bevat geen betaalproviderknoppen; checkout blijft expliciet demo.
+- Contact opent alleen na een bewuste klik en gebruikt een modal.
+- Producttitels blijven productspecifiek, ook met een winkelwagenaantal in de browsertab.
 
 ---
 
@@ -154,7 +158,7 @@ Ankers `#bestellen` / “Bestellen” / “Nu kopen” / “Beste deal” / “B
 - Cart: Zustand, geen backend
 - Contact: timeout + toast, geen echte mail
 - Checkout in drawer: nep-success
-- Auth/login, PGLite, `/__grok` PWA: template-restanten, niet nodig voor de LP
+- Auth/login, PGLite en `/__grok` PWA: template-infrastructuur, niet gekoppeld aan de shop
 - Hostinger shared: niet compatible zonder static export
 
 ---
@@ -176,6 +180,7 @@ npm run typecheck
 
 1. Kleine copy/layout: edit in place, HMR, server laten draaien.
 2. Alleen herstarten bij `vite.config` / deps.
-3. Geen nieuwe app, geen extra pages, geen dark mode, geen Engels.
+3. Geen nieuwe app, geen extra pagina's, geen dark mode, geen Engels.
 4. Screenshots voor QA: `/workspace/screenshots/`.
 5. Mobiel checken op ~390px en ~402px (iPhone 17 Pro CSS-breedte).
+6. Voeg voor geldstromen en navigatie een browserregressie toe in `scripts/storefront.test.mjs`.

@@ -19,6 +19,9 @@ export function ProductGallery({
           key={current.src}
           src={current.src}
           alt={current.alt}
+          width={800}
+          height={800}
+          fetchPriority="high"
           className="aspect-square w-full max-h-[420px] object-cover object-center"
         />
         {images.length > 1 && (
@@ -68,6 +71,9 @@ export function ProductGallery({
               <img
                 src={img.src}
                 alt=""
+                width={800}
+                height={800}
+                loading="lazy"
                 className="aspect-square w-full object-cover"
               />
             </button>

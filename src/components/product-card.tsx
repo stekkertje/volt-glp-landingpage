@@ -20,6 +20,8 @@ export function ProductCard({ product }: { product: Product }) {
           <img
             src={cover.src}
             alt={cover.alt}
+            width={800}
+            height={800}
             className="aspect-square w-full object-cover"
             loading="lazy"
           />
