@@ -67,7 +67,7 @@ after(async () => {
 test("a related product card always adds one item", async () => {
   const { context, page } = await newPage();
   try {
-    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+    await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
     const increase = page.getByRole("button", { name: "Aantal verhogen" });
@@ -75,7 +75,7 @@ test("a related product card always adds one item", async () => {
 
     const related = page
       .locator("section")
-      .filter({ hasText: "Vergelijk meer producten" });
+      .filter({ hasText: "Andere sterkte / vorm" });
     await related
       .getByRole("button", { name: "In winkelwagen" })
       .first()
@@ -83,8 +83,26 @@ test("a related product card always adds one item", async () => {
 
     const state = await cartState(page);
     assert.deepEqual(state.lines, [
-      { slug: "tirzepatide-20mg-pen", optionId: "default", qty: 1 },
+      { slug: "semaglutide-4mg-pen", optionId: "default", qty: 1 },
     ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("related products stay within the current compound", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    const related = page
+      .locator("section")
+      .filter({ hasText: "Andere sterkte / vorm" });
+    const text = await related.innerText();
+
+    assert.doesNotMatch(text, /Tirzepatide/);
+    assert.doesNotMatch(text, /Retatrutide/);
   } finally {
     await context.close();
   }
@@ -120,12 +138,12 @@ test("an invalid code does not replace an active VOLT10 discount", async () => {
 test("the PDP sticky bar stays bound to the current product", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
-    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+    await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
     const related = page
       .locator("section")
-      .filter({ hasText: "Vergelijk meer producten" });
+      .filter({ hasText: "Andere sterkte / vorm" });
     await related
       .getByRole("button", { name: "In winkelwagen" })
       .first()
@@ -138,7 +156,7 @@ test("the PDP sticky bar stays bound to the current product", async () => {
       has: page.getByRole("button", { name: "Kopen" }),
     });
     await sticky.waitFor({ state: "visible" });
-    assert.match(await sticky.innerText(), /Semaglutide 4mg · Pen/);
+    assert.match(await sticky.innerText(), /Semaglutide 2mg/);
   } finally {
     await context.close();
   }

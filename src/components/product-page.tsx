@@ -233,7 +233,7 @@ export function ProductPage({ product }: { product: Product }) {
         <section className="border-t border-border bg-bg-elevated">
           <div className="container-max section-pad py-16">
             <h2 className="text-2xl font-extrabold tracking-tight mb-6">
-              Vergelijk meer producten
+              Andere sterkte / vorm
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((p) => (

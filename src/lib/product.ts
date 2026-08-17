@@ -417,10 +417,10 @@ export function productsBySubcat(subcat: Subcat | "all"): Product[] {
 
 export function relatedProducts(slug: ProductSlug, limit = 3): Product[] {
   const current = getProduct(slug);
-  if (!current) return PRODUCTS.slice(0, limit);
-  const same = PRODUCTS.filter((p) => p.slug !== slug && p.subcat === current.subcat);
-  const rest = PRODUCTS.filter((p) => p.slug !== slug && p.subcat !== current.subcat);
-  return [...same, ...rest].slice(0, limit);
+  if (!current) return [];
+  return PRODUCTS.filter(
+    (p) => p.slug !== slug && p.subcat === current.subcat,
+  ).slice(0, limit);
 }
 
 export const COMPOUNDS = [
