@@ -60,7 +60,7 @@ try {
   const plus = desktop.getByRole("button", { name: "Aantal verhogen" });
   await plus.click();
   await plus.click();
-  await desktop.getByRole("button", { name: /In winkelwagen/ }).click();
+  await desktop.locator("#prijzen").getByRole("button", { name: /In winkelwagen/ }).click();
   await desktop.waitForTimeout(400);
   const cartTitle = await desktop.getByRole("dialog", { name: "Winkelwagen" }).innerText();
   if (!/3/.test(cartTitle) && !/\(3\)/.test(cartTitle)) {
@@ -124,9 +124,16 @@ try {
   const syringes = await mobile.getByText(/10 insulinespuiten/).count();
   if (syringes === 0) errors.push("pdp missing syringe option");
 
-  await mobile.evaluate(() => window.scrollTo(0, 1800));
-  await mobile.waitForTimeout(400);
+  await mobile.evaluate(async () => {
+    const target = document.getElementById("reviews") ?? document.body;
+    target.scrollIntoView({ block: "start" });
+  });
+  await mobile.waitForTimeout(500);
   const stickyBuy = mobile.getByRole("button", { name: "Kopen" });
+  if ((await stickyBuy.count()) === 0) {
+    await mobile.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await mobile.waitForTimeout(400);
+  }
   if ((await stickyBuy.count()) === 0) errors.push("mobile sticky Kopen missing after scroll");
   else {
     const box = await stickyBuy.boundingBox();

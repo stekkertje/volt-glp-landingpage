@@ -160,7 +160,7 @@ export function LandingPage() {
                 </Button>
                 <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
                   <Link to="/product/$slug" params={{ slug: featured.slug }}>
-                    Bestseller · {featured.name}
+                    Bestseller bekijken
                   </Link>
                 </Button>
               </div>

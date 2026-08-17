@@ -24,15 +24,18 @@ export function MobileStickyBar() {
 
   useEffect(() => {
     const onScroll = () => {
-      const section = document.getElementById("prijzen") ?? document.getElementById("producten");
-      if (!section) {
+      const cta =
+        document.querySelector("#prijzen .glow-primary") ??
+        document.getElementById("prijzen") ??
+        document.getElementById("producten");
+      if (!cta) {
         setVisible(window.scrollY > 420);
         return;
       }
-      const rect = section.getBoundingClientRect();
-      const pastHero = window.scrollY > 360;
-      const buyInView = rect.top < window.innerHeight && rect.bottom > 80;
-      setVisible(pastHero && !buyInView);
+      const rect = cta.getBoundingClientRect();
+      const pastHero = window.scrollY > 280;
+      const ctaInView = rect.top < window.innerHeight - 96 && rect.bottom > 96;
+      setVisible(pastHero && !ctaInView);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });

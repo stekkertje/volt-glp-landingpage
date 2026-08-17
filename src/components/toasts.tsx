@@ -9,7 +9,7 @@ export function Toasts() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-[calc(6.5rem+var(--volt-cookie-h,0px))] right-3 z-[80] flex w-[min(100%-1.5rem,22rem)] flex-col gap-2 md:bottom-6 md:right-6"
+      className="pointer-events-none fixed bottom-[calc(6.5rem+var(--volt-cookie-h,0px))] right-3 z-[60] flex w-[min(100%-1.5rem,22rem)] flex-col gap-2 md:bottom-6 md:right-6"
       aria-live="polite"
     >
       {toasts.map((t) => {

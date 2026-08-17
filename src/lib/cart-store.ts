@@ -108,11 +108,6 @@ export const useCartStore = create<CartState>()(
             selectedOptionId: opt,
           };
         });
-        const option = getOption(product, opt);
-        get().pushToast(
-          "Toegevoegd aan winkelwagen",
-          option ? `${product.name} · ${option.label}` : product.name,
-        );
       },
       setLineQty: (slug, optionId, qty) => {
         set((s) => {
