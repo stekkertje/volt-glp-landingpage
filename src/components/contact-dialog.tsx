@@ -26,15 +26,6 @@ export function ContactDialog() {
   useDialogFocus(open, close, panelRef, nameInputRef);
 
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  useEffect(() => {
     if (!open) {
       setName("");
       setEmail("");

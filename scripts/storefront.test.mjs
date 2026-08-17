@@ -188,7 +188,15 @@ test("the cart drawer moves focus inside and restores its opener", async () => {
       .locator("#producten article")
       .filter({ hasText: "Semaglutide 4mg" })
       .getByRole("button", { name: "In winkelwagen" });
+    const overflowBefore = await page.evaluate(
+      () => document.body.style.overflow,
+    );
     await opener.click();
+    await page.waitForFunction(
+      () =>
+        document.activeElement?.getAttribute("aria-label") ===
+        "Winkelwagen sluiten",
+    );
 
     assert.equal(
       await page.evaluate(() =>
@@ -196,10 +204,18 @@ test("the cart drawer moves focus inside and restores its opener", async () => {
       ),
       "Winkelwagen sluiten",
     );
+    assert.equal(
+      await page.evaluate(() => document.body.style.overflow),
+      "hidden",
+    );
     await page.keyboard.press("Escape");
     assert.equal(
       await opener.evaluate((element) => element === document.activeElement),
       true,
+    );
+    assert.equal(
+      await page.evaluate(() => document.body.style.overflow),
+      overflowBefore,
     );
   } finally {
     await context.close();
@@ -213,16 +229,30 @@ test("the contact dialog focuses the first field and restores its opener", async
     const opener = page
       .getByRole("button", { name: "Contact", exact: true })
       .last();
+    const overflowBefore = await page.evaluate(
+      () => document.body.style.overflow,
+    );
     await opener.click();
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute("name") === "name",
+    );
 
     assert.equal(
       await page.evaluate(() => document.activeElement?.getAttribute("name")),
       "name",
     );
+    assert.equal(
+      await page.evaluate(() => document.body.style.overflow),
+      "hidden",
+    );
     await page.keyboard.press("Escape");
     assert.equal(
       await opener.evaluate((element) => element === document.activeElement),
       true,
+    );
+    assert.equal(
+      await page.evaluate(() => document.body.style.overflow),
+      overflowBefore,
     );
   } finally {
     await context.close();

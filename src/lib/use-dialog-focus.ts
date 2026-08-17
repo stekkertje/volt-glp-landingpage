@@ -18,7 +18,15 @@ export function useDialogFocus(
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    initialFocusRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => {
+      const autofocusTarget =
+        panelRef.current?.querySelector<HTMLElement>(
+          "[data-dialog-autofocus]",
+        );
+      (autofocusTarget ?? initialFocusRef.current)?.focus();
+    });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -49,7 +57,9 @@ export function useDialogFocus(
 
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
       previousFocusRef.current = null;
     };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { X, ShoppingBag, Minus, Plus, Trash2, ChevronDown } from "lucide-react";
 import {
   useCartStore,
@@ -48,15 +48,6 @@ export function CartDrawer() {
   );
 
   useDialogFocus(open, close, panelRef, closeButtonRef);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
 
   if (!open) return null;
 
