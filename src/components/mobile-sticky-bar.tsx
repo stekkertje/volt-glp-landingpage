@@ -54,7 +54,7 @@ export function MobileStickyBar() {
           <img
             src={cover.src}
             alt=""
-            className="size-12 rounded-lg object-cover ring-1 ring-border"
+            className="size-12 rounded-lg object-cover ring-1 ring-border shrink-0"
           />
         )}
         <div className="min-w-0 flex-1">
@@ -64,7 +64,7 @@ export function MobileStickyBar() {
         <button
           type="button"
           onClick={openCart}
-          className="relative flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-bg-elevated text-fg"
+          className="relative flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-bg-elevated text-fg cursor-pointer"
           aria-label={
             count > 0
               ? `Winkelwagen openen, ${count} product${count === 1 ? "" : "en"}`
@@ -81,13 +81,13 @@ export function MobileStickyBar() {
         {onProduct ? (
           <Button
             size="md"
-            className="shrink-0 glow-primary min-h-11"
+            className="shrink-0 glow-primary min-h-11 px-4 font-bold cursor-pointer"
             onClick={() => addToCart(product.slug, selectedOptionId, selectedQty)}
           >
             Kopen
           </Button>
         ) : (
-          <Button size="md" className="shrink-0 glow-primary min-h-11" asChild>
+          <Button size="md" className="shrink-0 glow-primary min-h-11 px-4 font-bold cursor-pointer" asChild>
             <Link to="/product/$slug" params={{ slug: product.slug }}>
               Bekijk
             </Link>

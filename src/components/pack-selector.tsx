@@ -45,12 +45,12 @@ export function PackSelector({
   return (
     <div className="space-y-4">
       {product.options.length > 0 && (
-        <>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-fg">Kies injectie-optie:</p>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te injecteren. Kies of je
-            die extra wilt meenemen.
+            Bac water (2 ml) zit standaard bij de vial. Insulinespuiten zijn nodig voor toediening. Kies of je direct een set van 10 spuiten wilt meebestellen.
           </p>
-          <div className="grid gap-2.5" role="radiogroup" aria-label="Kies extra's">
+          <div className="grid gap-2.5 pt-1" role="radiogroup" aria-label="Kies extra's">
             {product.options.map((p) => {
               const active = optionId === p.id;
               return (
@@ -61,9 +61,9 @@ export function PackSelector({
                   aria-checked={active}
                   onClick={() => setSelected(product.slug, p.id)}
                   className={cn(
-                    "relative flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    "relative flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer",
                     active
-                      ? "border-primary bg-primary/6 ring-1 ring-primary/25"
+                      ? "border-primary bg-primary/6 ring-1 ring-primary/25 shadow-2xs"
                       : "border-border bg-surface hover:border-border-strong hover:bg-bg-elevated",
                   )}
                 >
@@ -76,10 +76,10 @@ export function PackSelector({
                     {active && <Check className="size-3" strokeWidth={3} />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <span className="font-semibold tracking-tight text-fg">{p.label}</span>
+                    <span className="font-semibold tracking-tight text-fg text-sm">{p.label}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-extrabold tracking-tight tabular-nums text-fg">
+                    <p className="text-base sm:text-lg font-extrabold tracking-tight tabular-nums text-fg">
                       {formatEuro(p.priceCents)}
                     </p>
                     {p.compareAtCents && (
@@ -92,15 +92,15 @@ export function PackSelector({
               );
             })}
           </div>
-        </>
+        </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 pt-1">
         <span className="text-sm font-medium text-muted">Aantal</span>
         <div className="inline-flex items-center rounded-full border border-border bg-bg-elevated">
           <button
             type="button"
-            className="flex size-10 items-center justify-center text-muted hover:text-fg disabled:opacity-40"
+            className="flex size-10 items-center justify-center text-muted hover:text-fg disabled:opacity-40 cursor-pointer"
             onClick={() => setSelectedQty(qty - 1)}
             disabled={qty <= 1}
             aria-label="Aantal verlagen"
@@ -112,7 +112,7 @@ export function PackSelector({
           </span>
           <button
             type="button"
-            className="flex size-10 items-center justify-center text-muted hover:text-fg"
+            className="flex size-10 items-center justify-center text-muted hover:text-fg cursor-pointer"
             onClick={() => setSelectedQty(qty + 1)}
             aria-label="Aantal verhogen"
           >
@@ -121,16 +121,14 @@ export function PackSelector({
         </div>
       </div>
 
-      <Button size="lg" className="w-full glow-primary" onClick={onAdd}>
+      <Button size="lg" className="w-full glow-primary min-h-12 text-base font-bold cursor-pointer" onClick={onAdd}>
         {stackPct ? (
-          <>
-            {ctaLabel} · {formatEuro(shownTotal)}
-            <span className="text-xs font-semibold opacity-90">−{stackPct}% stapel</span>
-          </>
+          <span className="flex items-center justify-center gap-2">
+            <span>{ctaLabel} · {formatEuro(shownTotal)}</span>
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold text-white">−{stackPct}% stapel</span>
+          </span>
         ) : (
-          <>
-            {ctaLabel} · {formatEuro(shownTotal)}
-          </>
+          <span>{ctaLabel} · {formatEuro(shownTotal)}</span>
         )}
       </Button>
 

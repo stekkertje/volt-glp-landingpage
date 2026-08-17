@@ -60,24 +60,24 @@ export function SiteFooter() {
               <p className="font-semibold tracking-tight text-bg mb-3">Service</p>
               <ul className="space-y-2 text-bg/60">
                 <li>
+                  <a href="/#beoordelingen" className="hover:text-bg">
+                    Beoordelingen ({SITE.rating} / 5)
+                  </a>
+                </li>
+                <li>
                   <a href="/#faq" className="hover:text-bg">
                     Veelgestelde vragen
                   </a>
                 </li>
                 <li>
-                  <a href="/#beoordelingen" className="hover:text-bg">
-                    Beoordelingen
-                  </a>
-                </li>
-                <li>
-                  <button type="button" onClick={openContact} className="hover:text-bg text-left">
-                    Contact
+                  <button type="button" onClick={openContact} className="hover:text-bg text-left cursor-pointer">
+                    Contact opnemen
                   </button>
                 </li>
                 <li>
                   <a
                     href="mailto:support@voltperformance.nl"
-                    className="text-bg/60 hover:text-bg"
+                    className="text-bg/60 hover:text-bg break-all"
                   >
                     support@voltperformance.nl
                   </a>

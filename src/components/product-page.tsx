@@ -26,7 +26,7 @@ export function ProductPage({ product }: { product: Product }) {
 
   useEffect(() => {
     setSelected(product.slug, getDefaultOptionId(product));
-  }, [product.slug, setSelected]);
+  }, [product, setSelected]);
 
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);
@@ -72,7 +72,7 @@ export function ProductPage({ product }: { product: Product }) {
                 <Stars rating={product.rating} />
                 <span className="text-sm font-semibold tabular-nums">{product.rating}</span>
                 <span className="text-sm text-muted underline-offset-2 hover:underline">
-                  · {product.reviewCount} beoordelingen
+                  · {product.reviewCount} geverifieerde reviews
                 </span>
               </a>
 
@@ -102,13 +102,17 @@ export function ProductPage({ product }: { product: Product }) {
               <p className="text-sm text-muted">{product.unit} per verpakking</p>
               <p className="mt-1 text-sm text-muted">
                 Ongeveer {product.weeksAtStart} weken bij startdosis
-                <span className="block tabular-nums">
+                <span className="block tabular-nums font-semibold text-fg">
                   {formatEuro(pricePerWeekCents(product, selectedOptionId))}/week
                 </span>
               </p>
-              {price < SITE.freeShippingCents && (
+              {price < SITE.freeShippingCents ? (
                 <p className="mt-2 text-sm text-muted">
                   + €4,95 verzending · gratis vanaf {formatEuro(SITE.freeShippingCents)}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm font-semibold text-success">
+                  Gratis verzending (boven {formatEuro(SITE.freeShippingCents)})
                 </p>
               )}
 
@@ -118,16 +122,18 @@ export function ProductPage({ product }: { product: Product }) {
                 <PackSelector key={`${product.slug}-buy`} product={product} />
               </div>
               {sibling && (
-                <p className="mt-3 text-sm text-muted">
-                  Liever {sibling.form === "pen" ? "een kant-en-klare pen" : "een vial"}?{" "}
+                <div className="mt-4 rounded-xl border border-border bg-bg-elevated p-3.5 text-sm text-muted flex items-center justify-between gap-3">
+                  <span>
+                    Liever {sibling.form === "pen" ? "een kant-en-klare pen" : "een voordelige vial"}?
+                  </span>
                   <Link
                     to="/product/$slug"
                     params={{ slug: sibling.slug }}
-                    className="font-semibold text-primary hover:underline"
+                    className="font-bold text-primary hover:underline shrink-0 text-xs sm:text-sm"
                   >
-                    {sibling.name}
+                    Bekijk {sibling.name} →
                   </Link>
-                </p>
+                </div>
               )}
 
               <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -141,7 +147,7 @@ export function ProductPage({ product }: { product: Product }) {
                 ].map((x) => (
                   <li
                     key={x.t}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 text-muted"
+                    className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 text-muted shadow-2xs"
                   >
                     <x.icon className="size-4 text-primary shrink-0" aria-hidden />
                     <span>{x.t}</span>

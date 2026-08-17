@@ -170,7 +170,7 @@ export function ContactDialog() {
           </p>
 
           <div className="mt-auto flex flex-col gap-2 pt-1 sm:flex-row-reverse">
-            <Button type="submit" className="w-full sm:flex-1" disabled={sending} aria-busy={sending}>
+            <Button type="submit" className="w-full sm:flex-1 glow-primary cursor-pointer" disabled={sending} aria-busy={sending}>
               {sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -183,7 +183,7 @@ export function ContactDialog() {
             <Button
               type="button"
               variant="secondary"
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto cursor-pointer"
               onClick={close}
               disabled={sending}
             >

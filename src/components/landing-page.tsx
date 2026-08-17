@@ -83,17 +83,17 @@ export function LandingPage() {
   return (
     <SiteShell>
       <section className="hero-grid relative overflow-hidden">
-        <div className="container-max section-pad grid items-center gap-10 py-10 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
-          <div className="order-1 space-y-6 min-w-0">
+        <div className="container-max section-pad grid items-center gap-8 py-8 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
+          <div className="space-y-5 min-w-0">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 {SITE.category}
               </p>
-              <h1 className="text-4xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
+              <h1 className="text-3xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
                 GLP-1 afvallen.
                 <span className="text-primary"> Vial of pen.</span>
               </h1>
-              <p className="max-w-lg text-base text-muted sm:text-lg sm:leading-relaxed">
+              <p className="max-w-lg text-sm text-muted sm:text-lg sm:leading-relaxed">
                 {SITE.shortPitch}
               </p>
             </div>
@@ -139,7 +139,7 @@ export function LandingPage() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button size="lg" className="glow-primary w-full sm:w-auto" asChild>
                   <a href="#producten">
-                    Bekijk 6 producten
+                    Bekijk alle 6 producten
                     <ArrowRight className="size-4" />
                   </a>
                 </Button>
@@ -170,7 +170,7 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="order-2 relative min-w-0">
+          <div className="relative min-w-0">
             <div
               className="absolute inset-8 rounded-full bg-primary/8 blur-3xl pointer-events-none"
               aria-hidden
@@ -178,21 +178,28 @@ export function LandingPage() {
             <Link
               to="/product/$slug"
               params={{ slug: featured.slug }}
-              className="relative mx-auto block max-w-md md:max-w-none"
+              className="relative mx-auto block max-w-sm md:max-w-md group"
             >
               <img
                 src={featured.images[0]?.src}
                 alt={featured.images[0]?.alt ?? featured.name}
-                className="relative z-10 mx-auto w-full max-w-sm rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-w-md"
+                className="relative z-10 mx-auto w-full max-h-[380px] rounded-2xl object-cover shadow-lg shadow-fg/8 ring-1 ring-border md:max-h-[460px] transition group-hover:scale-[1.01]"
               />
-              <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                  Bestseller
-                </p>
-                <p className="text-sm font-bold tracking-tight">{featured.name}</p>
-                <p className="text-sm font-extrabold tabular-nums text-fg">
-                  {formatEuro(featured.priceCents)}
-                </p>
+              <div className="absolute bottom-3 left-3 right-3 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm transition group-hover:border-primary/40 sm:bottom-4 sm:left-4 sm:right-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      Bestseller
+                    </p>
+                    <p className="text-sm font-bold tracking-tight">{featured.name}</p>
+                    <p className="text-sm font-extrabold tabular-nums text-fg">
+                      {formatEuro(featured.priceCents)}
+                    </p>
+                  </div>
+                  <span className="rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary group-hover:bg-primary group-hover:text-primary-fg transition">
+                    Bekijk &amp; bestel →
+                  </span>
+                </div>
               </div>
             </Link>
           </div>
@@ -201,7 +208,7 @@ export function LandingPage() {
 
       <section
         id="producten"
-        className="border-y border-border bg-bg-elevated scroll-mt-28"
+        className="border-y border-border bg-bg-elevated scroll-mt-28 relative"
       >
         <span id="semaglutide" className="sr-only">
           Semaglutide
@@ -221,7 +228,7 @@ export function LandingPage() {
               <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
                 {SITE.category}
               </h2>
-              <p className="mt-2 text-muted">{visible.length} producten</p>
+              <p className="mt-2 text-muted">{visible.length} producten in deze selectie</p>
             </div>
             <div
               className="flex flex-wrap gap-2"
@@ -236,9 +243,9 @@ export function LandingPage() {
                   aria-selected={filter === s.id}
                   onClick={() => setFilterAndHash(s.id)}
                   className={cn(
-                    "rounded-full border px-3.5 py-2 text-sm font-semibold transition",
+                    "rounded-full border px-3.5 py-2 text-sm font-semibold transition cursor-pointer",
                     filter === s.id
-                      ? "border-primary bg-primary text-primary-fg"
+                      ? "border-primary bg-primary text-primary-fg shadow-sm"
                       : "border-border bg-surface text-muted hover:border-primary/40 hover:text-fg",
                   )}
                 >
@@ -367,23 +374,35 @@ export function LandingPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {COMPOUNDS.map((c, i) => (
-              <article key={c.name} className="rounded-xl border border-border bg-surface p-5">
-                <span className="text-[10px] font-bold tabular-nums text-primary">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div className="mt-2 flex items-center gap-2">
-                  <FlaskConical className="size-4 text-primary" />
-                  <h3 className="font-bold tracking-tight">{c.name}</h3>
+              <article key={c.name} className="rounded-xl border border-border bg-surface p-5 transition hover:border-primary/40 hover:shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold tabular-nums text-primary">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="text-xs font-semibold text-muted">
+                      vanaf {formatEuro(c.startingPriceCents)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <FlaskConical className="size-4 text-primary" />
+                    <h3 className="font-bold tracking-tight text-fg">{c.name}</h3>
+                  </div>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
+                    {c.role}
+                  </p>
+                  <p className="mt-2 text-sm text-muted leading-relaxed">{c.detail}</p>
                 </div>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
-                  {c.role}
-                </p>
-                <p className="mt-2 text-sm text-muted leading-relaxed">{c.detail}</p>
                 <a
                   href={`/#${c.name.toLowerCase()}`}
-                  className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setFilterAndHash(c.name as Subcat);
+                    document.getElementById("producten")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline cursor-pointer"
                 >
-                  {c.count} producten →
+                  {c.count} producten bekijken →
                 </a>
               </article>
             ))}
@@ -489,7 +508,7 @@ export function LandingPage() {
             </div>
             <h3 className="text-xl font-extrabold tracking-tight">Klaar om te kiezen?</h3>
             <p className="mt-2 text-sm text-muted">Gratis verzending vanaf €100.</p>
-            <Button size="lg" className="mt-5 glow-primary" asChild>
+            <Button size="lg" className="mt-5 glow-primary cursor-pointer" asChild>
               <a href="#producten">
                 Naar de producten
                 <ArrowRight className="size-4" />
@@ -500,9 +519,9 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={openContact}
-                className="font-semibold text-primary hover:underline"
+                className="font-semibold text-primary hover:underline cursor-pointer"
               >
-                Neem contact op
+                Neem direct contact op
               </button>
             </p>
           </div>

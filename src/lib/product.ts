@@ -111,13 +111,13 @@ const PRODUCT_LIST: Product[] = [
     options: [
       {
         id: "none",
-        label: "Geen extra's",
+        label: "Geen extra's (incl. 2 ml bac water)",
         priceCents: 7760,
         compareAtCents: 9700,
       },
       {
         id: "syringes",
-        label: "Insuline spuiten",
+        label: "Met 10 insulinespuiten (+ €2,00)",
         priceCents: 7960,
         compareAtCents: 9950,
       },
@@ -225,8 +225,16 @@ const PRODUCT_LIST: Product[] = [
     frequency: "1 injectie per week",
     weeksAtStart: 8,
     options: [
-      { id: "none", label: "Geen extra's", priceCents: 8500 },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 8750 },
+      {
+        id: "none",
+        label: "Geen extra's (incl. 2 ml bac water)",
+        priceCents: 8500,
+      },
+      {
+        id: "syringes",
+        label: "Met 10 insulinespuiten (+ €2,50)",
+        priceCents: 8750,
+      },
     ],
   },
   {
@@ -315,11 +323,15 @@ const PRODUCT_LIST: Product[] = [
     options: [
       {
         id: "none",
-        label: "Geen extra's",
+        label: "Geen extra's (incl. 2 ml bac water)",
         priceCents: 9400,
         compareAtCents: 12000,
       },
-      { id: "syringes", label: "Insuline spuiten", priceCents: 9650 },
+      {
+        id: "syringes",
+        label: "Met 10 insulinespuiten (+ €2,50)",
+        priceCents: 9650,
+      },
     ],
   },
   {
@@ -429,18 +441,21 @@ export const COMPOUNDS = [
     role: "GLP-1",
     detail: "Eetlustremming en een vast wekelijks ritme. Instap via 2 mg vial of 4 mg pen.",
     count: 2,
+    startingPriceCents: 8500,
   },
   {
     name: "Tirzepatide",
     role: "GLP-1 + GIP",
     detail: "Dubbele agonist. Meer controle over cravings, als vial of als 20 mg pen.",
     count: 2,
+    startingPriceCents: 9400,
   },
   {
     name: "Retatrutide",
     role: "GLP-1 + GIP + glucagon",
     detail: "Triple agonist. Voor wie plateaus wil doorbreken, als weekdeal-vial of als pen.",
     count: 2,
+    startingPriceCents: 7760,
   },
 ] as const;
 
@@ -574,10 +589,10 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Alleen bij vials: Geen extra's, of Insuline spuiten",
-          "Retatrutide 10mg: extra's + €2,00",
-          "Semaglutide 2mg en Tirzepatide 10mg: extra's + €2,50",
-          "Pennen hebben geen extra-optie",
+          "Alleen bij vials: Geen extra's (inclusief 2 ml bac water), of inclusief 10 insulinespuiten",
+          "Retatrutide 10mg: 10 spuiten voor + €2,00",
+          "Semaglutide 2mg en Tirzepatide 10mg: 10 spuiten voor + €2,50",
+          "Pennen zijn kant-en-klaar en hebben al 4 pennaalden inbegrepen",
         ],
       },
     ],

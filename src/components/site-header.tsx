@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/#semaglutide", label: "Semaglutide" },
   { href: "/#tirzepatide", label: "Tirzepatide" },
   { href: "/#retatrutide", label: "Retatrutide" },
+  { href: "/#beoordelingen", label: "Reviews" },
   { href: "/#faq", label: "Veelgestelde vragen" },
 ];
 
@@ -215,7 +216,7 @@ export function SiteHeader() {
                     setMenuOpen(false);
                     openCart();
                   }}
-                  className="relative flex size-11 items-center justify-center rounded-full border border-border bg-surface text-fg transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="relative flex size-11 items-center justify-center rounded-full border border-border bg-surface text-fg transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
                   aria-label={
                     count > 0
                       ? `Winkelwagen openen, ${count} product${count === 1 ? "" : "en"}`
@@ -229,12 +230,12 @@ export function SiteHeader() {
                     </span>
                   )}
                 </button>
-                <Button asChild size="sm" className="hidden sm:inline-flex">
+                <Button asChild size="sm" className="hidden sm:inline-flex cursor-pointer glow-primary">
                   <a href="/#producten">Nu kopen</a>
                 </Button>
                 <button
                   type="button"
-                  className="flex size-11 items-center justify-center rounded-full border border-border bg-surface text-fg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="flex size-11 items-center justify-center rounded-full border border-border bg-surface text-fg lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
                   onClick={() => setMenuOpen((v) => !v)}
                   aria-label={open ? "Menu sluiten" : "Menu openen"}
                   aria-expanded={open}
@@ -274,11 +275,11 @@ export function SiteHeader() {
                     setMenuOpen(false);
                     openContact();
                   }}
-                  className="rounded-lg px-3 py-3 text-left text-sm font-medium text-fg hover:bg-bg-elevated"
+                  className="rounded-lg px-3 py-3 text-left text-sm font-medium text-fg hover:bg-bg-elevated cursor-pointer"
                 >
                   Contact
                 </button>
-                <Button asChild className="mt-2 w-full">
+                <Button asChild className="mt-2 w-full glow-primary cursor-pointer">
                   <a href="/#producten" onClick={() => setMenuOpen(false)} tabIndex={open ? 0 : -1}>
                     Nu kopen
                   </a>

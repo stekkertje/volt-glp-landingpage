@@ -79,7 +79,7 @@ export function CartDrawer() {
           <button
             type="button"
             onClick={close}
-            className="flex size-10 items-center justify-center rounded-full border border-border text-muted hover:text-fg"
+            className="flex size-10 items-center justify-center rounded-full border border-border text-muted hover:text-fg cursor-pointer"
             aria-label="Winkelwagen sluiten"
           >
             <X className="size-5" />
@@ -123,7 +123,7 @@ export function CartDrawer() {
                         <div className="inline-flex items-center rounded-full border border-border bg-surface">
                           <button
                             type="button"
-                            className="flex size-9 items-center justify-center text-muted hover:text-fg"
+                            className="flex size-9 items-center justify-center text-muted hover:text-fg cursor-pointer"
                             onClick={() => setLineQty(line.slug, line.optionId, line.qty - 1)}
                             aria-label="Aantal verlagen in winkelwagen"
                           >
@@ -134,7 +134,7 @@ export function CartDrawer() {
                           </span>
                           <button
                             type="button"
-                            className="flex size-9 items-center justify-center text-muted hover:text-fg"
+                            className="flex size-9 items-center justify-center text-muted hover:text-fg cursor-pointer"
                             onClick={() => setLineQty(line.slug, line.optionId, line.qty + 1)}
                             aria-label="Aantal verhogen in winkelwagen"
                           >
@@ -144,7 +144,7 @@ export function CartDrawer() {
                         <button
                           type="button"
                           onClick={() => removeLine(line.slug, line.optionId)}
-                          className="flex size-9 items-center justify-center rounded-full text-muted hover:bg-danger/10 hover:text-danger"
+                          className="flex size-9 items-center justify-center rounded-full text-muted hover:bg-danger/10 hover:text-danger cursor-pointer"
                           aria-label="Product verwijderen"
                         >
                           <Trash2 className="size-3.5" />
@@ -179,7 +179,7 @@ export function CartDrawer() {
                 <button
                   type="button"
                   onClick={() => setShowCode((v) => !v)}
-                  className="flex w-full items-center justify-between text-sm font-medium text-muted hover:text-fg"
+                  className="flex w-full items-center justify-between text-sm font-medium text-muted hover:text-fg cursor-pointer"
                 >
                   Heb je een kortingscode?
                   <ChevronDown
@@ -244,7 +244,7 @@ export function CartDrawer() {
         {count > 0 && (
           <div className="shrink-0 space-y-2 border-t border-border bg-surface px-5 py-4">
             <Button
-              className="w-full glow-primary"
+              className="w-full glow-primary min-h-12 text-base font-bold cursor-pointer"
               size="lg"
               disabled={checkingOut}
               onClick={() => {
@@ -257,9 +257,9 @@ export function CartDrawer() {
                 }, 900);
               }}
             >
-              {checkingOut ? "Bezig…" : "Veilig afrekenen"}
+              {checkingOut ? "Bezig met verwerken…" : "Veilig afrekenen"}
             </Button>
-            <Button variant="ghost" className="w-full" onClick={clear}>
+            <Button variant="ghost" className="w-full cursor-pointer text-muted hover:text-danger" onClick={clear}>
               Winkelwagen legen
             </Button>
           </div>

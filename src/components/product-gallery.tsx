@@ -29,7 +29,7 @@ export function ProductGallery({
                 type="button"
                 onClick={() => setActive(i)}
                 className={cn(
-                  "size-2 rounded-full transition",
+                  "size-2 rounded-full transition cursor-pointer",
                   i === active ? "bg-primary w-5" : "bg-fg/30 hover:bg-fg/50",
                 )}
                 aria-label={`Afbeelding ${i + 1}`}
@@ -47,8 +47,8 @@ export function ProductGallery({
               type="button"
               onClick={() => setActive(i)}
               className={cn(
-                "overflow-hidden rounded-lg border-2 transition",
-                i === active ? "border-primary" : "border-transparent opacity-80 hover:opacity-100",
+                "overflow-hidden rounded-lg border-2 transition cursor-pointer",
+                i === active ? "border-primary shadow-2xs" : "border-transparent opacity-80 hover:opacity-100",
               )}
               aria-label={`Toon ${img.alt}`}
             >

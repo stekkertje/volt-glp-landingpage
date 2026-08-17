@@ -45,10 +45,10 @@ export function CookieBanner() {
           <span className="text-fg">Geen tracking zonder toestemming.</span>
         </p>
         <div className="flex shrink-0 gap-2">
-          <Button size="sm" variant="secondary" onClick={accept}>
+          <Button size="sm" variant="secondary" className="cursor-pointer" onClick={accept}>
             Alleen functioneel
           </Button>
-          <Button size="sm" onClick={accept}>
+          <Button size="sm" className="cursor-pointer glow-primary" onClick={accept}>
             Accepteren
           </Button>
         </div>
