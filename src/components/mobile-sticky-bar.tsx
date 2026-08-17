@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
 import { useCartStore, cartCount } from "@/lib/cart-store";
-import { getProduct, unitPriceCents } from "@/lib/product";
+import { getDefaultOptionId, getProduct, unitPriceCents } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +18,15 @@ export function MobileStickyBar() {
   const [visible, setVisible] = useState(false);
 
   const onProduct = pathname.startsWith("/product/");
-  const product = getProduct(selectedSlug);
+  const routeProduct = onProduct ? getProduct(pathname.split("/").filter(Boolean).at(-1)) : undefined;
+  const product = routeProduct ?? getProduct(selectedSlug);
+  const productIsSelected = product?.slug === selectedSlug;
+  const optionId = productIsSelected
+    ? selectedOptionId
+    : product
+      ? getDefaultOptionId(product)
+      : selectedOptionId;
+  const qty = productIsSelected ? selectedQty : 1;
   const count = cartCount(lines);
 
   useEffect(() => {
@@ -45,7 +53,7 @@ export function MobileStickyBar() {
   if (!visible || cartOpen || !product) return null;
 
   const cover = product.images[0];
-  const price = unitPriceCents(product, selectedOptionId);
+  const price = unitPriceCents(product, optionId);
 
   return (
     <div className="fixed inset-x-0 z-[66] border-t border-border bg-surface/95 p-3 shadow-[0_-8px_30px_-12px_rgba(20,19,26,0.15)] backdrop-blur-xl md:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))] bottom-[var(--volt-cookie-h,0px)]">
@@ -82,7 +90,7 @@ export function MobileStickyBar() {
           <Button
             size="md"
             className="shrink-0 glow-primary min-h-11"
-            onClick={() => addToCart(product.slug, selectedOptionId, selectedQty)}
+            onClick={() => addToCart(product.slug, optionId, qty)}
           >
             Kopen
           </Button>

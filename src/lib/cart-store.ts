@@ -139,7 +139,15 @@ export const useCartStore = create<CartState>()(
           get().pushToast("Kortingscode toegepast", "10% extra op je subtotaal");
           return true;
         }
-        get().pushToast("Code niet geldig", "Probeer VOLT10 voor 10% korting", "error");
+        const alreadyApplied = get().discountApplied;
+        if (alreadyApplied) set({ discountCode: "VOLT10" });
+        get().pushToast(
+          "Code niet geldig",
+          alreadyApplied
+            ? "Je actieve VOLT10-korting blijft staan"
+            : "Probeer VOLT10 voor 10% korting",
+          "error",
+        );
         return false;
       },
       pushToast: (message, detail, kind = "success") => {

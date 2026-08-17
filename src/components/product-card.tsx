@@ -75,7 +75,7 @@ export function ProductCard({ product }: { product: Product }) {
           <Button
             size="sm"
             className="flex-1"
-            onClick={() => addToCart(product.slug, getDefaultOptionId(product))}
+            onClick={() => addToCart(product.slug, getDefaultOptionId(product), 1)}
           >
             In winkelwagen
           </Button>
