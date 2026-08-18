@@ -1005,11 +1005,14 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      await page
-        .getByRole("button", { name: "Contact", exact: true })
-        .last()
-        .click();
+      if (limitedResponse) break;
       const dialog = page.getByRole("dialog", { name: "Contact" });
+      if (!(await dialog.isVisible())) {
+        await page
+          .getByRole("button", { name: "Contact", exact: true })
+          .last()
+          .click();
+      }
       await dialog.getByLabel("Naam").fill("Rate Limit Tester");
       await dialog
         .getByLabel("E-mail")
@@ -1031,6 +1034,7 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
         limitedResponse = outcome;
         break;
       }
+      if (limitedResponse) break;
     }
 
     assert.ok(limitedResponse);
