@@ -33,11 +33,29 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
      where table_schema = 'public'
        and table_name = any($1)
      order by table_name`,
-    [["contact_messages", "customers", "discount_codes", "order_lines", "orders"]],
+    [
+      [
+        "contact_messages",
+        "customers",
+        "discount_codes",
+        "order_access_tokens",
+        "order_lines",
+        "orders",
+        "rate_limit_buckets",
+      ],
+    ],
   );
   assert.deepEqual(
     tables.map((row) => row.table_name),
-    ["contact_messages", "customers", "discount_codes", "order_lines", "orders"],
+    [
+      "contact_messages",
+      "customers",
+      "discount_codes",
+      "order_access_tokens",
+      "order_lines",
+      "orders",
+      "rate_limit_buckets",
+    ],
   );
 
   const codes = await sql`select code, percent, active from discount_codes where code = 'VOLT10'`;

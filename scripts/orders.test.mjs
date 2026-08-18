@@ -8,6 +8,8 @@ let getSql;
 let createOrderRecord;
 let getOrderRecordForViewer;
 let updateOrderStatusRecord;
+let ORDER_STATUSES;
+let ALLOWED_ORDER_STATUS_TRANSITIONS;
 
 function orderInput(overrides = {}) {
   const unique = randomUUID();
@@ -40,6 +42,8 @@ before(async () => {
     getOrderRecordForViewer,
     updateOrderStatusRecord,
   } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
+  ({ ORDER_STATUSES, ALLOWED_ORDER_STATUS_TRANSITIONS } =
+    await vite.ssrLoadModule("/src/lib/order-status.ts"));
 });
 
 after(async () => {
@@ -100,7 +104,7 @@ test("createOrder writes customer, order and lines using server prices", async (
   assert.ok(result.guestAccessToken.length >= 20);
 });
 
-test("an idempotent retry rotates guest access without creating another order", async () => {
+test("an idempotent retry keeps every issued guest proof valid", async () => {
   const input = orderInput();
   const first = await createOrderRecord(input, { userId: null });
   const second = await createOrderRecord(input, { userId: null });
@@ -110,22 +114,18 @@ test("an idempotent retry rotates guest access without creating another order", 
   assert.notEqual(second.guestAccessToken, first.guestAccessToken);
   assert.equal(second.replayed, true);
 
-  await assert.rejects(
-    getOrderRecordForViewer({
+  for (const accessCode of [
+    first.guestAccessToken,
+    second.guestAccessToken,
+  ]) {
+    const accessible = await getOrderRecordForViewer({
       id: first.order.id,
-      accessCode: first.guestAccessToken,
+      accessCode,
       userId: null,
       isAdmin: false,
-    }),
-    /niet gevonden|toegankelijk/i,
-  );
-  const accessible = await getOrderRecordForViewer({
-    id: first.order.id,
-    accessCode: second.guestAccessToken,
-    userId: null,
-    isAdmin: false,
-  });
-  assert.equal(accessible.id, first.order.id);
+    });
+    assert.equal(accessible.id, first.order.id);
+  }
 
   const sql = await getSql();
   const orderCount = await sql.query(
@@ -138,6 +138,107 @@ test("an idempotent retry rotates guest access without creating another order", 
   );
   assert.deepEqual(orderCount, [{ count: 1 }]);
   assert.deepEqual(customerCount, [{ count: 1 }]);
+  const tokens = await sql.query(
+    `select token_hash from order_access_tokens where order_id = $1 order by issued_at`,
+    [first.order.id],
+  );
+  assert.equal(tokens.length, 2);
+  assert.ok(tokens.every((row) => /^[a-f0-9]{64}$/.test(row.token_hash)));
+  assert.ok(
+    tokens.every(
+      (row) =>
+        row.token_hash !== first.guestAccessToken &&
+        row.token_hash !== second.guestAccessToken,
+    ),
+  );
+});
+
+test("concurrent identical retries create one order and keep both proofs valid", async () => {
+  const input = orderInput();
+  const [first, second] = await Promise.all([
+    createOrderRecord(input, { userId: null }),
+    createOrderRecord(input, { userId: null }),
+  ]);
+
+  assert.equal(first.order.id, second.order.id);
+  assert.notEqual(first.guestAccessToken, second.guestAccessToken);
+
+  for (const accessCode of [
+    first.guestAccessToken,
+    second.guestAccessToken,
+  ]) {
+    const order = await getOrderRecordForViewer({
+      id: first.order.id,
+      accessCode,
+      userId: null,
+      isAdmin: false,
+    });
+    assert.equal(order.id, first.order.id);
+  }
+
+  const sql = await getSql();
+  const counts = await sql.query(
+    "select count(*)::int as count from orders where idempotency_key = $1",
+    [input.idempotencyKey],
+  );
+  assert.deepEqual(counts, [{ count: 1 }]);
+});
+
+test("an idempotency key rejects a different canonical payload", async () => {
+  const input = orderInput();
+  await createOrderRecord(input, { userId: null });
+
+  await assert.rejects(
+    createOrderRecord(
+      {
+        ...input,
+        name: "Andere Klant",
+        email: `anders-${randomUUID()}@example.test`,
+        street: "Andere straat",
+      },
+      { userId: null },
+    ),
+    /herhaalcode|idempotent|andere bestelling/i,
+  );
+});
+
+test("an idempotency key rejects a different authenticated viewer", async () => {
+  const input = orderInput();
+  await createOrderRecord(input, { userId: "user-a" });
+
+  await assert.rejects(
+    createOrderRecord(input, { userId: "user-b" }),
+    /herhaalcode|idempotent|andere bestelling/i,
+  );
+});
+
+test("expired recovery codes and cookies do not authorize an order", async () => {
+  const created = await createOrderRecord(orderInput(), { userId: null });
+  const sql = await getSql();
+  await sql.query(
+    "update order_access_tokens set expires_at = now() - interval '1 second' where order_id = $1",
+    [created.order.id],
+  );
+
+  await assert.rejects(
+    getOrderRecordForViewer({
+      id: created.order.id,
+      accessCode: created.guestAccessToken,
+      userId: null,
+      isAdmin: false,
+    }),
+    /niet gevonden|toegankelijk/i,
+  );
+  await assert.rejects(
+    getOrderRecordForViewer({
+      id: created.order.id,
+      cookieOrderId: created.order.id,
+      cookieAccessToken: created.guestAccessToken,
+      userId: null,
+      isAdmin: false,
+    }),
+    /niet gevonden|toegankelijk/i,
+  );
 });
 
 test("an order is not returned without viewer authorization", async () => {
@@ -182,13 +283,53 @@ test("a wrong recovery code does not expose an order", async () => {
   );
 });
 
-test("admin status updates accept only known order statuses", async () => {
-  const created = await createOrderRecord(orderInput(), { userId: null });
-  const updated = await updateOrderStatusRecord(created.order.id, "paid");
-  assert.equal(updated.status, "paid");
+test("the server enforces every allowed and forbidden order-status transition", async () => {
+  const sql = await getSql();
+  for (const current of ORDER_STATUSES) {
+    for (const target of ORDER_STATUSES) {
+      const created = await createOrderRecord(orderInput(), { userId: null });
+      await sql.query("update orders set status = $1 where id = $2", [
+        current,
+        created.order.id,
+      ]);
+      const allowed = ALLOWED_ORDER_STATUS_TRANSITIONS[current].includes(target);
+      if (allowed) {
+        const updated = await updateOrderStatusRecord(
+          created.order.id,
+          current,
+          target,
+        );
+        assert.equal(updated.status, target, `${current} -> ${target}`);
+      } else {
+        await assert.rejects(
+          updateOrderStatusRecord(created.order.id, current, target),
+          /status|overgang|gewijzigd/i,
+          `${current} -> ${target}`,
+        );
+      }
+    }
+  }
+});
 
-  await assert.rejects(
-    updateOrderStatusRecord(created.order.id, "onbekend"),
-    /ongeldige bestelstatus/i,
+test("concurrent status updates with the same expected state cannot both win", async () => {
+  const created = await createOrderRecord(orderInput(), { userId: null });
+  const outcomes = await Promise.allSettled([
+    updateOrderStatusRecord(created.order.id, "pending", "paid"),
+    updateOrderStatusRecord(created.order.id, "pending", "cancelled"),
+  ]);
+
+  assert.equal(
+    outcomes.filter((outcome) => outcome.status === "fulfilled").length,
+    1,
   );
+  assert.equal(
+    outcomes.filter((outcome) => outcome.status === "rejected").length,
+    1,
+  );
+
+  const sql = await getSql();
+  const rows = await sql.query("select status from orders where id = $1", [
+    created.order.id,
+  ]);
+  assert.ok(["paid", "cancelled"].includes(rows[0].status));
 });
