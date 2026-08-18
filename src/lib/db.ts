@@ -1,4 +1,7 @@
-import { resolveDatabasePolicy } from "@/lib/db-policy";
+import {
+  postgresConnectionConfig,
+  resolveDatabasePolicy,
+} from "@/lib/db-policy";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -89,7 +92,7 @@ function getNeonPool(): Promise<import("pg").Pool> {
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    return new Pool({ connectionString: databaseUrl });
+    return new Pool(postgresConnectionConfig(databaseUrl!));
   })().catch((err) => {
     globalRef.__pgPoolPromise__ = undefined;
     throw err;

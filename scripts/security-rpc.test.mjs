@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 
@@ -11,6 +14,9 @@ let baseUrl;
 let browser;
 let devServer;
 let serverOutput = "";
+let viteCacheDir;
+const TEST_DATABASE_SOURCE_MARKER =
+  "[app-builder] verified database source: pglite";
 
 async function availablePort() {
   const server = createNetServer();
@@ -38,13 +44,48 @@ async function waitForServer() {
     }
     try {
       const response = await fetch(baseUrl);
-      if (response.ok) return;
+      if (response.ok && serverOutput.includes(TEST_DATABASE_SOURCE_MARKER)) {
+        return;
+      }
     } catch {
       // The process is still starting.
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Vite did not become ready:\n${serverOutput}`);
+}
+
+async function signalProcessGroupAndWait(child, signal, timeout) {
+  return new Promise((resolve) => {
+    let timer;
+    const finish = (exited) => {
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    child.once("exit", onExit);
+    timer = setTimeout(() => finish(false), timeout);
+    try {
+      process.kill(-child.pid, signal);
+    } catch {
+      finish(true);
+    }
+  });
+}
+
+async function stopDevServer() {
+  if (
+    !devServer?.pid ||
+    devServer.exitCode !== null ||
+    devServer.signalCode !== null
+  ) {
+    return;
+  }
+  const exited = await signalProcessGroupAndWait(devServer, "SIGTERM", 5_000);
+  if (!exited && devServer.exitCode === null) {
+    await signalProcessGroupAndWait(devServer, "SIGKILL", 2_000);
+  }
 }
 
 async function withPage(run) {
@@ -61,6 +102,7 @@ async function withPage(run) {
 before(async () => {
   const port = await availablePort();
   baseUrl = `http://127.0.0.1:${port}`;
+  viteCacheDir = await mkdtemp(join(tmpdir(), "volt-security-rpc-vite-"));
   devServer = spawn(
     "npm",
     ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)],
@@ -68,6 +110,17 @@ before(async () => {
       cwd: process.cwd(),
       env: {
         ...process.env,
+        DATABASE_URL: "",
+        MIGRATION_DATABASE_URL: "",
+        DATABASE_URL_UNPOOLED: "",
+        VERCEL: "",
+        NETLIFY: "",
+        REQUIRE_DATABASE: "",
+        PGLITE_PREVIEW: "",
+        NODE_ENV: "test",
+        npm_lifecycle_event: "test",
+        VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
+        VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
         ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
       },
@@ -89,12 +142,12 @@ before(async () => {
 });
 
 after(async () => {
-  await browser?.close();
-  if (devServer?.pid) {
-    try {
-      process.kill(-devServer.pid, "SIGTERM");
-    } catch {
-      // The test-owned process group already exited.
+  try {
+    await browser?.close();
+  } finally {
+    await stopDevServer();
+    if (viteCacheDir) {
+      await rm(viteCacheDir, { recursive: true, force: true });
     }
   }
 });

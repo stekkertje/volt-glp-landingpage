@@ -8,8 +8,7 @@ let ADMIN_COOKIE_NAME;
 let GUEST_ORDER_COOKIE;
 let SITE;
 let canonicalCheckoutPayload;
-let checkoutIdempotencyForPayload;
-let checkoutPayloadHash;
+let checkoutIdempotencyKeyFromSeed;
 let consumeOrderRecoveryCode;
 let getAdminCapabilities;
 let isConflictServerError;
@@ -46,11 +45,8 @@ before(async () => {
     "/src/lib/server/orders.ts",
   ));
   ({ SITE } = await vite.ssrLoadModule("/src/lib/product.ts"));
-  ({
-    canonicalCheckoutPayload,
-    checkoutIdempotencyForPayload,
-    checkoutPayloadHash,
-  } = await vite.ssrLoadModule("/src/lib/checkout-idempotency.ts"));
+  ({ canonicalCheckoutPayload, checkoutIdempotencyKeyFromSeed } =
+    await vite.ssrLoadModule("/src/lib/checkout-idempotency.ts"));
   ({ stageOrderRecoveryCode, consumeOrderRecoveryCode } =
     await vite.ssrLoadModule("/src/lib/order-recovery-memory.ts"));
   ({ isConflictServerError } = await vite.ssrLoadModule(
@@ -67,7 +63,7 @@ test("shop cookies use the host-only prefix", () => {
   assert.equal(GUEST_ORDER_COOKIE, "__Host-volt-order-access");
 });
 
-test("checkout payload hashing is canonical and changes with order data", async () => {
+test("checkout payload serialization is canonical and changes with order data", () => {
   const split = checkoutPayload();
   const combined = checkoutPayload({
     discountCode: "VOLT10",
@@ -77,13 +73,9 @@ test("checkout payload hashing is canonical and changes with order data", async 
     canonicalCheckoutPayload(split),
     canonicalCheckoutPayload(combined),
   );
-  assert.equal(
-    await checkoutPayloadHash(split),
-    await checkoutPayloadHash(combined),
-  );
   assert.notEqual(
-    await checkoutPayloadHash(combined),
-    await checkoutPayloadHash(
+    canonicalCheckoutPayload(combined),
+    canonicalCheckoutPayload(
       checkoutPayload({
         street: "Andere straat",
         lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 2 }],
@@ -92,32 +84,14 @@ test("checkout payload hashing is canonical and changes with order data", async 
   );
 });
 
-test("checkout keeps an idempotency key for retries and rotates it for changed payloads", async () => {
-  let createdKeys = 0;
-  const createKey = () => `checkout-key-${++createdKeys}`;
-  const first = await checkoutIdempotencyForPayload(
-    checkoutPayload(),
-    null,
-    createKey,
-  );
-  const equivalentRetry = await checkoutIdempotencyForPayload(
-    checkoutPayload({
-      discountCode: "VOLT10",
-      lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 2 }],
-    }),
-    first,
-    createKey,
-  );
-  const changedAddress = await checkoutIdempotencyForPayload(
-    checkoutPayload({ street: "Andere straat" }),
-    equivalentRetry,
-    createKey,
-  );
+test("checkout keeps one seed-derived key until an attempt is resolved", async () => {
+  const seed = "b".repeat(64);
+  const first = await checkoutIdempotencyKeyFromSeed(seed);
+  const retry = await checkoutIdempotencyKeyFromSeed(seed);
+  const nextAttempt = await checkoutIdempotencyKeyFromSeed("c".repeat(64));
 
-  assert.strictEqual(equivalentRetry, first);
-  assert.equal(equivalentRetry.key, "checkout-key-1");
-  assert.equal(changedAddress.key, "checkout-key-2");
-  assert.equal(createdKeys, 2);
+  assert.equal(retry, first);
+  assert.notEqual(nextAttempt, first);
 });
 
 test("a staged recovery code is memory-only and consumed once", () => {
@@ -211,7 +185,7 @@ test("checkout conflicts are recognized separately from generic errors", () => {
   assert.equal(isConflictServerError({ status: 500 }), false);
 });
 
-test("review documentation and recovery flow contain no stale demo or session storage path", async () => {
+test("review documentation and recovery flow contain no stale demo or recovery storage path", async () => {
   const [briefing, account, checkout, confirmation, orderFunctions, adminAuth] =
     await Promise.all([
       readFile("GROK.md", "utf8"),
@@ -224,7 +198,7 @@ test("review documentation and recovery flow contain no stale demo or session st
   assert.doesNotMatch(briefing, /checkout zijn DEMO|demo-submit|nep-success/i);
   assert.match(account, /<GuestOrderAccess showLogin=\{!user\} \/>/);
   assert.match(account, /user && !user\.isDevFallback && <SignedInOrders \/>/);
-  assert.doesNotMatch(`${checkout}\n${confirmation}`, /sessionStorage/);
+  assert.doesNotMatch(confirmation, /sessionStorage/);
   assert.match(checkout, /Deze bestelling is al geplaatst/);
   assert.match(checkout, /name: "robots", content: "noindex, nofollow"/);
   assert.doesNotMatch(orderFunctions, /secure:\s*process\.env\.NODE_ENV/);

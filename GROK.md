@@ -193,6 +193,13 @@ npm run typecheck
 - Betaling en e-mailafhandeling blijven handmatig.
 - `/admin` beheert bestellingen, statussen en contactberichten.
 - Admin gebruikt zelfstandig `ADMIN_EMAILS` of het paar `ADMIN_PASSWORD` + `ADMIN_SESSION_SECRET`.
-- Productie en deployments vereisen `DATABASE_URL`; PGLite is alleen voor dev/test.
+- Productie en deployments vereisen `DATABASE_URL` plus een expliciete directe
+  migratie-URL in `MIGRATION_DATABASE_URL` of `DATABASE_URL_UNPOOLED`; bij Neon
+  moeten beide URL's dezelfde branch en database aanwijzen. De databasenaam
+  staat in het URL-pad; gebruik geen afwijkende `?database=`-query. Runtime en
+  migrator gebruiken dezelfde veilige `search_path` met `public` als standaard.
+  De migratoromgeving bevat geen losse connection-affecting `PG*`-variabelen;
+  alle verbindingsinstellingen staan in de directe migratie-URL.
+  PGLite is alleen voor dev/test.
 - Gasttoegang werkt met een cookie of herstelcode die na 72 uur verloopt.
 - Nog niet aanwezig: betaalprovider, echte e-mail, voorraad, refunds en verzendkoppeling.

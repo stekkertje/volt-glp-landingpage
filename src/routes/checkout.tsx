@@ -1,12 +1,18 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Loader2, LockKeyhole } from "lucide-react";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/cart-store";
 import {
-  checkoutIdempotencyForPayload,
-  type CheckoutIdempotencyState,
+  checkoutIdempotencyKeyFromSeed,
+  finalizeCheckoutAttemptAfterSuccess,
+  initializeCheckoutAttemptSeed,
+  isCheckoutReplayExpiredError,
+  markCheckoutAttemptReplayExpired,
+  markCheckoutAttemptWithCommittedCart,
+  prepareCheckoutAttemptSeedForSubmit,
+  type CheckoutAttemptSeed,
 } from "@/lib/checkout-idempotency";
 import { stageOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { createOrderSchema } from "@/lib/server/order-schema";
@@ -30,9 +36,103 @@ export const Route = createFileRoute("/checkout")({
 });
 
 type PricingPreview = Awaited<ReturnType<typeof getPricingPreview>>;
+type ConfirmedOrder = {
+  id: string;
+  orderNumber: string;
+};
+type PricingInput = {
+  lines: { slug: string; optionId: string; qty: number }[];
+  discountCode?: string;
+};
+
+function pricingRequestKey(input: PricingInput): string {
+  return JSON.stringify({
+    discountCode: input.discountCode?.trim().toUpperCase() || null,
+    lines: [...input.lines].sort((left, right) => {
+      const leftKey = `${left.slug}\0${left.optionId}`;
+      const rightKey = `${right.slug}\0${right.optionId}`;
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    }),
+  });
+}
+
+function currentPricingInput(): PricingInput {
+  const state = useCartStore.getState();
+  return {
+    lines: state.lines.map(({ slug, optionId, qty }) => ({
+      slug,
+      optionId,
+      qty,
+    })),
+    discountCode: state.discountApplied ? state.discountCode : undefined,
+  };
+}
+
+const CONFIRMATION_NAVIGATION_FALLBACK_MS = 1_500;
+
+function committedOrderPath(orderId: string): string {
+  return `/bestelling/${encodeURIComponent(orderId)}`;
+}
+
+function anchorCommittedOrderUrl(orderId: string): boolean {
+  if (typeof window === "undefined") return false;
+  const orderPath = committedOrderPath(orderId);
+  try {
+    // Bypass the router's patched method for this crash-safety anchor. A hard
+    // reload can then open the committed order through its HttpOnly cookie.
+    const nativeReplaceState = window.History?.prototype?.replaceState;
+    if (typeof nativeReplaceState === "function") {
+      nativeReplaceState.call(
+        window.history,
+        window.history.state,
+        "",
+        orderPath,
+      );
+    } else {
+      window.history.replaceState(window.history.state, "", orderPath);
+    }
+    return window.location.pathname === orderPath;
+  } catch {
+    // The committed fallback remains usable when browser history is blocked.
+    return false;
+  }
+}
+
+async function establishCommittedOrderUrl(
+  navigation: Promise<unknown>,
+  orderId: string,
+): Promise<boolean> {
+  let timer: number | undefined;
+  const navigationOutcome = navigation.then(
+    () => "resolved" as const,
+    () => "rejected" as const,
+  );
+  const outcome = await Promise.race([
+    navigationOutcome,
+    new Promise<"timeout">((resolve) => {
+      timer = window.setTimeout(
+        () => resolve("timeout"),
+        CONFIRMATION_NAVIGATION_FALLBACK_MS,
+      );
+    }),
+  ]);
+  if (timer !== undefined) window.clearTimeout(timer);
+
+  const orderPath = committedOrderPath(orderId);
+  if (outcome === "resolved" && window.location.pathname === orderPath) {
+    return true;
+  }
+  // Rejection and a bounded navigation hang both receive a reload-safe native
+  // URL. `navigationOutcome` keeps observing a promise that settles later.
+  return anchorCommittedOrderUrl(orderId);
+}
 
 const inputClass =
   "h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2";
+const replayExpiredFeedback =
+  "De veilige herhaaltermijn van deze bestelling is verlopen. Plaats de bestelling niet opnieuw. Neem via Contact contact op en vermeld je e-mailadres, zodat we de bestaande bestelling kunnen terugvinden.";
+const committedCartFeedback =
+  "Deze bestelling is al geplaatst. De eerder opgeslagen winkelwagen kan niet opnieuw worden verstuurd. Neem via Contact contact op als je de bevestiging niet meer kunt openen.";
 
 function CheckoutPage() {
   const navigate = useNavigate();
@@ -44,15 +144,60 @@ function CheckoutPage() {
   // Keep the server and first client render identical. Zustand's persist API
   // exists only once browser storage is available.
   const [hydrated, setHydrated] = useState(false);
-  const [pricing, setPricing] = useState<PricingPreview | null>(null);
-  const [pricingError, setPricingError] = useState("");
+  const [pricing, setPricing] = useState<{
+    requestKey: string;
+    preview: PricingPreview;
+  } | null>(null);
+  const [pricingError, setPricingError] = useState<{
+    requestKey: string;
+    message: string;
+  } | null>(null);
+  const [checkoutAttemptReady, setCheckoutAttemptReady] = useState(false);
+  const [checkoutAttemptBlocked, setCheckoutAttemptBlocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(
+    null,
+  );
   const [formError, setFormError] = useState("");
-  const [orderConflict, setOrderConflict] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const idempotency = useRef<CheckoutIdempotencyState | null>(null);
+  const checkoutAttempt = useRef<CheckoutAttemptSeed | null>(null);
+  const confirmedOrderRef = useRef<ConfirmedOrder | null>(null);
+  const pricingRequestSequence = useRef(0);
   const emptyRedirected = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
+  const pricingInput = useMemo<PricingInput>(
+    () => ({
+      lines: lines.map(({ slug, optionId, qty }) => ({
+        slug,
+        optionId,
+        qty,
+      })),
+      discountCode: discountApplied ? discountCode : undefined,
+    }),
+    [discountApplied, discountCode, lines],
+  );
+  const activePricingRequestKey = useMemo(
+    () => pricingRequestKey(pricingInput),
+    [pricingInput],
+  );
+  const currentPricing =
+    pricing?.requestKey === activePricingRequestKey ? pricing.preview : null;
+  const currentPricingError =
+    pricingError?.requestKey === activePricingRequestKey
+      ? pricingError.message
+      : "";
+
+  useEffect(() => {
+    let active = true;
+    void initializeCheckoutAttemptSeed().then((attempt) => {
+      if (!active) return;
+      checkoutAttempt.current = attempt;
+      setCheckoutAttemptReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const persist = useCartStore.persist;
@@ -78,37 +223,47 @@ function CheckoutPage() {
 
   useEffect(() => {
     if (!hydrated || !lines.length) return;
+    const requestSequence = ++pricingRequestSequence.current;
     let active = true;
-    setPricingError("");
+    setPricingError(null);
     void getPricingPreview({
-      data: {
-        lines: lines.map(({ slug, optionId, qty }) => ({
-          slug,
-          optionId,
-          qty,
-        })),
-        discountCode: discountApplied ? discountCode : undefined,
-      },
+      data: pricingInput,
     })
       .then((result) => {
-        if (active) setPricing(result);
+        if (active && requestSequence === pricingRequestSequence.current) {
+          setPricing({ requestKey: activePricingRequestKey, preview: result });
+        }
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || requestSequence !== pricingRequestSequence.current) {
+          return;
+        }
         setPricing(null);
-        setPricingError("De actuele totalen konden niet worden berekend.");
+        setPricingError({
+          requestKey: activePricingRequestKey,
+          message: "De actuele totalen konden niet worden berekend.",
+        });
       });
     return () => {
       active = false;
     };
-  }, [discountApplied, discountCode, hydrated, lines]);
+  }, [activePricingRequestKey, hydrated, lines.length, pricingInput]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!lines.length || submitting) return;
+    if (!lines.length || submitting || confirmedOrderRef.current) return;
+    if (checkoutAttemptBlocked) {
+      setFormError(replayExpiredFeedback);
+      requestAnimationFrame(() => errorRef.current?.focus());
+      return;
+    }
+    if (!checkoutAttemptReady || !currentPricing) {
+      setFormError("Wacht tot de actuele totalen zijn berekend.");
+      requestAnimationFrame(() => errorRef.current?.focus());
+      return;
+    }
     setSubmitting(true);
     setFormError("");
-    setOrderConflict(false);
     setFieldErrors({});
     const form = event.currentTarget;
     const fields = new FormData(form);
@@ -124,7 +279,7 @@ function CheckoutPage() {
       note: String(fields.get("note") ?? ""),
       lines: lines.map(({ slug, optionId, qty }) => ({ slug, optionId, qty })),
       discountCode: discountApplied ? discountCode : undefined,
-      idempotencyKey: idempotency.current?.key ?? crypto.randomUUID(),
+      idempotencyKey: "checkout-validation-placeholder",
     });
     if (!validation.success) {
       const nextErrors: Record<string, string> = {};
@@ -145,28 +300,70 @@ function CheckoutPage() {
       return;
     }
 
+    let submittedAttempt: CheckoutAttemptSeed | null = null;
+    let result: Awaited<ReturnType<typeof createOrder>>;
     try {
-      idempotency.current = await checkoutIdempotencyForPayload(
-        validation.data,
-        idempotency.current,
+      const now = Date.now();
+      const preparation = await prepareCheckoutAttemptSeedForSubmit(
+        checkoutAttempt.current,
+        undefined,
+        now,
       );
-      const result = await createOrder({
+      if (!preparation.ok) {
+        if (preparation.reason === "replay-expired") {
+          setCheckoutAttemptBlocked(true);
+          setFormError(replayExpiredFeedback);
+        } else if (preparation.reason === "committed-cart") {
+          setCheckoutAttemptBlocked(true);
+          setFormError(committedCartFeedback);
+        } else if (preparation.reason === "stale") {
+          setFormError(
+            "Deze checkout is verlopen of in een ander tabblad gewijzigd of afgerond. Open de winkelwagen opnieuw om veilig verder te gaan.",
+          );
+        } else if (preparation.reason === "lock") {
+          setFormError(
+            "De veilige tabbladbeveiliging is niet beschikbaar of bezet. Sluit andere checkout-tabbladen of gebruik een recente browser en probeer opnieuw.",
+          );
+        } else {
+          setFormError(
+            "De veilige herhaalbeveiliging kon niet worden opgeslagen. Sta browseropslag toe en probeer opnieuw.",
+          );
+        }
+        requestAnimationFrame(() => errorRef.current?.focus());
+        setSubmitting(false);
+        return;
+      }
+      const { attempt } = preparation;
+      submittedAttempt = attempt;
+      checkoutAttempt.current = attempt;
+      const idempotencyKey = await checkoutIdempotencyKeyFromSeed(attempt.seed);
+      if (
+        pricingRequestKey(currentPricingInput()) !== activePricingRequestKey
+      ) {
+        setFormError(
+          "Je winkelwagen is gewijzigd. Wacht op de nieuwe totalen en probeer opnieuw.",
+        );
+        requestAnimationFrame(() => errorRef.current?.focus());
+        setSubmitting(false);
+        return;
+      }
+      result = await createOrder({
         data: {
           ...validation.data,
-          idempotencyKey: idempotency.current.key,
+          idempotencyKey,
         },
       });
-      stageOrderRecoveryCode(result.order.id, result.guestAccessToken);
-      emptyRedirected.current = true;
-      clearCart();
-      await navigate({
-        to: "/bestelling/$id",
-        params: { id: result.order.id },
-      });
     } catch (error) {
-      if (isConflictServerError(error)) {
-        setOrderConflict(true);
-        setFormError("Deze bestelling is al geplaatst.");
+      if (isCheckoutReplayExpiredError(error)) {
+        if (submittedAttempt) {
+          await markCheckoutAttemptReplayExpired(submittedAttempt);
+        }
+        setCheckoutAttemptBlocked(true);
+        setFormError(replayExpiredFeedback);
+      } else if (isConflictServerError(error)) {
+        setFormError(
+          "Deze bestelling is al geplaatst. Heb je gegevens na de eerste verzendpoging gewijzigd? Zet de oorspronkelijke gegevens terug en probeer opnieuw om dezelfde bestelling veilig te openen.",
+        );
       } else {
         setFormError(
           rateLimitFeedback(error) ??
@@ -174,10 +371,114 @@ function CheckoutPage() {
         );
       }
       requestAnimationFrame(() => errorRef.current?.focus());
-    } finally {
       setSubmitting(false);
+      return;
     }
+
+    // `createOrder` has returned: from here on the order is committed. Make
+    // recovery and a non-retryable success state available before any storage
+    // or navigation work that can fail or wait.
+    const committed = {
+      id: result.order.id,
+      orderNumber: result.order.orderNumber,
+    };
+    const confirmedAttempt = submittedAttempt!;
+    stageOrderRecoveryCode(result.order.id, result.guestAccessToken);
+    confirmedOrderRef.current = committed;
+    setConfirmedOrder(committed);
+    emptyRedirected.current = true;
+    // Start router reconciliation in the next task so the HttpOnly response
+    // cookie is committed before the confirmation loader reads it. Attach the
+    // settlement handler before doing any destructive client cleanup.
+    const confirmationNavigation = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    }).then(() =>
+      navigate({
+        to: "/bestelling/$id",
+        params: { id: result.order.id },
+        replace: true,
+      }),
+    );
+    const committedUrlReady = await establishCommittedOrderUrl(
+      confirmationNavigation,
+      result.order.id,
+    );
+    if (!committedUrlReady) {
+      // The order is committed, but neither router nor history has a proven
+      // recovery URL. Preserve the cart and seed so a reload can safely replay
+      // the same idempotency key instead of losing the only recovery path.
+      setSubmitting(false);
+      return;
+    }
+
+    let cartPersistedEmpty = false;
+    try {
+      clearCart();
+      cartPersistedEmpty = true;
+    } catch {
+      // Zustand updates memory before its persistence write. Keep the original
+      // attempt terminal as the old durable cart may still exist after reload.
+      try {
+        await markCheckoutAttemptWithCommittedCart(confirmedAttempt);
+      } catch {
+        // The in-memory committed state still prevents a second submit here.
+      }
+      checkoutAttempt.current = confirmedAttempt;
+    }
+
+    if (cartPersistedEmpty) {
+      try {
+        checkoutAttempt.current =
+          await finalizeCheckoutAttemptAfterSuccess(confirmedAttempt);
+      } catch {
+        // Never turn post-commit cleanup into a failed-order message.
+        try {
+          await markCheckoutAttemptWithCommittedCart(confirmedAttempt);
+        } catch {
+          // The in-memory committed state still prevents a second submit here.
+        }
+        checkoutAttempt.current = confirmedAttempt;
+      }
+    }
+
+    setSubmitting(false);
   };
+
+  if (confirmedOrder) {
+    return (
+      <SiteShell>
+        <main className="container-max section-pad py-16">
+          <section
+            className="mx-auto max-w-xl rounded-2xl border border-success/30 bg-surface p-6 shadow-sm sm:p-8"
+            aria-live="polite"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-success">
+              Bevestigd
+            </p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
+              Bestelling is geplaatst
+            </h1>
+            <p className="mt-3 text-sm text-muted">
+              Bestelnummer:{" "}
+              <strong className="text-fg">{confirmedOrder.orderNumber}</strong>
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              Open de bevestiging vóór je deze pagina herlaadt en bewaar de
+              eenmalige herstelcode. Als gast kun je de bestelling op dit
+              apparaat tot 72 uur na plaatsing openen. Was je ingelogd, dan kun
+              je gekoppelde bestellingen ook via je account openen. De code
+              wordt voor je veiligheid niet bewaard of opnieuw getoond.
+            </p>
+            <Button asChild size="lg" className="mt-6">
+              <Link to="/bestelling/$id" params={{ id: confirmedOrder.id }}>
+                Open de bevestiging
+              </Link>
+            </Button>
+          </section>
+        </main>
+      </SiteShell>
+    );
+  }
 
   if (!hydrated || !lines.length) {
     return (
@@ -226,14 +527,6 @@ function CheckoutPage() {
                     className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger outline-none"
                   >
                     {formError}
-                    {orderConflict && (
-                      <Link
-                        to="/account"
-                        className="ml-1 font-bold underline underline-offset-2"
-                      >
-                        Bekijk je bestellingen.
-                      </Link>
-                    )}
                   </div>
                 )}
 
@@ -369,7 +662,12 @@ function CheckoutPage() {
                   type="submit"
                   size="lg"
                   className="w-full glow-primary"
-                  disabled={submitting || !pricing}
+                  disabled={
+                    submitting ||
+                    checkoutAttemptBlocked ||
+                    !checkoutAttemptReady ||
+                    !currentPricing
+                  }
                   aria-busy={submitting}
                 >
                   {submitting ? (
@@ -388,10 +686,10 @@ function CheckoutPage() {
               <h2 className="text-lg font-extrabold tracking-tight">
                 Je bestelling
               </h2>
-              {pricing ? (
+              {currentPricing ? (
                 <>
                   <div className="mt-4 divide-y divide-border">
-                    {pricing.lines.map((line) => (
+                    {currentPricing.lines.map((line) => (
                       <div
                         key={`${line.slug}-${line.optionId}`}
                         className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"
@@ -409,30 +707,33 @@ function CheckoutPage() {
                     ))}
                   </div>
                   <dl className="space-y-2 border-t border-border pt-4 text-sm">
-                    <PriceRow label="Subtotaal" cents={pricing.subtotalCents} />
-                    {pricing.stackDiscountCents > 0 && (
+                    <PriceRow
+                      label="Subtotaal"
+                      cents={currentPricing.subtotalCents}
+                    />
+                    {currentPricing.stackDiscountCents > 0 && (
                       <PriceRow
                         label="Stapelkorting"
-                        cents={-pricing.stackDiscountCents}
+                        cents={-currentPricing.stackDiscountCents}
                         discount
                       />
                     )}
-                    {pricing.codeDiscountCents > 0 && (
+                    {currentPricing.codeDiscountCents > 0 && (
                       <PriceRow
-                        label={`Kortingscode ${pricing.discountCode ?? ""}`}
-                        cents={-pricing.codeDiscountCents}
+                        label={`Kortingscode ${currentPricing.discountCode ?? ""}`}
+                        cents={-currentPricing.codeDiscountCents}
                         discount
                       />
                     )}
                     <PriceRow
                       label="Verzending"
-                      cents={pricing.shippingCents}
-                      free={pricing.shippingCents === 0}
+                      cents={currentPricing.shippingCents}
+                      free={currentPricing.shippingCents === 0}
                     />
                     <div className="flex justify-between border-t border-border pt-3 text-base font-extrabold">
                       <dt>Totaal</dt>
                       <dd className="tabular-nums text-primary">
-                        {formatEuro(pricing.totalCents)}
+                        {formatEuro(currentPricing.totalCents)}
                       </dd>
                     </div>
                   </dl>
@@ -441,8 +742,12 @@ function CheckoutPage() {
                   </p>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-muted">
-                  {pricingError || "Actuele totalen berekenen…"}
+                <p
+                  className="mt-4 text-sm text-muted"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {currentPricingError || "Actuele totalen berekenen…"}
                 </p>
               )}
             </aside>

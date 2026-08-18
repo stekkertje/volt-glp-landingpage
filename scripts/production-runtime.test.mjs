@@ -10,7 +10,12 @@ test("built production runtime fails closed before loading PGLite assets", () =>
     env: {
       ...process.env,
       DATABASE_URL: "",
+      MIGRATION_DATABASE_URL: "",
+      DATABASE_URL_UNPOOLED: "",
       PGLITE_PREVIEW: "",
+      VERCEL: "",
+      NETLIFY: "",
+      REQUIRE_DATABASE: "",
     },
   });
   assert.equal(
@@ -51,6 +56,8 @@ test("built production runtime fails closed before loading PGLite assets", () =>
         ...process.env,
         NODE_ENV: "production",
         DATABASE_URL: "",
+        MIGRATION_DATABASE_URL: "",
+        DATABASE_URL_UNPOOLED: "",
         PGLITE_PREVIEW: "true",
         VERCEL: "",
         NETLIFY: "",

@@ -24,6 +24,39 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 ## Productie en beheer
 
 - `DATABASE_URL` is verplicht in iedere production runtime en deployment.
+- `MIGRATION_DATABASE_URL` (of de door sommige integraties geleverde
+  `DATABASE_URL_UNPOOLED`) is daarnaast verplicht voor deploymigraties en moet
+  de directe/unpooled PostgreSQL-URL met een expliciete niet-lege gebruiker en
+  wachtwoord zijn. De migrator gebruikt nooit de OS-gebruiker of `~/.pgpass`
+  als credentialfallback. De runtime mag een pooled
+  `DATABASE_URL` gebruiken; de migrator weigert bekende pooler-URL's omdat zijn
+  session advisory lock één vaste databaseverbinding nodig heeft. Bij Neon
+  moeten runtime- en migratie-URL aantoonbaar dezelfde branch en database
+  aanwijzen; een afzonderlijke migratierol/gebruikersnaam is wel toegestaan.
+  Zet de database altijd in het URL-pad (`/...`) zoals `pg` dat werkelijk
+  interpreteert. Een afwijkende `?database=...`-query wordt vóór verbinden
+  geweigerd. Het standaardschema is `public`. Wanneer de URL-instelling
+  `options=-c search_path=...` wordt gebruikt, moeten runtime en migrator exact
+  dezelfde veilige schemazoekvolgorde krijgen. De migrator controleert vóór
+  wijzigingen ook het werkelijk actieve schema; zonder expliciete instelling
+  pinnen migrator, runtime en auth `search_path=public`, onafhankelijk van
+  roldefaults. Geef de migrator geen losse
+  `PGHOST`/`PGPORT`/`PGDATABASE`/`PGOPTIONS` of andere connection-affecting
+  `PG*`-omgevingsvariabelen: alle verbindingsinstellingen horen expliciet in de
+  directe migratie-URL. Openen, sluiten en wachten op de
+  advisory-lock zijn begrensd. Wachten op een gewone PostgreSQL-lock is per
+  statement maximaal 15 seconden; een actief uitgevoerd migratiestatement
+  krijgt geen algemene `statement_timeout`. Zet daarom geen `statement_timeout`,
+  `query_timeout` of `lock_timeout` in de directe migratie-URL of de
+  `options`-parameter; de migrator voegt uitsluitend zijn eigen
+  `lock_timeout=15000` toe.
+- De GitHub-check **Migration integration** start bij iedere push en pull request
+  een tijdelijke PostgreSQL-service. Daarmee draaien ook de echte
+  advisory-lock- en concurrencytests, een echte geblokkeerde statement-locktest
+  én de volledige productiemigrator inclusief 0007 `CREATE INDEX CONCURRENTLY`.
+  De migrator draait daar tweemaal en de tweede run moet idempotent zijn. Lokaal
+  blijven deze tests alleen overgeslagen wanneer
+  `TEST_MIGRATION_DATABASE_URL` niet is ingesteld.
 - PGLite wordt uitsluitend gebruikt tijdens lokale development en tests.
 - `ORDER_ACCESS_TOKEN_SECRET` is verplicht naast een persistente database en
   moet een afzonderlijk, stabiel geheim van minimaal 32 tekens zijn. Genereer
