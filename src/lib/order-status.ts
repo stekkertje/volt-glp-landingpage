@@ -15,3 +15,21 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   shipped: "Verzonden",
   cancelled: "Geannuleerd",
 };
+
+export const ALLOWED_ORDER_STATUS_TRANSITIONS: Record<
+  OrderStatus,
+  readonly OrderStatus[]
+> = {
+  pending: ["paid", "cancelled"],
+  paid: ["packed", "cancelled"],
+  packed: ["shipped"],
+  shipped: [],
+  cancelled: [],
+};
+
+export function isOrderStatusTransitionAllowed(
+  current: OrderStatus,
+  next: OrderStatus,
+): boolean {
+  return ALLOWED_ORDER_STATUS_TRANSITIONS[current].includes(next);
+}

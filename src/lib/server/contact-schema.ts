@@ -1,19 +1,36 @@
 import { z } from "zod";
 
+const requiredText = (label: string, max: number) =>
+  z.preprocess(
+    (value) =>
+      typeof value === "string"
+        ? value.trim().replace(/\s+/g, " ")
+        : value,
+    z
+      .string({ message: `${label} is verplicht.` })
+      .min(1, { message: `${label} is verplicht.` })
+      .max(max, { message: `${label} is te lang.` }),
+  );
+
 export const contactMessageSchema = z
   .object({
-    name: z
-      .string()
-      .min(1)
-      .max(120)
-      .transform((value) => value.trim().replace(/\s+/g, " ")),
-    email: z
-      .string()
-      .trim()
-      .max(254)
-      .email()
-      .transform((value) => value.toLowerCase()),
-    message: z.string().trim().min(10).max(4_000),
+    name: requiredText("Naam", 120),
+    email: z.preprocess(
+      (value) =>
+        typeof value === "string" ? value.trim().toLowerCase() : value,
+      z
+        .string({ message: "E-mailadres is verplicht." })
+        .min(1, { message: "E-mailadres is verplicht." })
+        .max(254, { message: "E-mailadres is te lang." })
+        .email({ message: "Vul een geldig e-mailadres in." }),
+    ),
+    message: z.preprocess(
+      (value) => (typeof value === "string" ? value.trim() : value),
+      z
+        .string({ message: "Bericht is verplicht." })
+        .min(10, { message: "Schrijf minimaal 10 tekens." })
+        .max(4_000, { message: "Bericht mag maximaal 4000 tekens bevatten." }),
+    ),
   })
   .strict();
 

@@ -69,6 +69,19 @@ test("createOrder writes customer, order and lines using server prices", async (
      from order_lines where order_id = $1`,
     [result.order.id],
   );
+  const security = await sql.query(
+    `select idempotency_payload_hash, idempotency_viewer_hash,
+       guest_access_token_hash
+     from orders
+     where id = $1`,
+    [result.order.id],
+  );
+  const accessTokens = await sql.query(
+    `select token_hash, issued_at, expires_at
+     from order_access_tokens
+     where order_id = $1`,
+    [result.order.id],
+  );
 
   assert.deepEqual(customers, [
     {
@@ -102,6 +115,16 @@ test("createOrder writes customer, order and lines using server prices", async (
   assert.match(result.order.orderNumber, /^VOLT-[A-Z0-9]{8}$/);
   assert.equal("guestAccessTokenHash" in result.order, false);
   assert.ok(result.guestAccessToken.length >= 20);
+  assert.match(security[0].idempotency_payload_hash, /^[a-f0-9]{64}$/);
+  assert.match(security[0].idempotency_viewer_hash, /^[a-f0-9]{64}$/);
+  assert.equal(security[0].guest_access_token_hash, null);
+  assert.equal(accessTokens.length, 1);
+  assert.match(accessTokens[0].token_hash, /^[a-f0-9]{64}$/);
+  assert.equal(
+    new Date(accessTokens[0].expires_at).getTime() -
+      new Date(accessTokens[0].issued_at).getTime(),
+    72 * 60 * 60 * 1_000,
+  );
 });
 
 test("an idempotent retry keeps every issued guest proof valid", async () => {
@@ -151,6 +174,29 @@ test("an idempotent retry keeps every issued guest proof valid", async () => {
         row.token_hash !== second.guestAccessToken,
     ),
   );
+});
+
+test("canonical normalization treats equivalent retry payloads as identical", async () => {
+  const input = orderInput();
+  const first = await createOrderRecord(input, { userId: null });
+  const replay = await createOrderRecord(
+    {
+      ...input,
+      name: "Noor de Vries",
+      email: input.email.toLowerCase(),
+      phone: "0612345678",
+      street: "Teststraat",
+      houseNumber: "12 A",
+      postcode: "1234 AB",
+      city: "Utrecht",
+      country: "NL",
+      note: "Bel aan bij de buren.",
+      lines: [...input.lines].reverse(),
+    },
+    { userId: null },
+  );
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.order.id, first.order.id);
 });
 
 test("concurrent identical retries create one order and keep both proofs valid", async () => {
@@ -216,7 +262,10 @@ test("expired recovery codes and cookies do not authorize an order", async () =>
   const created = await createOrderRecord(orderInput(), { userId: null });
   const sql = await getSql();
   await sql.query(
-    "update order_access_tokens set expires_at = now() - interval '1 second' where order_id = $1",
+    `update order_access_tokens
+     set issued_at = now() - interval '73 hours',
+         expires_at = now() - interval '1 hour'
+     where order_id = $1`,
     [created.order.id],
   );
 

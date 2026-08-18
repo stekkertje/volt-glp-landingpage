@@ -11,25 +11,17 @@ import {
   verifyAdminSession,
 } from "@/lib/server/admin-session.server";
 import { getSessionUser } from "@/lib/auth/verify.server";
+import {
+  clearRateLimit,
+  consumeRateLimit,
+  RateLimitError,
+} from "@/lib/server/rate-limit.server";
 
 export const ADMIN_COOKIE_NAME = "volt-admin-session";
 const ADMIN_SESSION_SECONDS = 4 * 60 * 60;
 const LOGIN_WINDOW_MS = 15 * 60 * 1_000;
 const MAX_LOGIN_FAILURES = 8;
-
-type LoginAttempt = {
-  failures: number;
-  blockedUntil: number;
-  lastSeen: number;
-};
-
-const globalAdminRef = globalThis as typeof globalThis & {
-  __voltAdminLoginAttempts__?: Map<string, LoginAttempt>;
-};
-
-const loginAttempts =
-  globalAdminRef.__voltAdminLoginAttempts__ ??
-  (globalAdminRef.__voltAdminLoginAttempts__ = new Map());
+const MAX_LOGIN_ATTEMPTS = 20;
 
 export class AdminUnauthorizedError extends Error {
   readonly status = 401;
@@ -81,29 +73,6 @@ function requestKey(): string {
   }
 }
 
-function clearExpiredAttempts(now: number): void {
-  for (const [key, attempt] of loginAttempts) {
-    if (now - attempt.lastSeen > LOGIN_WINDOW_MS) loginAttempts.delete(key);
-  }
-}
-
-function loginDelay(attempt: LoginAttempt | undefined, now: number): number {
-  if (!attempt) return 0;
-  if (now - attempt.lastSeen > LOGIN_WINDOW_MS) return 0;
-  return Math.max(0, attempt.blockedUntil - now);
-}
-
-function recordFailedLogin(key: string, now: number): number {
-  const previous = loginAttempts.get(key);
-  const failures =
-    previous && now - previous.lastSeen <= LOGIN_WINDOW_MS ? previous.failures + 1 : 1;
-  const backoff = Math.min(4_000, 250 * 2 ** Math.min(failures - 1, 4));
-  const blockedUntil =
-    failures >= MAX_LOGIN_FAILURES ? now + LOGIN_WINDOW_MS : now + backoff;
-  loginAttempts.set(key, { failures, blockedUntil, lastSeen: now });
-  return backoff;
-}
-
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -132,20 +101,37 @@ export async function loginAdminWithPassword(password: string): Promise<void> {
   const config = adminConfig();
   const key = requestKey();
   const now = Date.now();
-  clearExpiredAttempts(now);
-
-  const delay = loginDelay(loginAttempts.get(key), now);
-  if (delay > 0) {
-    await wait(Math.min(delay, 4_000));
-    throw new AdminUnauthorizedError();
-  }
+  await consumeRateLimit({
+    scope: "admin-login-attempt",
+    identifier: key,
+    limit: MAX_LOGIN_ATTEMPTS,
+    windowMs: LOGIN_WINDOW_MS,
+    now: new Date(now),
+  });
 
   if (!config || !timingSafePasswordEqual(password, config.password)) {
-    await wait(recordFailedLogin(key, now));
+    try {
+      const failure = await consumeRateLimit({
+        scope: "admin-login-failure",
+        identifier: key,
+        limit: MAX_LOGIN_FAILURES,
+        windowMs: LOGIN_WINDOW_MS,
+        now: new Date(now),
+      });
+      await wait(
+        Math.min(
+          4_000,
+          250 * 2 ** Math.min(failure.count - 1, 4),
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof RateLimitError)) throw error;
+      await wait(Math.min(error.retryAfterMs, 4_000));
+    }
     throw new AdminUnauthorizedError();
   }
 
-  loginAttempts.delete(key);
+  await clearRateLimit("admin-login-failure", key);
   const expiresAt = now + ADMIN_SESSION_SECONDS * 1_000;
   setCookie(ADMIN_COOKIE_NAME, signAdminSession(config.sessionSecret, expiresAt), {
     httpOnly: true,

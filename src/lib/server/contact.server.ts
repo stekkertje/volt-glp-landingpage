@@ -5,25 +5,7 @@ import {
   type ContactListInput,
   type ContactMessageInput,
 } from "@/lib/server/contact-schema";
-
-const CONTACT_WINDOW_MS = 10 * 60 * 1_000;
-const CONTACT_LIMIT = 8;
-
-const globalContactRef = globalThis as typeof globalThis & {
-  __voltContactRateLimit__?: Map<string, number[]>;
-};
-const contactRateLimit: Map<string, number[]> =
-  globalContactRef.__voltContactRateLimit__ ??
-  (globalContactRef.__voltContactRateLimit__ = new Map<string, number[]>());
-
-export class ContactRateLimitError extends Error {
-  readonly status = 429;
-
-  constructor() {
-    super("Probeer het over een paar minuten opnieuw.");
-    this.name = "ContactRateLimitError";
-  }
-}
+import { enforceContactCreationLimit } from "@/lib/server/abuse-protection.server";
 
 export type ContactMessage = {
   id: string;
@@ -61,28 +43,12 @@ function toContactMessage(row: ContactRow): ContactMessage {
   };
 }
 
-function consumeContactRateLimit(key: string, now = Date.now()): void {
-  const cutoff = now - CONTACT_WINDOW_MS;
-  const recent = (contactRateLimit.get(key) ?? []).filter((timestamp) => timestamp > cutoff);
-  if (recent.length >= CONTACT_LIMIT) throw new ContactRateLimitError();
-  recent.push(now);
-  contactRateLimit.set(key, recent);
-
-  if (contactRateLimit.size > 1_000) {
-    for (const [entryKey, timestamps] of contactRateLimit) {
-      if (!timestamps.some((timestamp) => timestamp > cutoff)) {
-        contactRateLimit.delete(entryKey);
-      }
-    }
-  }
-}
-
 export async function storeContactMessage(
   rawInput: ContactMessageInput,
   rateLimitKey: string,
 ): Promise<void> {
   const input = contactMessageSchema.parse(rawInput);
-  consumeContactRateLimit(rateLimitKey);
+  await enforceContactCreationLimit(rateLimitKey);
   const sql = await getSql();
   await sql`
     insert into contact_messages (id, name, email, message, handled, created_at)

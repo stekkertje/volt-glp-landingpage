@@ -62,3 +62,28 @@ test("contact stores a validated message and admin can mark it handled", async (
   assert.equal(updated.handled, true);
   assert.ok(updated.handledAt);
 });
+
+test("contact creation uses the persistent abuse limit", async () => {
+  const key = `contact-limit-${randomUUID()}`;
+  for (let index = 0; index < 8; index += 1) {
+    await storeContactMessage(
+      {
+        name: "Noor de Vries",
+        email: `contact-limit-${index}-${randomUUID()}@example.test`,
+        message: "Dit is een geldig contactbericht.",
+      },
+      key,
+    );
+  }
+  await assert.rejects(
+    storeContactMessage(
+      {
+        name: "Noor de Vries",
+        email: `contact-limit-${randomUUID()}@example.test`,
+        message: "Dit is een geldig contactbericht.",
+      },
+      key,
+    ),
+    (error) => error?.name === "RateLimitError" && error?.status === 429,
+  );
+});

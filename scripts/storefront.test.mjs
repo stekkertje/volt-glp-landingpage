@@ -737,6 +737,74 @@ test("a checkout request failure keeps the cart intact", async () => {
   }
 });
 
+test("checkout shows server-shared postcode feedback without clearing the cart", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.getByRole("link", { name: "Veilig afrekenen" }).click();
+    await page.waitForURL(`${BASE_URL}/checkout`);
+    await fillCheckout(page, `postcode-${randomUUID()}@example.test`);
+    await page.getByLabel("Postcode").fill("abc");
+    await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
+
+    await page
+      .getByText("Vul een geldige Nederlandse postcode in.")
+      .waitFor();
+    assert.equal(page.url(), `${BASE_URL}/checkout`);
+    assert.equal((await cartState(page)).lines.length, 1);
+  } finally {
+    await context.close();
+  }
+});
+
+test("admin only offers valid next order statuses", async () => {
+  const { context, page } = await newPage({ width: 390, height: 844 });
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.getByRole("link", { name: "Veilig afrekenen" }).click();
+    await page.waitForURL(`${BASE_URL}/checkout`);
+    await fillCheckout(page, `status-${randomUUID()}@example.test`);
+    await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
+    await page.waitForURL(/\/bestelling\/[^/]+$/);
+    const orderNumber = (
+      await page.getByRole("heading", { level: 1 }).innerText()
+    ).trim();
+
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
+    await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Inloggen" }).click();
+    await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+    await page.getByRole("button", { name: new RegExp(orderNumber) }).click();
+
+    const status = page.getByLabel("Volgende status");
+    await status.waitFor({ state: "visible" });
+    assert.deepEqual(
+      await status
+        .locator("option")
+        .evaluateAll((options) => options.map((option) => option.value)),
+      ["pending", "paid", "cancelled"],
+    );
+    await status.selectOption("paid");
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "Status opslaan" }).click();
+    await page.getByText("Betaald", { exact: true }).last().waitFor();
+  } finally {
+    await context.close();
+  }
+});
+
 test("contact is stored and only an authenticated admin can handle it", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   const uniqueMessage = `Contacttest ${randomUUID()} met voldoende tekens.`;

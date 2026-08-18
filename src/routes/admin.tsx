@@ -12,7 +12,11 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { Button } from "@/components/ui/button";
-import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/order-status";
+import {
+  ALLOWED_ORDER_STATUS_TRANSITIONS,
+  ORDER_STATUS_LABELS,
+  type OrderStatus,
+} from "@/lib/order-status";
 import { getAdminSessionState, loginAdmin, logoutAdmin } from "@/lib/server/admin";
 import { listContactMessages, setContactHandled } from "@/lib/server/contact";
 import {
@@ -414,6 +418,11 @@ function OrderAdminDetail({
   const [status, setStatus] = useState<OrderStatus>(order.status);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const nextStatuses = ALLOWED_ORDER_STATUS_TRANSITIONS[order.status];
+
+  useEffect(() => {
+    setStatus(order.status);
+  }, [order.status]);
 
   return (
     <div className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6">
@@ -426,46 +435,65 @@ function OrderAdminDetail({
           Sluiten
         </Button>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <label className="space-y-1.5">
-          <span className="text-xs font-semibold">Status</span>
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as OrderStatus)}
-            className={inputClass}
-          >
-            {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
+      {nextStatuses.length ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold">Volgende status</span>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as OrderStatus)}
+              className={inputClass}
+            >
+              <option value={order.status}>
+                Kies een volgende status
               </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          type="button"
-          disabled={saving || status === order.status}
-          onClick={async () => {
-            if (!window.confirm(`Status wijzigen naar ${ORDER_STATUS_LABELS[status]}?`)) {
-              return;
-            }
-            setSaving(true);
-            setError("");
-            try {
-              onUpdated(
-                await updateOrderStatus({
-                  data: { id: order.id, status },
-                }),
-              );
-            } catch {
-              setError("Status wijzigen is niet gelukt.");
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          {saving ? "Opslaan…" : "Status opslaan"}
-        </Button>
-      </div>
+              {nextStatuses.map((value) => (
+                <option key={value} value={value}>
+                  {ORDER_STATUS_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            type="button"
+            disabled={saving || status === order.status}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `Status wijzigen naar ${ORDER_STATUS_LABELS[status]}?`,
+                )
+              ) {
+                return;
+              }
+              setSaving(true);
+              setError("");
+              try {
+                onUpdated(
+                  await updateOrderStatus({
+                    data: {
+                      id: order.id,
+                      expectedStatus: order.status,
+                      status,
+                    },
+                  }),
+                );
+              } catch {
+                setError(
+                  "Status wijzigen is niet gelukt. Vernieuw het overzicht en probeer opnieuw.",
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "Opslaan…" : "Status opslaan"}
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-5 rounded-xl border border-border bg-bg-elevated p-3 text-sm text-muted">
+          Deze status is definitief en kan niet meer worden gewijzigd.
+        </p>
+      )}
       {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
       <div className="mt-6">
         <OrderDetails order={order} />

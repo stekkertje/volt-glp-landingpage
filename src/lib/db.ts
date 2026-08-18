@@ -1,20 +1,19 @@
+import { resolveDatabasePolicy } from "@/lib/db-policy";
+
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
-// An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
-// "unset" — otherwise production would silently run on the PGLite fallback.
-const rawDatabaseUrl =
-  typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const databasePolicy = resolveDatabasePolicy(
+  typeof process !== "undefined" ? process.env : {},
+);
+const databaseUrl = databasePolicy.databaseUrl;
 
 /**
- * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
- * sandbox), otherwise a local embedded **PGLite** (Postgres compiled to WASM) so
- * the app has a working database even with nothing configured — the live preview
- * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
+ * Active backend: real **Neon** when `DATABASE_URL` is set. PGLite is restricted
+ * to development, tests, local builds and explicitly ephemeral previews.
+ * Production runtimes fail during import when persistent Postgres is missing.
  */
-export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+export const dbSource: DbSource = databasePolicy.source;
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the

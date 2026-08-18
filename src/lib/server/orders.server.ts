@@ -1,6 +1,10 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, withSqlTransaction, type Sql } from "@/lib/db";
-import { ORDER_STATUSES, type OrderStatus } from "@/lib/order-status";
+import {
+  ORDER_STATUSES,
+  isOrderStatusTransitionAllowed,
+  type OrderStatus,
+} from "@/lib/order-status";
 import { calculatePricing, type DiscountCodeRecord } from "@/lib/server/pricing";
 import {
   createOrderSchema,
@@ -75,7 +79,8 @@ type OrderRow = {
   total_cents: number;
   discount_code: string | null;
   note: string | null;
-  guest_access_token_hash: string | null;
+  idempotency_payload_hash: string | null;
+  idempotency_viewer_hash: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -106,11 +111,39 @@ export type OrderViewer = OrderViewerInput & {
 
 const TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ORDER_ACCESS_ERROR = "Bestelling niet gevonden of niet toegankelijk.";
+export const GUEST_ACCESS_TOKEN_TTL_MS = 72 * 60 * 60 * 1_000;
 
 export class OrderAccessError extends Error {
   constructor() {
     super(ORDER_ACCESS_ERROR);
     this.name = "OrderAccessError";
+  }
+}
+
+export class IdempotencyConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("Deze herhaalcode hoort bij een andere bestelling.");
+    this.name = "IdempotencyConflictError";
+  }
+}
+
+export class OrderStatusTransitionError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("Deze statusovergang is niet toegestaan.");
+    this.name = "OrderStatusTransitionError";
+  }
+}
+
+export class OrderStatusConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("De bestelstatus is intussen gewijzigd. Vernieuw het overzicht.");
+    this.name = "OrderStatusConflictError";
   }
 }
 
@@ -129,8 +162,55 @@ export function normalizeGuestAccessToken(token: string): string {
   return token.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 export function hashGuestAccessToken(token: string): string {
-  return createHash("sha256").update(normalizeGuestAccessToken(token)).digest("hex");
+  return sha256(normalizeGuestAccessToken(token));
+}
+
+function canonicalPayloadHash(input: CreateOrderInput): string {
+  const lines = [...input.lines]
+    .map((line) => ({
+      slug: line.slug,
+      optionId: line.optionId,
+      qty: line.qty,
+    }))
+    .sort((left, right) =>
+      `${left.slug}\0${left.optionId}`.localeCompare(
+        `${right.slug}\0${right.optionId}`,
+      ),
+    );
+  return sha256(
+    JSON.stringify({
+      name: input.name,
+      email: input.email,
+      phone: input.phone ?? null,
+      street: input.street,
+      houseNumber: input.houseNumber,
+      postcode: input.postcode,
+      city: input.city,
+      country: input.country,
+      note: input.note ?? null,
+      discountCode: input.discountCode?.toUpperCase() ?? null,
+      lines,
+    }),
+  );
+}
+
+function viewerBindingHash(input: CreateOrderInput, userId: string | null): string {
+  return sha256(userId ? `user:${userId}` : `guest:${input.email}`);
+}
+
+function hashMatches(actual: string, expected: string | null): boolean {
+  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) return false;
+  const actualBuffer = Buffer.from(actual, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return (
+    actualBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(actualBuffer, expectedBuffer)
+  );
 }
 
 export function guestOrderCookieValue(orderId: string, token: string): string {
@@ -148,11 +228,44 @@ export function parseGuestOrderCookie(
   return orderId && token ? { orderId, token } : null;
 }
 
-function tokenMatches(token: string | null | undefined, storedHash: string | null): boolean {
-  if (!token || !storedHash || !/^[a-f0-9]{64}$/i.test(storedHash)) return false;
-  const actual = Buffer.from(hashGuestAccessToken(token), "hex");
-  const expected = Buffer.from(storedHash, "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+async function issueAccessToken(
+  sql: Sql,
+  orderId: string,
+  tokenHash: string,
+  issuedAt: Date,
+): Promise<void> {
+  const expiresAt = new Date(issuedAt.getTime() + GUEST_ACCESS_TOKEN_TTL_MS);
+  await sql`
+    delete from order_access_tokens
+    where order_id = ${orderId}
+      and (expires_at <= ${issuedAt.toISOString()} or revoked_at is not null)
+  `;
+  await sql`
+    insert into order_access_tokens (
+      id, order_id, token_hash, issued_at, expires_at, revoked_at
+    ) values (
+      ${randomUUID()}, ${orderId}, ${tokenHash}, ${issuedAt.toISOString()},
+      ${expiresAt.toISOString()}, null
+    )
+  `;
+}
+
+async function hasValidAccessToken(
+  sql: Sql,
+  orderId: string,
+  token: string | null | undefined,
+): Promise<boolean> {
+  if (!token) return false;
+  const rows = await sql<{ allowed: boolean }>`
+    select true as allowed
+    from order_access_tokens
+    where order_id = ${orderId}
+      and token_hash = ${hashGuestAccessToken(token)}
+      and revoked_at is null
+      and expires_at > now()
+    limit 1
+  `;
+  return rows[0]?.allowed === true;
 }
 
 function asIsoString(value: Date | string): string {
@@ -199,7 +312,7 @@ async function loadOrderById(sql: Sql, id: string): Promise<OrderRow | null> {
     select id, order_number, user_id, email, name, phone, street, house_number,
       postcode, city, country, status, subtotal_cents, stack_discount_cents,
       code_discount_cents, shipping_cents, total_cents, discount_code, note,
-      guest_access_token_hash, created_at, updated_at
+      idempotency_payload_hash, idempotency_viewer_hash, created_at, updated_at
     from orders
     where id = ${id}
     limit 1
@@ -212,7 +325,7 @@ async function loadOrderByNumber(sql: Sql, orderNumber: string): Promise<OrderRo
     select id, order_number, user_id, email, name, phone, street, house_number,
       postcode, city, country, status, subtotal_cents, stack_discount_cents,
       code_discount_cents, shipping_cents, total_cents, discount_code, note,
-      guest_access_token_hash, created_at, updated_at
+      idempotency_payload_hash, idempotency_viewer_hash, created_at, updated_at
     from orders
     where order_number = ${orderNumber.trim().toUpperCase()}
     limit 1
@@ -231,29 +344,35 @@ async function loadPublicOrder(sql: Sql, row: OrderRow): Promise<PublicOrder> {
   return toPublicOrder(row, lines);
 }
 
-async function rotateExistingOrder(
+async function replayExistingOrder(
   sql: Sql,
   idempotencyKey: string,
+  payloadHash: string,
+  viewerHash: string,
   tokenHash: string,
+  issuedAt: Date,
 ): Promise<PublicOrder | null> {
-  const rows = await sql<OrderRow>`
-    select id, order_number, user_id, email, name, phone, street, house_number,
-      postcode, city, country, status, subtotal_cents, stack_discount_cents,
-      code_discount_cents, shipping_cents, total_cents, discount_code, note,
-      guest_access_token_hash, created_at, updated_at
+  const rows = await sql<{
+    id: string;
+    idempotency_payload_hash: string | null;
+    idempotency_viewer_hash: string | null;
+  }>`
+    select id, idempotency_payload_hash, idempotency_viewer_hash
     from orders
     where idempotency_key = ${idempotencyKey}
     limit 1
   `;
   const existing = rows[0];
   if (!existing) return null;
-  await sql`
-    update orders
-    set guest_access_token_hash = ${tokenHash}, updated_at = now()
-    where id = ${existing.id}
-  `;
-  const refreshed = await loadOrderById(sql, existing.id);
-  return refreshed ? loadPublicOrder(sql, refreshed) : null;
+  if (
+    !hashMatches(payloadHash, existing.idempotency_payload_hash) ||
+    !hashMatches(viewerHash, existing.idempotency_viewer_hash)
+  ) {
+    throw new IdempotencyConflictError();
+  }
+  await issueAccessToken(sql, existing.id, tokenHash, issuedAt);
+  const row = await loadOrderById(sql, existing.id);
+  return row ? loadPublicOrder(sql, row) : null;
 }
 
 function uniqueConstraint(error: unknown): string {
@@ -267,7 +386,10 @@ async function createNewOrder(
   sql: Sql,
   input: CreateOrderInput,
   userId: string | null,
+  payloadHash: string,
+  viewerHash: string,
   tokenHash: string,
+  issuedAt: Date,
 ): Promise<PublicOrder> {
   const pricing = await calculatePricing(
     { lines: input.lines, discountCode: input.discountCode },
@@ -299,17 +421,20 @@ async function createNewOrder(
   const orderNumber = `VOLT-${randomCharacters(8)}`;
   await sql`
     insert into orders (
-      id, order_number, idempotency_key, customer_id, user_id, email, name, phone,
-      street, house_number, postcode, city, country, status, subtotal_cents,
+      id, order_number, idempotency_key, idempotency_payload_hash,
+      idempotency_viewer_hash, customer_id, user_id, email, name, phone, street,
+      house_number, postcode, city, country, status, subtotal_cents,
       stack_discount_cents, code_discount_cents, shipping_cents, total_cents,
       discount_code, note, guest_access_token_hash, created_at, updated_at
     ) values (
-      ${orderId}, ${orderNumber}, ${input.idempotencyKey}, ${customer.id}, ${userId},
-      ${input.email}, ${input.name}, ${input.phone ?? null}, ${input.street},
-      ${input.houseNumber}, ${input.postcode}, ${input.city}, ${input.country},
-      'pending', ${pricing.subtotalCents}, ${pricing.stackDiscountCents},
-      ${pricing.codeDiscountCents}, ${pricing.shippingCents}, ${pricing.totalCents},
-      ${pricing.discountCode}, ${input.note ?? null}, ${tokenHash}, now(), now()
+      ${orderId}, ${orderNumber}, ${input.idempotencyKey}, ${payloadHash},
+      ${viewerHash}, ${customer.id}, ${userId}, ${input.email}, ${input.name},
+      ${input.phone ?? null}, ${input.street}, ${input.houseNumber},
+      ${input.postcode}, ${input.city}, ${input.country}, 'pending',
+      ${pricing.subtotalCents}, ${pricing.stackDiscountCents},
+      ${pricing.codeDiscountCents}, ${pricing.shippingCents},
+      ${pricing.totalCents}, ${pricing.discountCode}, ${input.note ?? null},
+      null, now(), now()
     )
   `;
 
@@ -325,6 +450,7 @@ async function createNewOrder(
       )
     `;
   }
+  await issueAccessToken(sql, orderId, tokenHash, issuedAt);
 
   const row = await loadOrderById(sql, orderId);
   if (!row) throw new Error("Bestelling kon niet worden opgeslagen.");
@@ -339,13 +465,31 @@ export async function createOrderRecord(
   const guestAccessToken = generateGuestAccessToken();
   const tokenHash = hashGuestAccessToken(guestAccessToken);
   const userId = viewer.userId ?? null;
+  const payloadHash = canonicalPayloadHash(input);
+  const viewerHash = viewerBindingHash(input, userId);
+  const issuedAt = new Date();
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const result = await withSqlTransaction(async (sql) => {
-        const replay = await rotateExistingOrder(sql, input.idempotencyKey, tokenHash);
+        const replay = await replayExistingOrder(
+          sql,
+          input.idempotencyKey,
+          payloadHash,
+          viewerHash,
+          tokenHash,
+          issuedAt,
+        );
         if (replay) return { order: replay, replayed: true };
-        const order = await createNewOrder(sql, input, userId, tokenHash);
+        const order = await createNewOrder(
+          sql,
+          input,
+          userId,
+          payloadHash,
+          viewerHash,
+          tokenHash,
+          issuedAt,
+        );
         return { order, replayed: false };
       });
       return { ...result, guestAccessToken };
@@ -353,7 +497,14 @@ export async function createOrderRecord(
       const constraint = uniqueConstraint(error);
       if (constraint.includes("idempotency")) {
         const replay = await withSqlTransaction((sql) =>
-          rotateExistingOrder(sql, input.idempotencyKey, tokenHash),
+          replayExistingOrder(
+            sql,
+            input.idempotencyKey,
+            payloadHash,
+            viewerHash,
+            tokenHash,
+            issuedAt,
+          ),
         );
         if (replay) {
           return { order: replay, guestAccessToken, replayed: true };
@@ -377,12 +528,14 @@ export async function getOrderRecordForViewer(viewer: OrderViewer): Promise<Publ
   if (!row) throw new OrderAccessError();
 
   const isOwner = Boolean(viewer.userId && row.user_id === viewer.userId);
-  const cookieMatches =
-    viewer.cookieOrderId === row.id &&
-    tokenMatches(viewer.cookieAccessToken, row.guest_access_token_hash);
-  const codeMatches = tokenMatches(viewer.accessCode, row.guest_access_token_hash);
-  if (!viewer.isAdmin && !isOwner && !cookieMatches && !codeMatches) {
-    throw new OrderAccessError();
+  if (!viewer.isAdmin && !isOwner) {
+    const cookieMatches =
+      viewer.cookieOrderId === row.id &&
+      (await hasValidAccessToken(sql, row.id, viewer.cookieAccessToken));
+    const codeMatches =
+      !cookieMatches &&
+      (await hasValidAccessToken(sql, row.id, viewer.accessCode));
+    if (!cookieMatches && !codeMatches) throw new OrderAccessError();
   }
 
   return loadPublicOrder(sql, row);
@@ -499,19 +652,32 @@ export async function getAdminOrderRecord(id: string): Promise<PublicOrder> {
 
 export async function updateOrderStatusRecord(
   id: string,
+  expectedStatus: OrderStatus,
   status: OrderStatus,
 ): Promise<PublicOrder> {
-  if (!ORDER_STATUSES.includes(status)) {
+  if (
+    !ORDER_STATUSES.includes(expectedStatus) ||
+    !ORDER_STATUSES.includes(status)
+  ) {
     throw new Error("Ongeldige bestelstatus.");
+  }
+  if (!isOrderStatusTransitionAllowed(expectedStatus, status)) {
+    throw new OrderStatusTransitionError();
   }
   return withSqlTransaction(async (sql) => {
     const updated = await sql<{ id: string }>`
       update orders
       set status = ${status}, updated_at = now()
-      where id = ${id}
+      where id = ${id} and status = ${expectedStatus}
       returning id
     `;
-    if (!updated[0]) throw new OrderAccessError();
+    if (!updated[0]) {
+      const existing = await sql<{ id: string }>`
+        select id from orders where id = ${id} limit 1
+      `;
+      if (!existing[0]) throw new OrderAccessError();
+      throw new OrderStatusConflictError();
+    }
     const row = await loadOrderById(sql, id);
     if (!row) throw new OrderAccessError();
     return loadPublicOrder(sql, row);

@@ -13,6 +13,7 @@ import { ArrowLeft, Loader2, LockKeyhole } from "lucide-react";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/cart-store";
+import { createOrderSchema } from "@/lib/server/order-schema";
 import { createOrder, getPricingPreview } from "@/lib/server/orders";
 import { formatEuro } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ function CheckoutPage() {
   const [pricingError, setPricingError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const idempotencyKey = useRef<string | null>(null);
   const emptyRedirected = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -95,25 +97,46 @@ function CheckoutPage() {
     if (!lines.length || submitting) return;
     setSubmitting(true);
     setFormError("");
-    const fields = new FormData(event.currentTarget);
+    setFieldErrors({});
+    const form = event.currentTarget;
+    const fields = new FormData(form);
     idempotencyKey.current ??= crypto.randomUUID();
+    const validation = createOrderSchema.safeParse({
+      name: String(fields.get("name") ?? ""),
+      email: String(fields.get("email") ?? ""),
+      phone: String(fields.get("phone") ?? ""),
+      street: String(fields.get("street") ?? ""),
+      houseNumber: String(fields.get("houseNumber") ?? ""),
+      postcode: String(fields.get("postcode") ?? ""),
+      city: String(fields.get("city") ?? ""),
+      country: String(fields.get("country") ?? ""),
+      note: String(fields.get("note") ?? ""),
+      lines: lines.map(({ slug, optionId, qty }) => ({ slug, optionId, qty })),
+      discountCode: discountApplied ? discountCode : undefined,
+      idempotencyKey: idempotencyKey.current,
+    });
+    if (!validation.success) {
+      const nextErrors: Record<string, string> = {};
+      for (const issue of validation.error.issues) {
+        const field = String(issue.path[0] ?? "form");
+        nextErrors[field] ??= issue.message;
+      }
+      setFieldErrors(nextErrors);
+      setFormError("Controleer de gemarkeerde velden.");
+      setSubmitting(false);
+      const firstField = String(validation.error.issues[0]?.path[0] ?? "");
+      requestAnimationFrame(() => {
+        const target = form.querySelector<HTMLElement>(
+          `[name="${CSS.escape(firstField)}"]`,
+        );
+        target?.focus();
+      });
+      return;
+    }
 
     try {
       const result = await createOrder({
-        data: {
-          name: String(fields.get("name") ?? ""),
-          email: String(fields.get("email") ?? ""),
-          phone: String(fields.get("phone") ?? ""),
-          street: String(fields.get("street") ?? ""),
-          houseNumber: String(fields.get("houseNumber") ?? ""),
-          postcode: String(fields.get("postcode") ?? ""),
-          city: String(fields.get("city") ?? ""),
-          country: String(fields.get("country") ?? ""),
-          note: String(fields.get("note") ?? ""),
-          lines: lines.map(({ slug, optionId, qty }) => ({ slug, optionId, qty })),
-          discountCode: discountApplied ? discountCode : undefined,
-          idempotencyKey: idempotencyKey.current,
-        },
+        data: validation.data,
       });
       sessionStorage.setItem(
         `volt-order-recovery:${result.order.id}`,
@@ -189,13 +212,20 @@ function CheckoutPage() {
                   <legend className="col-span-full mb-1 text-base font-bold">
                     Contactgegevens
                   </legend>
-                  <Field label="Naam" name="name" autoComplete="name" required />
+                  <Field
+                    label="Naam"
+                    name="name"
+                    autoComplete="name"
+                    required
+                    error={fieldErrors.name}
+                  />
                   <Field
                     label="E-mail"
                     name="email"
                     type="email"
                     autoComplete="email"
                     required
+                    error={fieldErrors.email}
                   />
                   <Field
                     label="Telefoon"
@@ -203,6 +233,7 @@ function CheckoutPage() {
                     type="tel"
                     autoComplete="tel"
                     className="sm:col-span-2"
+                    error={fieldErrors.phone}
                   />
                 </fieldset>
 
@@ -216,6 +247,7 @@ function CheckoutPage() {
                     autoComplete="address-line1"
                     required
                     className="sm:col-span-4"
+                    error={fieldErrors.street}
                   />
                   <Field
                     label="Huisnummer"
@@ -223,6 +255,7 @@ function CheckoutPage() {
                     autoComplete="address-line2"
                     required
                     className="sm:col-span-2"
+                    error={fieldErrors.houseNumber}
                   />
                   <Field
                     label="Postcode"
@@ -230,6 +263,7 @@ function CheckoutPage() {
                     autoComplete="postal-code"
                     required
                     className="sm:col-span-2"
+                    error={fieldErrors.postcode}
                   />
                   <Field
                     label="Plaats"
@@ -237,6 +271,7 @@ function CheckoutPage() {
                     autoComplete="address-level2"
                     required
                     className="sm:col-span-2"
+                    error={fieldErrors.city}
                   />
                   <label className="space-y-1.5 sm:col-span-2">
                     <span className="text-xs font-semibold text-fg">Land</span>
@@ -245,10 +280,23 @@ function CheckoutPage() {
                       autoComplete="country"
                       defaultValue="NL"
                       className={inputClass}
+                      aria-invalid={Boolean(fieldErrors.country)}
+                      aria-describedby={
+                        fieldErrors.country ? "checkout-country-error" : undefined
+                      }
                     >
                       <option value="NL">Nederland</option>
                       <option value="BE">België</option>
                     </select>
+                    {fieldErrors.country && (
+                      <span
+                        id="checkout-country-error"
+                        role="alert"
+                        className="block text-xs text-danger"
+                      >
+                        {fieldErrors.country}
+                      </span>
+                    )}
                   </label>
                 </fieldset>
 
@@ -262,7 +310,20 @@ function CheckoutPage() {
                     maxLength={1_000}
                     className={`${inputClass} h-auto min-h-24 resize-y py-3`}
                     placeholder="Bijvoorbeeld een bezorginstructie"
+                    aria-invalid={Boolean(fieldErrors.note)}
+                    aria-describedby={
+                      fieldErrors.note ? "checkout-note-error" : undefined
+                    }
                   />
+                  {fieldErrors.note && (
+                    <span
+                      id="checkout-note-error"
+                      role="alert"
+                      className="block text-xs text-danger"
+                    >
+                      {fieldErrors.note}
+                    </span>
+                  )}
                 </label>
 
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
@@ -365,6 +426,7 @@ function Field({
   autoComplete,
   required = false,
   className = "",
+  error,
 }: {
   label: string;
   name: string;
@@ -372,7 +434,9 @@ function Field({
   autoComplete?: string;
   required?: boolean;
   className?: string;
+  error?: string;
 }) {
+  const errorId = `checkout-${name}-error`;
   return (
     <label className={`space-y-1.5 ${className}`}>
       <span className="text-xs font-semibold text-fg">{label}</span>
@@ -382,7 +446,14 @@ function Field({
         autoComplete={autoComplete}
         required={required}
         className={inputClass}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
       />
+      {error && (
+        <span id={errorId} role="alert" className="block text-xs text-danger">
+          {error}
+        </span>
+      )}
     </label>
   );
 }

@@ -13,7 +13,6 @@ import {
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
 
 export const GUEST_ORDER_COOKIE = "volt-order-access";
-const GUEST_COOKIE_SECONDS = 3 * 24 * 60 * 60;
 
 export const getPricingPreview = createServerFn({ method: "POST" })
   .middleware([sameSiteMiddleware])
@@ -27,10 +26,19 @@ export const createOrder = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(createOrderSchema)
   .handler(async ({ data, context }) => {
-    const { setCookie } = await import("@tanstack/react-start/server");
-    const { createOrderRecord, guestOrderCookieValue } = await import(
-      "./orders.server"
+    const { getRequestIP, setCookie } = await import(
+      "@tanstack/react-start/server"
     );
+    const {
+      createOrderRecord,
+      GUEST_ACCESS_TOKEN_TTL_MS,
+      guestOrderCookieValue,
+    } = await import("./orders.server");
+    const { enforceOrderCreationLimit } = await import(
+      "./abuse-protection.server"
+    );
+    const requestIp = getRequestIP({ xForwardedFor: true }) || "unknown";
+    await enforceOrderCreationLimit(requestIp, data.email);
     const result = await createOrderRecord(data, { userId: context.userId });
     setCookie(
       GUEST_ORDER_COOKIE,
@@ -40,7 +48,7 @@ export const createOrder = createServerFn({ method: "POST" })
         sameSite: "strict",
         secure: process.env.NODE_ENV === "production",
         path: "/",
-        maxAge: GUEST_COOKIE_SECONDS,
+        maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
       },
     );
     return result;
@@ -50,13 +58,24 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(orderViewerSchema)
   .handler(async ({ data, context }) => {
-    const { getCookie, setCookie } = await import("@tanstack/react-start/server");
+    const { getCookie, getRequestIP, setCookie } = await import(
+      "@tanstack/react-start/server"
+    );
     const {
+      GUEST_ACCESS_TOKEN_TTL_MS,
       getOrderRecordForViewer,
       guestOrderCookieValue,
       parseGuestOrderCookie,
     } = await import("./orders.server");
     const { isAdminViewer } = await import("./admin-auth.server");
+    if (data.accessCode) {
+      const { enforceOrderAccessLimit } = await import(
+        "./abuse-protection.server"
+      );
+      const requestIp = getRequestIP({ xForwardedFor: true }) || "unknown";
+      const orderReference = data.id ?? data.orderNumber ?? "unknown";
+      await enforceOrderAccessLimit(requestIp, orderReference);
+    }
     const cookie = parseGuestOrderCookie(getCookie(GUEST_ORDER_COOKIE));
     const order = await getOrderRecordForViewer({
       ...data,
@@ -75,7 +94,7 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
           sameSite: "strict",
           secure: process.env.NODE_ENV === "production",
           path: "/",
-          maxAge: GUEST_COOKIE_SECONDS,
+          maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
         },
       );
     }
@@ -112,5 +131,9 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     const { assertSameOriginMutation } = await import("./admin-auth.server");
     const { updateOrderStatusRecord } = await import("./orders.server");
     assertSameOriginMutation();
-    return updateOrderStatusRecord(data.id, data.status);
+    return updateOrderStatusRecord(
+      data.id,
+      data.expectedStatus,
+      data.status,
+    );
   });

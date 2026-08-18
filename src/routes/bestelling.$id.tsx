@@ -97,7 +97,7 @@ function OrderConfirmationPage() {
                   Bewaar je herstelcode
                 </h2>
                 <p className="mt-1 text-sm text-muted">
-                  Hiermee kun je deze bestelling later als gast terugvinden.
+                  Hiermee kun je deze bestelling 72 uur lang als gast terugvinden.
                 </p>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <code className="min-w-0 flex-1 break-all rounded-lg border border-border bg-surface px-3 py-2.5 text-sm font-bold tracking-wide text-fg">

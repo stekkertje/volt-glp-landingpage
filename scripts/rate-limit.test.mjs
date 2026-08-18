@@ -6,6 +6,8 @@ import { createServer } from "vite";
 let vite;
 let getSql;
 let consumeRateLimit;
+let enforceOrderCreationLimit;
+let enforceOrderAccessLimit;
 
 before(async () => {
   vite = await createServer({
@@ -17,6 +19,10 @@ before(async () => {
   ({ consumeRateLimit } = await vite.ssrLoadModule(
     "/src/lib/server/rate-limit.server.ts",
   ));
+  ({ enforceOrderCreationLimit, enforceOrderAccessLimit } =
+    await vite.ssrLoadModule(
+      "/src/lib/server/abuse-protection.server.ts",
+    ));
 });
 
 after(async () => {
@@ -78,4 +84,27 @@ test("a new fixed window starts with a fresh allowance", async () => {
     now: new Date("2026-08-18T00:01:00.000Z"),
   });
   assert.equal(next.count, 1);
+});
+
+test("order creation is limited persistently by normalized customer identity", async () => {
+  const email = `rate-${randomUUID()}@example.test`;
+  for (let index = 0; index < 8; index += 1) {
+    await enforceOrderCreationLimit(`198.51.100.${index}`, email);
+  }
+  await assert.rejects(
+    enforceOrderCreationLimit("198.51.100.200", email),
+    (error) => error?.name === "RateLimitError" && error?.status === 429,
+  );
+});
+
+test("recovery-code attempts are limited per request source and order", async () => {
+  const requestIp = `192.0.2.${Math.floor(Math.random() * 200) + 1}`;
+  const reference = randomUUID();
+  for (let index = 0; index < 12; index += 1) {
+    await enforceOrderAccessLimit(requestIp, reference);
+  }
+  await assert.rejects(
+    enforceOrderAccessLimit(requestIp, reference),
+    (error) => error?.name === "RateLimitError" && error?.status === 429,
+  );
 });

@@ -14,11 +14,32 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
-  console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
-  );
+  const explicitPreview = process.env.PGLITE_PREVIEW?.toLowerCase() === "true";
+  const deployment =
+    process.env.VERCEL === "1" ||
+    process.env.NETLIFY === "true" ||
+    process.env.REQUIRE_DATABASE === "1" ||
+    process.env.REQUIRE_DATABASE?.toLowerCase() === "true";
+  const localBuild =
+    ["build", "db:migrate"].includes(process.env.npm_lifecycle_event ?? "") &&
+    !deployment;
+  const production = process.env.NODE_ENV === "production";
+
+  if (explicitPreview) {
+    console.log(
+      "[migrate] DATABASE_URL ontbreekt; expliciete PGLite preview slaat persistente migratie over.",
+    );
+    process.exit(0);
+  }
+  if (deployment || (production && !localBuild)) {
+    console.error(
+      "[migrate] DATABASE_URL is verplicht voor een productie-deployment.",
+    );
+    process.exit(1);
+  }
+  console.log("[migrate] lokale dev/test zonder DATABASE_URL; PGLite migreert bij start.");
   process.exit(0);
 }
 
