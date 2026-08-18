@@ -7,6 +7,7 @@ let vite;
 let getSql;
 let createOrderRecord;
 let getOrderRecordForViewer;
+let listOwnOrderRecords;
 let updateOrderStatusRecord;
 let ORDER_STATUSES;
 let ALLOWED_ORDER_STATUS_TRANSITIONS;
@@ -30,6 +31,17 @@ function orderInput(overrides = {}) {
   };
 }
 
+async function insertAuthUser(id) {
+  const sql = await getSql();
+  await sql.query(
+    `insert into "user" (
+      "id", "name", "email", "emailVerified", "createdAt", "updatedAt"
+    ) values ($1, $2, $3, true, now(), now())
+    on conflict ("id") do nothing`,
+    [id, `Gebruiker ${id}`, `${id}@example.test`],
+  );
+}
+
 before(async () => {
   vite = await createServer({
     appType: "custom",
@@ -40,6 +52,7 @@ before(async () => {
   ({
     createOrderRecord,
     getOrderRecordForViewer,
+    listOwnOrderRecords,
     updateOrderStatusRecord,
   } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
   ({ ORDER_STATUSES, ALLOWED_ORDER_STATUS_TRANSITIONS } =
@@ -250,11 +263,37 @@ test("an idempotency key rejects a different canonical payload", async () => {
 
 test("an idempotency key rejects a different authenticated viewer", async () => {
   const input = orderInput();
-  await createOrderRecord(input, { userId: "user-a" });
+  const firstUser = `user-${randomUUID()}`;
+  const secondUser = `user-${randomUUID()}`;
+  await insertAuthUser(firstUser);
+  await insertAuthUser(secondUser);
+  await createOrderRecord(input, { userId: firstUser });
 
   await assert.rejects(
-    createOrderRecord(input, { userId: "user-b" }),
+    createOrderRecord(input, { userId: secondUser }),
     /herhaalcode|idempotent|andere bestelling/i,
+  );
+});
+
+test("orders enforce the auth-user foreign key and list only the owner", async () => {
+  const ownerId = `owner-${randomUUID()}`;
+  const otherId = `owner-${randomUUID()}`;
+  await insertAuthUser(ownerId);
+  await insertAuthUser(otherId);
+
+  const own = await createOrderRecord(orderInput(), { userId: ownerId });
+  await createOrderRecord(orderInput(), { userId: otherId });
+  const listed = await listOwnOrderRecords(ownerId);
+  assert.deepEqual(
+    listed.map((order) => order.id),
+    [own.order.id],
+  );
+
+  await assert.rejects(
+    createOrderRecord(orderInput(), {
+      userId: `missing-${randomUUID()}`,
+    }),
+    /foreign key|orders_user_id/i,
   );
 });
 

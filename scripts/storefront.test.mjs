@@ -78,6 +78,33 @@ after(async () => {
   }
 });
 
+test("document responses include central security and privacy headers", async () => {
+  const home = await fetch(BASE_URL);
+  assert.equal(home.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(
+    home.headers.get("referrer-policy"),
+    "strict-origin-when-cross-origin",
+  );
+  assert.match(
+    home.headers.get("content-security-policy") ?? "",
+    /default-src 'self'/,
+  );
+  assert.match(
+    home.headers.get("content-security-policy") ?? "",
+    /frame-ancestors/,
+  );
+
+  for (const path of [
+    "/admin",
+    "/account",
+    "/checkout",
+    "/bestelling/bestaat-niet",
+  ]) {
+    const response = await fetch(`${BASE_URL}${path}`);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/i, path);
+  }
+});
+
 test("a related product card always adds one item", async () => {
   const { context, page } = await newPage();
   try {
