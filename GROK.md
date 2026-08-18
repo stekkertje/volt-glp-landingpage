@@ -184,3 +184,11 @@ npm run typecheck
 4. Screenshots voor QA: `/workspace/screenshots/`.
 5. Mobiel checken op ~390px en ~402px (iPhone 17 Pro CSS-breedte).
 6. Voeg voor geldstromen en navigatie een browserregressie toe in `scripts/storefront.test.mjs`.
+
+## Echte shopbackend
+- `/checkout` plaatst echte gastorders en contactberichten worden opgeslagen.
+- Betaling en e-mailafhandeling blijven handmatig.
+- `/admin` beheert bestellingen, statussen en contactberichten.
+- Admin vereist `ADMIN_PASSWORD` en `ADMIN_SESSION_SECRET`; `ADMIN_EMAILS` is optioneel.
+- Gasttoegang werkt met een beveiligde cookie of een eenmalig getoonde herstelcode.
+- Nog niet aanwezig: betaalprovider, echte e-mail, voorraad, refunds en verzendkoppeling.
