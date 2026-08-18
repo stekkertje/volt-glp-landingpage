@@ -23,8 +23,8 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 
 ## Productie en beheer
 
-- `DATABASE_URL` is verplicht in productie. Zonder deze variabele stopt de app.
-- `PGLITE_PREVIEW=true` is uitsluitend voor een expliciet vluchtige preview.
+- `DATABASE_URL` is verplicht in iedere production runtime en deployment.
+- PGLite wordt uitsluitend gebruikt tijdens lokale development en tests.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
 - Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.

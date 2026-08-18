@@ -103,6 +103,13 @@ test("document responses include central security and privacy headers", async ()
   ]) {
     const response = await fetch(`${BASE_URL}${path}`);
     assert.match(response.headers.get("cache-control") ?? "", /no-store/i, path);
+    if (path === "/checkout") {
+      const body = await response.text();
+      assert.doesNotMatch(
+        body,
+        /Switched to client rendering because the server rendering errored|Cannot read properties of undefined/,
+      );
+    }
   }
   const install = await fetch(`${BASE_URL}/admin?install=1&platform=ios`);
   assert.match(install.headers.get("cache-control") ?? "", /no-store/i);
@@ -690,6 +697,50 @@ async function fillCheckout(page, email) {
   await page.getByLabel("Land").selectOption("NL");
   await page.getByLabel(/Opmerking/).fill("Browserregressie voor de checkout.");
 }
+
+test("direct checkout navigation and hard reload hydrate a persisted cart", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      localStorage.setItem(
+        "volt-cart",
+        JSON.stringify({
+          state: {
+            lines: [
+              {
+                slug: "semaglutide-4mg-pen",
+                optionId: "default",
+                qty: 1,
+              },
+            ],
+            discountCode: "",
+            discountApplied: false,
+            selectedSlug: "semaglutide-4mg-pen",
+            selectedOptionId: "default",
+          },
+          version: 0,
+        }),
+      );
+    });
+
+    await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
+    await page
+      .getByRole("heading", { name: "Waar mogen we bezorgen?" })
+      .waitFor();
+    await page.reload({ waitUntil: "networkidle" });
+    await page
+      .getByRole("heading", { name: "Waar mogen we bezorgen?" })
+      .waitFor();
+    await page.getByText("Semaglutide 4mg · Pen", { exact: true }).waitFor();
+    assert.equal(
+      await page.getByText(/Switched to client rendering/).count(),
+      0,
+    );
+  } finally {
+    await context.close();
+  }
+});
 
 test("a product can be ordered and only its authorized guest sees confirmation", async () => {
   const { context, page } = await newPage();

@@ -190,6 +190,6 @@ npm run typecheck
 - Betaling en e-mailafhandeling blijven handmatig.
 - `/admin` beheert bestellingen, statussen en contactberichten.
 - Admin gebruikt zelfstandig `ADMIN_EMAILS` of het paar `ADMIN_PASSWORD` + `ADMIN_SESSION_SECRET`.
-- Productie vereist `DATABASE_URL`; `PGLITE_PREVIEW=true` is alleen voor vluchtige previews.
+- Productie en deployments vereisen `DATABASE_URL`; PGLite is alleen voor dev/test.
 - Gasttoegang werkt met een cookie of herstelcode die na 72 uur verloopt.
 - Nog niet aanwezig: betaalprovider, echte e-mail, voorraad, refunds en verzendkoppeling.

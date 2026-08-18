@@ -27,6 +27,7 @@ test("a real production deployment requires DATABASE_URL", () => {
       resolveDatabasePolicy({
         NODE_ENV: "production",
         VERCEL: "1",
+        PGLITE_PREVIEW: "true",
         DATABASE_URL: "",
       }),
     /DATABASE_URL/,
@@ -42,7 +43,7 @@ test("a real production deployment requires DATABASE_URL", () => {
   );
 });
 
-test("local development, tests and explicit preview may use PGLite", () => {
+test("only development, tests and local builds may use PGLite", () => {
   assert.equal(
     resolveDatabasePolicy({ NODE_ENV: "development", DATABASE_URL: "" }).source,
     "pglite",
@@ -51,13 +52,14 @@ test("local development, tests and explicit preview may use PGLite", () => {
     resolveDatabasePolicy({ NODE_ENV: "test", DATABASE_URL: "" }).source,
     "pglite",
   );
-  assert.equal(
-    resolveDatabasePolicy({
-      NODE_ENV: "production",
-      PGLITE_PREVIEW: "true",
-      DATABASE_URL: "",
-    }).source,
-    "pglite",
+  assert.throws(
+    () =>
+      resolveDatabasePolicy({
+        NODE_ENV: "production",
+        PGLITE_PREVIEW: "true",
+        DATABASE_URL: "",
+      }),
+    /DATABASE_URL/,
   );
   assert.equal(
     resolveDatabasePolicy({
@@ -95,7 +97,7 @@ test("the deployment migrator exits non-zero without DATABASE_URL", () => {
   assert.match(`${result.stdout}\n${result.stderr}`, /DATABASE_URL/);
 });
 
-test("the migrator permits an explicitly marked ephemeral preview", () => {
+test("PGLITE_PREVIEW cannot bypass persistent storage in deployment", () => {
   const result = spawnSync(process.execPath, ["scripts/migrate.mjs"], {
     cwd: process.cwd(),
     encoding: "utf8",
@@ -107,6 +109,6 @@ test("the migrator permits an explicitly marked ephemeral preview", () => {
       PGLITE_PREVIEW: "true",
     },
   });
-  assert.equal(result.status, 0);
-  assert.match(result.stdout, /PGLite preview/);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /DATABASE_URL/);
 });

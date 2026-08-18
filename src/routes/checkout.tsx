@@ -43,7 +43,9 @@ function CheckoutPage() {
   const discountApplied = useCartStore((state) => state.discountApplied);
   const clearCart = useCartStore((state) => state.clearCart);
   const pushToast = useCartStore((state) => state.pushToast);
-  const [hydrated, setHydrated] = useState(() => useCartStore.persist.hasHydrated());
+  // Keep the server and first client render identical. Zustand's persist API
+  // exists only once browser storage is available.
+  const [hydrated, setHydrated] = useState(false);
   const [pricing, setPricing] = useState<PricingPreview | null>(null);
   const [pricingError, setPricingError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -54,8 +56,13 @@ function CheckoutPage() {
   const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = useCartStore.persist.onFinishHydration(() => setHydrated(true));
-    void Promise.resolve(useCartStore.persist.rehydrate()).then(() => setHydrated(true));
+    const persist = useCartStore.persist;
+    if (!persist) {
+      setHydrated(true);
+      return;
+    }
+    const unsubscribe = persist.onFinishHydration(() => setHydrated(true));
+    void Promise.resolve(persist.rehydrate()).then(() => setHydrated(true));
     return unsubscribe;
   }, []);
 
