@@ -738,7 +738,7 @@ test("a checkout request failure keeps the cart intact", async () => {
 });
 
 test("contact is stored and only an authenticated admin can handle it", async () => {
-  const { context, page } = await newPage();
+  const { context, page } = await newPage({ width: 390, height: 844 });
   const uniqueMessage = `Contacttest ${randomUUID()} met voldoende tekens.`;
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
