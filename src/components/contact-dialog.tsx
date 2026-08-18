@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { createContactMessage } from "@/lib/server/contact";
+import { rateLimitFeedback } from "@/lib/server-error";
 
 export function ContactDialog() {
   const open = useContactStore((s) => s.open);
@@ -62,9 +63,10 @@ export function ContactDialog() {
       await createContactMessage({ data: { name, email, message } });
       close();
       pushToast("Bericht verstuurd", "We reageren binnen 24 uur op werkdagen.");
-    } catch {
+    } catch (error) {
       setSubmitError(
-        "Je bericht kon niet worden verstuurd. Controleer je gegevens en probeer later opnieuw.",
+        rateLimitFeedback(error) ??
+          "Je bericht kon niet worden verstuurd. Controleer je gegevens en probeer later opnieuw.",
       );
       setSending(false);
     }

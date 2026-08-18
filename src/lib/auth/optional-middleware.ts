@@ -11,9 +11,13 @@ export const optionalAuthMiddleware = createMiddleware({ type: "function" })
     return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
   })
   .server(async ({ next, context }) => {
+    const { setResponseHeader } = await import(
+      "@tanstack/react-start/server"
+    );
     const { assertSameSiteRequest } = await import("./isolation.server");
     const { getSessionUser } = await import("./verify.server");
     assertSameSiteRequest();
+    setResponseHeader("cache-control", "no-store");
     const user = await getSessionUser(context.bearerToken);
     return next({
       context: {

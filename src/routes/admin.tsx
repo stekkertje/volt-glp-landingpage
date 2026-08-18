@@ -7,9 +7,17 @@ import {
   LogOut,
   Mail,
   Package,
+  RefreshCw,
   Search,
 } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,13 +25,22 @@ import {
   ORDER_STATUS_LABELS,
   type OrderStatus,
 } from "@/lib/order-status";
-import { getAdminSessionState, loginAdmin, logoutAdmin } from "@/lib/server/admin";
+import {
+  getAdminSessionState,
+  getAdminSummary,
+  loginAdmin,
+  logoutAdmin,
+} from "@/lib/server/admin";
 import { listContactMessages, setContactHandled } from "@/lib/server/contact";
 import {
   getOrderForAdmin,
   listOrders,
   updateOrderStatus,
 } from "@/lib/server/orders";
+import {
+  isUnauthorizedServerError,
+  rateLimitFeedback,
+} from "@/lib/server-error";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -39,28 +56,40 @@ export const Route = createFileRoute("/admin")({
 type OrderListResult = Awaited<ReturnType<typeof listOrders>>;
 type AdminOrder = Awaited<ReturnType<typeof getOrderForAdmin>>;
 type ContactListResult = Awaited<ReturnType<typeof listContactMessages>>;
+type AdminSessionState = Awaited<ReturnType<typeof getAdminSessionState>>;
+type AdminSummary = Awaited<ReturnType<typeof getAdminSummary>>;
 
 const inputClass =
   "h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2";
 
 function AdminPage() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [session, setSession] = useState<AdminSessionState | null>(null);
+  const [sessionError, setSessionError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    void getAdminSessionState()
-      .then((state) => {
-        if (active) setAuthenticated(state.authenticated);
-      })
-      .catch(() => {
-        if (active) setAuthenticated(false);
-      });
-    return () => {
-      active = false;
-    };
+  const loadSession = useCallback(async () => {
+    setSessionError("");
+    try {
+      setSession(await getAdminSessionState());
+    } catch {
+      setSessionError(
+        "Beheerconfiguratie of sessiestatus kon niet worden geladen.",
+      );
+    }
   }, []);
 
-  if (authenticated === null) {
+  useEffect(() => {
+    void loadSession();
+  }, [loadSession]);
+
+  if (sessionError) {
+    return (
+      <AdminFrame>
+        <ErrorState message={sessionError} onRetry={loadSession} />
+      </AdminFrame>
+    );
+  }
+
+  if (session === null) {
     return (
       <AdminFrame>
         <p className="inline-flex items-center gap-2 text-sm text-muted">
@@ -71,22 +100,26 @@ function AdminPage() {
     );
   }
 
-  if (!authenticated) {
+  if (!session.authenticated) {
     return (
       <AdminFrame>
-        <AdminLogin onSuccess={() => setAuthenticated(true)} />
+        <AdminLogin
+          passwordLoginAvailable={session.passwordLoginAvailable}
+          allowlistConfigured={session.allowlistConfigured}
+          onSuccess={loadSession}
+        />
       </AdminFrame>
     );
   }
 
   return (
     <AdminFrame>
-      <AdminDashboard onUnauthorized={() => setAuthenticated(false)} />
+      <AdminDashboard onUnauthorized={loadSession} />
     </AdminFrame>
   );
 }
 
-function AdminFrame({ children }: { children: React.ReactNode }) {
+function AdminFrame({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-bg-elevated text-fg">
       <header className="border-b border-border bg-surface">
@@ -109,9 +142,40 @@ function AdminFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
+function AdminLogin({
+  passwordLoginAvailable,
+  allowlistConfigured,
+  onSuccess,
+}: {
+  passwordLoginAvailable: boolean;
+  allowlistConfigured: boolean;
+  onSuccess: () => void | Promise<void>;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  if (!passwordLoginAvailable) {
+    return (
+      <section className="mx-auto mt-8 max-w-sm rounded-xl border border-border bg-surface p-6 text-center shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+          Beveiligd beheer
+        </p>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Inloggen</h1>
+        <p className="mt-2 text-sm text-muted">
+          {allowlistConfigured
+            ? "Log in met een toegestaan account om het beheer te openen."
+            : "Er is nog geen beheermethode geconfigureerd."}
+        </p>
+        {allowlistConfigured && (
+          <Button className="mt-5 w-full" asChild>
+            <Link to="/login" search={{ redirect: "/admin" }}>
+              Inloggen met account
+            </Link>
+          </Button>
+        )}
+      </section>
+    );
+  }
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -120,9 +184,12 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
     const fields = new FormData(event.currentTarget);
     try {
       await loginAdmin({ data: { password: String(fields.get("password") ?? "") } });
-      onSuccess();
-    } catch {
-      setError("Inloggen mislukt. Controleer het wachtwoord en probeer later opnieuw.");
+      await onSuccess();
+    } catch (caught) {
+      setError(
+        rateLimitFeedback(caught) ??
+          "Inloggen mislukt. Controleer het wachtwoord en probeer later opnieuw.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -158,12 +225,74 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
       <Button type="submit" className="mt-5 w-full" disabled={submitting}>
         {submitting ? "Controleren…" : "Inloggen"}
       </Button>
+      {allowlistConfigured && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="mt-2 w-full"
+          asChild
+        >
+          <Link to="/login" search={{ redirect: "/admin" }}>
+            Inloggen met toegestaan account
+          </Link>
+        </Button>
+      )}
     </form>
   );
 }
 
 function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [tab, setTab] = useState<"orders" | "contact">("orders");
+  const [summary, setSummary] = useState<AdminSummary | null>(null);
+  const [summaryError, setSummaryError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const summaryRequestSequence = useRef(0);
+  const refreshBusy =
+    refreshing || (tab === "orders" ? ordersLoading : contactsLoading);
+
+  const refresh = useCallback(async () => {
+    const requestSequence = ++summaryRequestSequence.current;
+    setRefreshing(true);
+    setSummaryError("");
+    try {
+      const next = await getAdminSummary();
+      if (requestSequence === summaryRequestSequence.current) {
+        setSummary(next);
+      }
+    } catch (error) {
+      if (isUnauthorizedServerError(error)) {
+        onUnauthorized();
+        return;
+      }
+      if (requestSequence === summaryRequestSequence.current) {
+        setSummaryError("De dagelijkse samenvatting kon niet worden geladen.");
+      }
+    } finally {
+      if (requestSequence === summaryRequestSequence.current) {
+        setRefreshing(false);
+      }
+    }
+  }, [onUnauthorized]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh, refreshVersion]);
+
+  const refreshAll = () => {
+    setRefreshing(true);
+    setRefreshVersion((value) => value + 1);
+  };
+  const handleOrdersLoading = useCallback(
+    (loading: boolean) => setOrdersLoading(loading),
+    [],
+  );
+  const handleContactsLoading = useCallback(
+    (loading: boolean) => setContactsLoading(loading),
+    [],
+  );
 
   return (
     <div>
@@ -174,24 +303,68 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           </p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Shopbeheer</h1>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            void logoutAdmin()
-              .catch(() => undefined)
-              .finally(onUnauthorized);
-          }}
-        >
-          <LogOut className="size-4" />
-          Uitloggen
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={refreshBusy}
+            onClick={refreshAll}
+          >
+            <RefreshCw
+              className={`size-4 ${refreshBusy ? "animate-spin" : ""}`}
+            />
+            Vernieuwen
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void logoutAdmin()
+                .catch(() => undefined)
+                .finally(onUnauthorized);
+            }}
+          >
+            <LogOut className="size-4" />
+            Uitloggen
+          </Button>
+        </div>
       </div>
 
-      <div className="mt-7 flex gap-2 border-b border-border">
+      {summaryError ? (
+        <div className="mt-6">
+          <ErrorState message={summaryError} onRetry={refreshAll} />
+        </div>
+      ) : (
+        <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
+          <SummaryCard
+            label="Nieuw / in afwachting"
+            value={summary?.pendingOrders}
+            loading={refreshing && !summary}
+          />
+          <SummaryCard
+            label="Te verwerken"
+            value={summary?.processingOrders}
+            loading={refreshing && !summary}
+          />
+          <SummaryCard
+            label="Open contact"
+            value={summary?.openContacts}
+            loading={refreshing && !summary}
+          />
+        </div>
+      )}
+
+      <div
+        className="mt-7 flex gap-2 border-b border-border"
+        role="tablist"
+        aria-label="Beheeronderdelen"
+      >
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "orders"}
           onClick={() => setTab("orders")}
           className={`border-b-2 px-3 py-3 text-sm font-semibold ${
             tab === "orders"
@@ -204,6 +377,8 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === "contact"}
           onClick={() => setTab("contact")}
           className={`border-b-2 px-3 py-3 text-sm font-semibold ${
             tab === "contact"
@@ -217,27 +392,56 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       </div>
 
       {tab === "orders" ? (
-        <OrdersAdmin onUnauthorized={onUnauthorized} />
+        <OrdersAdmin
+          onUnauthorized={onUnauthorized}
+          refreshVersion={refreshVersion}
+          onDataChanged={refreshAll}
+          onLoadingChange={handleOrdersLoading}
+        />
       ) : (
-        <ContactAdmin onUnauthorized={onUnauthorized} />
+        <ContactAdmin
+          onUnauthorized={onUnauthorized}
+          refreshVersion={refreshVersion}
+          onDataChanged={refreshAll}
+          onLoadingChange={handleContactsLoading}
+        />
       )}
     </div>
   );
 }
 
-function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
+function OrdersAdmin({
+  onUnauthorized,
+  refreshVersion,
+  onDataChanged,
+  onLoadingChange,
+}: {
+  onUnauthorized: () => void;
+  refreshVersion: number;
+  onDataChanged: () => void;
+  onLoadingChange: (loading: boolean) => void;
+}) {
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<OrderStatus | "all">("all");
   const [page, setPage] = useState(1);
-  const [reload, setReload] = useState(0);
   const [result, setResult] = useState<OrderListResult | null>(null);
   const [selected, setSelected] = useState<AdminOrder | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [detailRequestedId, setDetailRequestedId] = useState<string | null>(null);
+  const [detailSaving, setDetailSaving] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
+  const detailRequestSequence = useRef(0);
+  const listRequestSequence = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const loadOrders = useCallback(async () => {
+    const requestSequence = ++listRequestSequence.current;
     setLoading(true);
+    onLoadingChange(true);
     setError("");
     try {
       const next = await listOrders({
@@ -248,26 +452,66 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
           pageSize: 20,
         },
       });
-      setResult(next);
-    } catch {
-      setError("Bestellingen konden niet worden geladen.");
-      onUnauthorized();
+      if (requestSequence === listRequestSequence.current) setResult(next);
+    } catch (caught) {
+      if (isUnauthorizedServerError(caught)) {
+        onUnauthorized();
+        return;
+      }
+      if (requestSequence === listRequestSequence.current) {
+        setError("Bestellingen konden niet worden geladen.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence === listRequestSequence.current) {
+        setLoading(false);
+        onLoadingChange(false);
+      }
     }
-  }, [onUnauthorized, page, search, status]);
+  }, [onLoadingChange, onUnauthorized, page, search, status]);
 
   useEffect(() => {
     void loadOrders();
-  }, [loadOrders, reload]);
+  }, [loadOrders, refreshVersion]);
 
   const openOrder = async (id: string) => {
-    setError("");
+    if (detailSaving) return;
+    const requestSequence = ++detailRequestSequence.current;
+    detailTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setDetailError("");
+    setDetailRequestedId(id);
+    setDetailLoadingId(id);
+    setSelected(null);
     try {
-      setSelected(await getOrderForAdmin({ data: { id } }));
-    } catch {
-      setError("Bestelling kon niet worden geopend.");
+      const order = await getOrderForAdmin({ data: { id } });
+      if (requestSequence === detailRequestSequence.current) {
+        setSelected(order);
+      }
+    } catch (caught) {
+      if (isUnauthorizedServerError(caught)) {
+        onUnauthorized();
+        return;
+      }
+      if (requestSequence === detailRequestSequence.current) {
+        setDetailError("Bestelling kon niet worden geopend.");
+      }
+    } finally {
+      if (requestSequence === detailRequestSequence.current) {
+        setDetailLoadingId(null);
+      }
     }
+  };
+
+  const closeOrder = () => {
+    detailRequestSequence.current += 1;
+    setSelected(null);
+    requestAnimationFrame(() => {
+      const trigger = detailTriggerRef.current;
+      if (trigger?.isConnected) trigger.focus();
+      else searchInputRef.current?.focus();
+    });
   };
 
   return (
@@ -284,6 +528,7 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
           <span className="sr-only">Zoek bestellingen</span>
           <Search className="pointer-events-none absolute left-3.5 top-3.5 size-4 text-dim" />
           <input
+            ref={searchInputRef}
             value={draftSearch}
             onChange={(event) => setDraftSearch(event.target.value)}
             placeholder="Nummer, naam of e-mail"
@@ -313,7 +558,11 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
         </Button>
       </form>
 
-      {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
+      {error && (
+        <div className="mt-4">
+          <ErrorState message={error} onRetry={loadOrders} />
+        </div>
+      )}
       {loading ? (
         <p className="mt-6 text-sm text-muted">Bestellingen laden…</p>
       ) : (
@@ -331,16 +580,24 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
               </thead>
               <tbody className="divide-y divide-border">
                 {result?.orders.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="cursor-pointer hover:bg-bg-elevated"
-                    onClick={() => void openOrder(order.id)}
-                  >
+                  <tr key={order.id} className="hover:bg-bg-elevated">
                     <td className="px-4 py-3 whitespace-nowrap">
                       {formatDate(order.createdAt)}
                     </td>
-                    <td className="px-4 py-3 font-bold text-primary">
-                      {order.orderNumber}
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        disabled={
+                          detailSaving || detailLoadingId === order.id
+                        }
+                        onClick={() => void openOrder(order.id)}
+                        className="font-bold text-primary underline-offset-4 hover:underline disabled:opacity-60"
+                        aria-label={`Bekijk bestelling ${order.orderNumber}`}
+                      >
+                        {detailLoadingId === order.id
+                          ? "Openen…"
+                          : order.orderNumber}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-semibold">{order.name}</p>
@@ -363,8 +620,10 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
               <button
                 key={order.id}
                 type="button"
+                disabled={detailSaving || detailLoadingId === order.id}
                 onClick={() => void openOrder(order.id)}
                 className="w-full rounded-xl border border-border bg-surface p-4 text-left"
+                aria-label={`Bekijk bestelling ${order.orderNumber}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -392,13 +651,31 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
         </>
       )}
 
+      {detailLoadingId && (
+        <p className="mt-5 inline-flex items-center gap-2 text-sm text-muted" role="status">
+          <Loader2 className="size-4 animate-spin" />
+          Bestelling openen…
+        </p>
+      )}
+      {detailError && (
+        <div className="mt-5">
+          <ErrorState
+            message={detailError}
+            onRetry={() => {
+              if (detailRequestedId) void openOrder(detailRequestedId);
+            }}
+          />
+        </div>
+      )}
       {selected && (
         <OrderAdminDetail
           order={selected}
-          onClose={() => setSelected(null)}
+          onUnauthorized={onUnauthorized}
+          onClose={closeOrder}
+          onSavingChange={setDetailSaving}
           onUpdated={(order) => {
             setSelected(order);
-            setReload((value) => value + 1);
+            onDataChanged();
           }}
         />
       )}
@@ -408,30 +685,55 @@ function OrdersAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
 
 function OrderAdminDetail({
   order,
+  onUnauthorized,
   onClose,
+  onSavingChange,
   onUpdated,
 }: {
   order: AdminOrder;
+  onUnauthorized: () => void;
   onClose: () => void;
+  onSavingChange: (saving: boolean) => void;
   onUpdated: (order: AdminOrder) => void;
 }) {
   const [status, setStatus] = useState<OrderStatus>(order.status);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const detailRef = useRef<HTMLDivElement>(null);
   const nextStatuses = ALLOWED_ORDER_STATUS_TRANSITIONS[order.status];
 
   useEffect(() => {
     setStatus(order.status);
   }, [order.status]);
 
+  useEffect(() => {
+    detailRef.current?.focus({ preventScroll: true });
+    detailRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [order.id]);
+
   return (
-    <div className="mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6">
+    <div
+      ref={detailRef}
+      tabIndex={-1}
+      className="mt-6 scroll-mt-6 rounded-xl border border-border bg-surface p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-6"
+      aria-label={`Besteldetail ${order.orderNumber}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-muted">Besteldetail</p>
           <h2 className="text-xl font-extrabold tracking-tight">{order.orderNumber}</h2>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          disabled={saving}
+        >
           Sluiten
         </Button>
       </div>
@@ -443,6 +745,7 @@ function OrderAdminDetail({
               value={status}
               onChange={(event) => setStatus(event.target.value as OrderStatus)}
               className={inputClass}
+              disabled={saving}
             >
               <option value={order.status}>
                 Kies een volgende status
@@ -466,23 +769,32 @@ function OrderAdminDetail({
                 return;
               }
               setSaving(true);
+              onSavingChange(true);
               setError("");
+              setSuccess("");
               try {
-                onUpdated(
-                  await updateOrderStatus({
+                const updated = await updateOrderStatus({
                     data: {
                       id: order.id,
                       expectedStatus: order.status,
                       status,
                     },
-                  }),
+                  });
+                onUpdated(updated);
+                setSuccess(
+                  `Status bijgewerkt naar ${ORDER_STATUS_LABELS[updated.status]}.`,
                 );
-              } catch {
+              } catch (caught) {
+                if (isUnauthorizedServerError(caught)) {
+                  onUnauthorized();
+                  return;
+                }
                 setError(
                   "Status wijzigen is niet gelukt. Vernieuw het overzicht en probeer opnieuw.",
                 );
               } finally {
                 setSaving(false);
+                onSavingChange(false);
               }
             }}
           >
@@ -495,6 +807,11 @@ function OrderAdminDetail({
         </p>
       )}
       {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
+      {success && (
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-success">
+          {success}
+        </p>
+      )}
       <div className="mt-6">
         <OrderDetails order={order} />
       </div>
@@ -502,40 +819,62 @@ function OrderAdminDetail({
   );
 }
 
-function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
+function ContactAdmin({
+  onUnauthorized,
+  refreshVersion,
+  onDataChanged,
+  onLoadingChange,
+}: {
+  onUnauthorized: () => void;
+  refreshVersion: number;
+  onDataChanged: () => void;
+  onLoadingChange: (loading: boolean) => void;
+}) {
   const [handled, setHandled] = useState(false);
   const [page, setPage] = useState(1);
-  const [reload, setReload] = useState(0);
   const [result, setResult] = useState<ContactListResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const listRequestSequence = useRef(0);
+
+  const loadContacts = useCallback(async () => {
+    const requestSequence = ++listRequestSequence.current;
+    setLoading(true);
+    onLoadingChange(true);
+    setError("");
+    try {
+      const next = await listContactMessages({
+        data: { handled, page, pageSize: 20 },
+      });
+      if (requestSequence === listRequestSequence.current) setResult(next);
+    } catch (caught) {
+      if (isUnauthorizedServerError(caught)) {
+        onUnauthorized();
+        return;
+      }
+      if (requestSequence === listRequestSequence.current) {
+        setError("Contactberichten konden niet worden geladen.");
+      }
+    } finally {
+      if (requestSequence === listRequestSequence.current) {
+        setLoading(false);
+        onLoadingChange(false);
+      }
+    }
+  }, [handled, onLoadingChange, onUnauthorized, page]);
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    void listContactMessages({ data: { handled, page, pageSize: 20 } })
-      .then((next) => {
-        if (active) setResult(next);
-      })
-      .catch(() => {
-        if (!active) return;
-        setError("Contactberichten konden niet worden geladen.");
-        onUnauthorized();
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [handled, onUnauthorized, page, reload]);
+    void loadContacts();
+  }, [loadContacts, refreshVersion]);
 
   return (
     <section className="mt-6">
       <div className="inline-flex rounded-full border border-border bg-surface p-1">
         <button
           type="button"
+          disabled={savingId !== null}
           onClick={() => {
             setHandled(false);
             setPage(1);
@@ -548,6 +887,7 @@ function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
         </button>
         <button
           type="button"
+          disabled={savingId !== null}
           onClick={() => {
             setHandled(true);
             setPage(1);
@@ -559,7 +899,16 @@ function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
           Afgehandeld
         </button>
       </div>
-      {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
+      {success && (
+        <p role="status" aria-live="polite" className="mt-4 text-sm text-success">
+          {success}
+        </p>
+      )}
+      {error && (
+        <div className="mt-4">
+          <ErrorState message={error} onRetry={loadContacts} />
+        </div>
+      )}
       {loading ? (
         <p className="mt-6 text-sm text-muted">Contactberichten laden…</p>
       ) : (
@@ -579,18 +928,35 @@ function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
                   type="button"
                   size="sm"
                   variant={message.handled ? "secondary" : "primary"}
+                  disabled={savingId !== null}
                   onClick={async () => {
+                    setSavingId(message.id);
+                    setError("");
+                    setSuccess("");
                     try {
-                      await setContactHandled({
+                      const updated = await setContactHandled({
                         data: { id: message.id, handled: !message.handled },
                       });
-                      setReload((value) => value + 1);
-                    } catch {
+                      setSuccess(
+                        updated.handled
+                          ? "Contactbericht gemarkeerd als afgehandeld."
+                          : "Contactbericht opnieuw als open gemarkeerd.",
+                      );
+                      onDataChanged();
+                    } catch (caught) {
+                      if (isUnauthorizedServerError(caught)) {
+                        onUnauthorized();
+                        return;
+                      }
                       setError("Contactstatus wijzigen is niet gelukt.");
+                    } finally {
+                      setSavingId(null);
                     }
                   }}
                 >
-                  {message.handled ? (
+                  {savingId === message.id ? (
+                    "Opslaan…"
+                  ) : message.handled ? (
                     "Markeer als open"
                   ) : (
                     <>
@@ -613,6 +979,7 @@ function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
               page={result.page}
               pageCount={result.pageCount}
               onPage={setPage}
+              disabled={savingId !== null}
             />
           )}
         </div>
@@ -621,14 +988,66 @@ function ContactAdmin({ onUnauthorized }: { onUnauthorized: () => void }) {
   );
 }
 
+function SummaryCard({
+  label,
+  value,
+  loading,
+}: {
+  label: string;
+  value: number | undefined;
+  loading: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="rounded-xl border border-border bg-surface p-3 shadow-sm sm:p-4"
+    >
+      <p className="text-[11px] font-semibold leading-tight text-muted sm:text-xs">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums text-fg">
+        {loading ? "…" : (value ?? 0)}
+      </p>
+    </div>
+  );
+}
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void | Promise<void>;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-xl border border-danger/25 bg-danger/5 p-4 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p>{message}</p>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={() => void onRetry()}
+      >
+        Opnieuw proberen
+      </Button>
+    </div>
+  );
+}
+
 function Pagination({
   page,
   pageCount,
   onPage,
+  disabled = false,
 }: {
   page: number;
   pageCount: number;
   onPage: (page: number) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="mt-5 flex items-center justify-between gap-3 text-sm">
@@ -636,7 +1055,7 @@ function Pagination({
         type="button"
         size="sm"
         variant="secondary"
-        disabled={page <= 1}
+        disabled={disabled || page <= 1}
         onClick={() => onPage(page - 1)}
       >
         <ChevronLeft className="size-4" />
@@ -649,7 +1068,7 @@ function Pagination({
         type="button"
         size="sm"
         variant="secondary"
-        disabled={page >= pageCount}
+        disabled={disabled || page >= pageCount}
         onClick={() => onPage(page + 1)}
       >
         Volgende

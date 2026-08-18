@@ -4,6 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
+import { securityHeadersForPath } from "./src/lib/security-headers";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 
@@ -28,6 +29,40 @@ function pgliteBootstrapPlugin(): Plugin {
         console.error("[app-builder] DB bootstrap failed:", err);
         throw err;
       }
+    },
+  };
+}
+
+function securityHeadersPlugin(): Plugin {
+  return {
+    name: "volt:security-headers",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url ?? "/").split("?", 1)[0] || "/";
+        const applyHeaders = () => {
+          for (const [name, value] of Object.entries(
+            securityHeadersForPath(pathname, { development: true }),
+          )) {
+            res.setHeader(name, value);
+          }
+        };
+        const originalWriteHead = res.writeHead;
+        res.writeHead = function writeHead(statusCode, ...args) {
+          applyHeaders();
+          if (statusCode === 429 && !res.hasHeader("retry-after")) {
+            const statusMessage =
+              (typeof args[0] === "string" ? args[0] : "") ||
+              res.statusMessage;
+            const retryAfter =
+              /Retry-After-(\d+)/.exec(statusMessage)?.[1] ?? "60";
+            res.setHeader("retry-after", retryAfter);
+          }
+          return originalWriteHead.call(this, statusCode, ...args);
+        } as typeof res.writeHead;
+        applyHeaders();
+        next();
+      });
     },
   };
 }
@@ -137,6 +172,7 @@ export default defineConfig(({ command }) => ({
   },
   resolve: { tsconfigPaths: true },
   plugins: [
+    securityHeadersPlugin(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),

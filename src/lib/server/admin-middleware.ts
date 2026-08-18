@@ -7,9 +7,25 @@ export const adminMiddleware = createMiddleware({ type: "function" })
     return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
   })
   .server(async ({ next, context }) => {
+    const { setResponseHeader, setResponseStatus } = await import(
+      "@tanstack/react-start/server"
+    );
     const { assertSameSiteRequest } = await import("@/lib/auth/isolation.server");
     const { requireAdmin } = await import("./admin-auth.server");
     assertSameSiteRequest();
-    await requireAdmin(context.bearerToken);
+    setResponseHeader("cache-control", "no-store");
+    try {
+      await requireAdmin(context.bearerToken);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "status" in error &&
+        error.status === 401
+      ) {
+        setResponseStatus(401);
+      }
+      throw error;
+    }
     return next({ context: { bearerToken: context.bearerToken, isAdmin: true as const } });
   });

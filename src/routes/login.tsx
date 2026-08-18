@@ -2,10 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect:
+      search.redirect === "/admin" || search.redirect === "/account"
+        ? search.redirect
+        : "/account",
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
+  const { redirect } = Route.useSearch();
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-5 py-12 text-fg">
       <div className="w-full max-w-sm space-y-6">
@@ -30,7 +37,7 @@ function LoginPage() {
               <button
                 key={p.providerId}
                 type="button"
-                onClick={() => signIn(p.providerId, { callbackURL: "/account" })}
+                onClick={() => signIn(p.providerId, { callbackURL: redirect })}
                 className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
               >
                 Doorgaan met {p.label}

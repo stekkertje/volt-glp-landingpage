@@ -68,18 +68,36 @@ async function main() {
     for (const name of files) {
       if (applied.has(name)) continue;
       const text = await readFile(join(migrationsDir, name), "utf8");
+      const withoutTransaction = /^\s*-- migrate:no-transaction\b/im.test(text);
+      const sqlText = text.replace(/^\s*-- migrate:no-transaction\s*/im, "");
       try {
-        await client.query("BEGIN");
-        // pg's simple-query protocol runs a whole multi-statement file at once.
-        await client.query(text);
-        await client.query("INSERT INTO _migrations (name) VALUES ($1)", [name]);
-        await client.query("COMMIT");
+        if (withoutTransaction) {
+          // Required for operations such as CREATE INDEX CONCURRENTLY. These
+          // files must be idempotent because applying + tracking cannot be one
+          // transaction.
+          const statements = sqlText
+            .split(";")
+            .map((statement) => statement.trim())
+            .filter(Boolean);
+          for (const statement of statements) {
+            await client.query(statement);
+          }
+          await client.query("INSERT INTO _migrations (name) VALUES ($1)", [name]);
+        } else {
+          await client.query("BEGIN");
+          // pg's simple-query protocol runs a whole multi-statement file at once.
+          await client.query(sqlText);
+          await client.query("INSERT INTO _migrations (name) VALUES ($1)", [name]);
+          await client.query("COMMIT");
+        }
       } catch (err) {
         console.error(`[migrate] error applying ${name}`);
-        try {
-          await client.query("ROLLBACK");
-        } catch {
-          // ROLLBACK fails when the connection died — keep the original error.
+        if (!withoutTransaction) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {
+            // ROLLBACK fails when the connection died — keep the original error.
+          }
         }
         throw err;
       }

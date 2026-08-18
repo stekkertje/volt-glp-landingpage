@@ -1,4 +1,8 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import {
+  setResponseHeader,
+  setResponseStatus,
+} from "@tanstack/react-start/server";
 import { getSql } from "@/lib/db";
 
 export class RateLimitError extends Error {
@@ -6,10 +10,27 @@ export class RateLimitError extends Error {
   readonly retryAfterMs: number;
 
   constructor(retryAfterMs: number) {
-    super("Te veel pogingen. Probeer het later opnieuw.");
+    const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1_000));
+    super(
+      `Te veel pogingen. Probeer over ${retryAfterSeconds} seconden opnieuw.`,
+    );
     this.name = "RateLimitError";
     this.retryAfterMs = retryAfterMs;
   }
+}
+
+export function applyRateLimitResponse(error: unknown): void {
+  if (!(error instanceof RateLimitError)) return;
+  const retryAfterSeconds = Math.max(
+    1,
+    Math.ceil(error.retryAfterMs / 1_000),
+  );
+  setResponseStatus(429, `Retry-After-${retryAfterSeconds}`);
+  setResponseHeader(
+    "retry-after",
+    String(retryAfterSeconds),
+  );
+  setResponseHeader("cache-control", "no-store");
 }
 
 export type RateLimitOptions = {

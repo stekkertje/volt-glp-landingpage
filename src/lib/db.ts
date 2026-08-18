@@ -157,10 +157,19 @@ async function createPgliteSql(): Promise<Sql> {
     )) {
       const name = path.split("/").pop() as string;
       if (done.has(name)) continue;
+      // Production can opt one statement out of the transaction for
+      // `CREATE INDEX CONCURRENTLY`. PGLite is a single local connection, so it
+      // runs the equivalent regular index atomically instead.
+      const pgliteText = text
+        .replace(/^-- migrate:no-transaction\s*/i, "")
+        .replace(
+          /\b(create|drop)\s+index\s+concurrently\b/gi,
+          "$1 index",
+        );
       // Apply + record atomically (parity with scripts/migrate.mjs) so a failed
       // statement can't leave a file half-applied but untracked.
       await pg.transaction(async (tx) => {
-        await tx.exec(text);
+        await tx.exec(pgliteText);
         await tx.query("insert into _migrations (name) values ($1)", [name]);
       });
     }

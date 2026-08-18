@@ -53,6 +53,7 @@ before(async () => {
       cwd: process.cwd(),
       env: {
         ...process.env,
+        ADMIN_EMAILS: "allowlisted-admin@example.test",
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
         ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
       },
@@ -103,6 +104,12 @@ test("document responses include central security and privacy headers", async ()
     const response = await fetch(`${BASE_URL}${path}`);
     assert.match(response.headers.get("cache-control") ?? "", /no-store/i, path);
   }
+  const install = await fetch(`${BASE_URL}/admin?install=1&platform=ios`);
+  assert.match(install.headers.get("cache-control") ?? "", /no-store/i);
+  assert.match(
+    install.headers.get("content-security-policy") ?? "",
+    /default-src 'self'/,
+  );
 });
 
 test("a related product card always adds one item", async () => {
@@ -791,7 +798,7 @@ test("checkout shows server-shared postcode feedback without clearing the cart",
 });
 
 test("admin only offers valid next order statuses", async () => {
-  const { context, page } = await newPage({ width: 390, height: 844 });
+  const { context, page } = await newPage();
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
       waitUntil: "networkidle",
@@ -810,10 +817,70 @@ test("admin only offers valid next order statuses", async () => {
     ).trim();
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
+    await page
+      .getByRole("link", { name: "Inloggen met toegestaan account" })
+      .waitFor();
+    const rejectedLogin = page.waitForResponse(
+      (response) => response.status() === 401,
+    );
+    await page.getByLabel("Beheerwachtwoord").fill("onjuist-wachtwoord");
+    await page.getByRole("button", { name: "Inloggen" }).click();
+    assert.equal((await rejectedLogin).status(), 401);
+    await page.getByText(/Inloggen mislukt/).waitFor();
     await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
-    await page.getByRole("button", { name: new RegExp(orderNumber) }).click();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+    assert.equal(await page.getByLabel("Beheerwachtwoord").count(), 0);
+    await page
+      .getByRole("group", { name: "Nieuw / in afwachting" })
+      .getByText(/^\d+$/)
+      .waitFor();
+    await page
+      .getByRole("group", { name: "Te verwerken" })
+      .getByText(/^\d+$/)
+      .waitFor();
+    await page
+      .getByRole("group", { name: "Open contact" })
+      .getByText("0", { exact: true })
+      .waitFor();
+
+    let aborted = false;
+    await page.route("**/*", async (route) => {
+      if (!aborted && route.request().resourceType() === "fetch") {
+        aborted = true;
+        await route.abort();
+      } else {
+        await route.continue();
+      }
+    });
+    await page.getByPlaceholder("Nummer, naam of e-mail").fill("bestaat-niet");
+    await page.getByRole("button", { name: "Zoeken" }).click();
+    await page.getByText("Bestellingen konden niet worden geladen.").waitFor();
+    await page.unroute("**/*");
+    await page.getByRole("button", { name: "Opnieuw proberen" }).click();
+    await page.getByText("Geen bestellingen gevonden.").waitFor();
+
+    await page.getByPlaceholder("Nummer, naam of e-mail").fill(orderNumber);
+    await page.getByRole("button", { name: "Zoeken" }).click();
+    await page.getByLabel("Filter op status").selectOption("pending");
+    const openOrder = page.getByRole("button", {
+      name: `Bekijk bestelling ${orderNumber}`,
+    });
+    await openOrder.focus();
+    await page.keyboard.press("Enter");
+    const detail = page.getByLabel(`Besteldetail ${orderNumber}`);
+    await detail.waitFor({ state: "visible" });
+    assert.equal(await detail.evaluate((element) => element === document.activeElement), true);
+    await detail.getByRole("button", { name: "Sluiten" }).click();
+    await page.waitForFunction(
+      (label) =>
+        document.activeElement?.getAttribute("aria-label") === label,
+      `Bekijk bestelling ${orderNumber}`,
+    );
+    await page.keyboard.press("Enter");
+    await detail.waitFor({ state: "visible" });
 
     const status = page.getByLabel("Volgende status");
     await status.waitFor({ state: "visible" });
@@ -826,7 +893,36 @@ test("admin only offers valid next order statuses", async () => {
     await status.selectOption("paid");
     page.once("dialog", (dialog) => void dialog.accept());
     await page.getByRole("button", { name: "Status opslaan" }).click();
-    await page.getByText("Betaald", { exact: true }).last().waitFor();
+    await page.getByText("Status bijgewerkt naar Betaald.").waitFor();
+    await detail.getByRole("button", { name: "Sluiten" }).click();
+    await page.waitForFunction(
+      () =>
+        document.activeElement?.getAttribute("placeholder") ===
+        "Nummer, naam of e-mail",
+    );
+
+    const shopper = await context.newPage();
+    await shopper.goto(BASE_URL, { waitUntil: "networkidle" });
+    await shopper
+      .getByRole("button", { name: "Contact", exact: true })
+      .last()
+      .click();
+    await shopper.getByLabel("Naam").fill("Dashboard Contact");
+    await shopper
+      .getByLabel("E-mail")
+      .fill(`dashboard-${randomUUID()}@example.test`);
+    await shopper
+      .getByLabel("Bericht")
+      .fill("Nieuw open contact voor de dashboardtelling.");
+    await shopper.getByRole("button", { name: "Verstuur bericht" }).click();
+    await shopper.getByText("Bericht verstuurd").waitFor();
+    await shopper.close();
+
+    await page.getByRole("button", { name: "Vernieuwen" }).click();
+    await page
+      .getByRole("group", { name: "Open contact" })
+      .getByText("1", { exact: true })
+      .waitFor();
   } finally {
     await context.close();
   }
@@ -850,6 +946,11 @@ test("contact is stored and only an authenticated admin can handle it", async ()
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Inloggen" }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "Shopbeheer" }).count(), 0);
+    let unauthorizedStatus;
+    const captureUnauthorized = (response) => {
+      if (response.status() === 401) unauthorizedStatus = 401;
+    };
+    page.on("response", captureUnauthorized);
     assert.equal(
       await page.evaluate(async () => {
         try {
@@ -862,15 +963,76 @@ test("contact is stored and only an authenticated admin can handle it", async ()
       }),
       true,
     );
+    page.off("response", captureUnauthorized);
+    assert.equal(unauthorizedStatus, 401);
 
     await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
-    await page.getByRole("button", { name: "Contact" }).click();
+    const summaryBoxes = await Promise.all(
+      ["Nieuw / in afwachting", "Te verwerken", "Open contact"].map((name) =>
+        page.getByRole("group", { name }).boundingBox(),
+      ),
+    );
+    assert.ok(summaryBoxes.every(Boolean));
+    assert.ok(
+      summaryBoxes.every(
+        (box) => Math.abs(box.y - summaryBoxes[0].y) <= 2,
+      ),
+    );
+    await page.getByRole("tab", { name: "Contact" }).click();
     await page.getByText(uniqueMessage).waitFor();
-    await page.getByRole("button", { name: "Markeer afgehandeld" }).click();
+    const contactCard = page.locator("article").filter({ hasText: uniqueMessage });
+    await contactCard
+      .getByRole("button", { name: "Markeer afgehandeld" })
+      .click();
+    await page
+      .getByText("Contactbericht gemarkeerd als afgehandeld.")
+      .waitFor();
     await page.getByRole("button", { name: "Afgehandeld", exact: true }).click();
     await page.getByText(uniqueMessage).waitFor();
+  } finally {
+    await context.close();
+  }
+});
+
+test("contact abuse protection returns 429 with retry feedback", async () => {
+  const { context, page } = await newPage();
+  let limitedResponse;
+  page.on("response", (response) => {
+    if (response.status() === 429) limitedResponse = response;
+  });
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await page
+        .getByRole("button", { name: "Contact", exact: true })
+        .last()
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Contact" });
+      await dialog.getByLabel("Naam").fill("Rate Limit Tester");
+      await dialog
+        .getByLabel("E-mail")
+        .fill(`rate-${attempt}-${randomUUID()}@example.test`);
+      await dialog
+        .getByLabel("Bericht")
+        .fill("Dit bericht controleert de gedeelde rate limit.");
+      await dialog.getByRole("button", { name: "Verstuur bericht" }).click();
+      await page.waitForTimeout(250);
+      if (limitedResponse) break;
+      await dialog.waitFor({ state: "hidden", timeout: 5_000 });
+    }
+
+    assert.ok(limitedResponse);
+    const feedback = page.getByText(
+      /Te veel pogingen. Probeer over \d+ seconden opnieuw/,
+    );
+    await feedback.waitFor();
+    const retrySeconds = /over (\d+) seconden/.exec(
+      await feedback.innerText(),
+    )?.[1];
+    assert.ok(retrySeconds);
+    assert.equal(limitedResponse.headers()["retry-after"], retrySeconds);
   } finally {
     await context.close();
   }

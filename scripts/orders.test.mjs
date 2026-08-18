@@ -7,6 +7,7 @@ let vite;
 let getSql;
 let createOrderRecord;
 let getOrderRecordForViewer;
+let listAdminOrderRecords;
 let listOwnOrderRecords;
 let updateOrderStatusRecord;
 let ORDER_STATUSES;
@@ -52,6 +53,7 @@ before(async () => {
   ({
     createOrderRecord,
     getOrderRecordForViewer,
+    listAdminOrderRecords,
     listOwnOrderRecords,
     updateOrderStatusRecord,
   } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
@@ -295,6 +297,35 @@ test("orders enforce the auth-user foreign key and list only the owner", async (
     }),
     /foreign key|orders_user_id/i,
   );
+});
+
+test("admin order pagination returns distinct working pages", async () => {
+  const marker = `Pager ${randomUUID()}`;
+  const created = await Promise.all([
+    createOrderRecord(orderInput({ name: marker }), { userId: null }),
+    createOrderRecord(orderInput({ name: marker }), { userId: null }),
+    createOrderRecord(orderInput({ name: marker }), { userId: null }),
+  ]);
+  const first = await listAdminOrderRecords({
+    search: marker,
+    page: 1,
+    pageSize: 2,
+    status: "all",
+  });
+  const second = await listAdminOrderRecords({
+    search: marker,
+    page: 2,
+    pageSize: 2,
+    status: "all",
+  });
+  assert.equal(first.pageCount >= 2, true);
+  assert.equal(first.orders.length, 2);
+  assert.ok(second.orders.length >= 1);
+  const ids = new Set([
+    ...first.orders.map((order) => order.id),
+    ...second.orders.map((order) => order.id),
+  ]);
+  for (const order of created) assert.ok(ids.has(order.order.id));
 });
 
 test("expired recovery codes and cookies do not authorize an order", async () => {

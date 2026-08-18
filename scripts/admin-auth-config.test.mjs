@@ -5,6 +5,7 @@ import { createServer } from "vite";
 
 let vite;
 let resolveAdminConfiguration;
+let resolveAdminAuthorizationConfiguration;
 let hasConfiguredAdminAccess;
 let signAdminSession;
 
@@ -14,8 +15,11 @@ before(async () => {
     logLevel: "silent",
     server: { middlewareMode: true },
   });
-  ({ resolveAdminConfiguration, hasConfiguredAdminAccess } =
-    await vite.ssrLoadModule("/src/lib/server/admin-policy.server.ts"));
+  ({
+    resolveAdminConfiguration,
+    resolveAdminAuthorizationConfiguration,
+    hasConfiguredAdminAccess,
+  } = await vite.ssrLoadModule("/src/lib/server/admin-policy.server.ts"));
   ({ signAdminSession } = await vite.ssrLoadModule(
     "/src/lib/server/admin-session.server.ts",
   ));
@@ -92,6 +96,16 @@ test("partial or weak production password configuration fails closed", () => {
         ADMIN_SESSION_SECRET: "kort",
       }),
     /sterk|tekens|ADMIN_/i,
+  );
+});
+
+test("broken admin fallback configuration cannot break public authorization probes", () => {
+  assert.equal(
+    resolveAdminAuthorizationConfiguration({
+      NODE_ENV: "production",
+      ADMIN_PASSWORD: "sterk-beheer-wachtwoord-2026",
+    }),
+    null,
   );
 });
 

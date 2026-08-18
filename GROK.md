@@ -189,7 +189,7 @@ npm run typecheck
 - `/checkout` plaatst echte gastorders en contactberichten worden opgeslagen.
 - Betaling en e-mailafhandeling blijven handmatig.
 - `/admin` beheert bestellingen, statussen en contactberichten.
-- Admin vereist `ADMIN_PASSWORD` en `ADMIN_SESSION_SECRET`; `ADMIN_EMAILS` is optioneel.
+- Admin gebruikt zelfstandig `ADMIN_EMAILS` of het paar `ADMIN_PASSWORD` + `ADMIN_SESSION_SECRET`.
 - Productie vereist `DATABASE_URL`; `PGLITE_PREVIEW=true` is alleen voor vluchtige previews.
 - Gasttoegang werkt met een cookie of herstelcode die na 72 uur verloopt.
 - Nog niet aanwezig: betaalprovider, echte e-mail, voorraad, refunds en verzendkoppeling.

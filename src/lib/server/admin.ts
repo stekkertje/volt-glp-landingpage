@@ -13,8 +13,22 @@ const adminLoginSchema = z
 export const getAdminSessionState = createServerFn({ method: "GET" })
   .middleware([optionalAuthMiddleware])
   .handler(async ({ context }) => {
-    const { isAdminViewer } = await import("./admin-auth.server");
-    return { authenticated: await isAdminViewer(context.bearerToken) };
+    const { getAdminCapabilities, isAdminViewer } = await import(
+      "./admin-auth.server"
+    );
+    return {
+      authenticated: await isAdminViewer(context.bearerToken),
+      ...getAdminCapabilities(),
+    };
+  });
+
+export const getAdminSummary = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .handler(async () => {
+    const { getAdminSummaryRecord } = await import(
+      "./admin-dashboard.server"
+    );
+    return getAdminSummaryRecord();
   });
 
 export const loginAdmin = createServerFn({ method: "POST" })

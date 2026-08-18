@@ -60,6 +60,19 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
 
   const codes = await sql`select code, percent, active from discount_codes where code = 'VOLT10'`;
   assert.deepEqual(codes, [{ code: "VOLT10", percent: 10, active: true }]);
+  const foreignKeys = await sql.query(
+    "select conname from pg_constraint where conname = 'orders_user_id_fkey'",
+  );
+  assert.deepEqual(foreignKeys, [{ conname: "orders_user_id_fkey" }]);
+  const indexes = await sql.query(
+    `select index_class.relname as indexname, index_meta.indisvalid
+     from pg_index as index_meta
+     join pg_class as index_class on index_class.oid = index_meta.indexrelid
+     where index_class.relname = 'orders_user_id_idx'`,
+  );
+  assert.deepEqual(indexes, [
+    { indexname: "orders_user_id_idx", indisvalid: true },
+  ]);
 });
 
 test("withSqlTransaction rolls an order back when its line insert fails", async () => {

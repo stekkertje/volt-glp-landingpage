@@ -26,9 +26,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(createOrderSchema)
   .handler(async ({ data, context }) => {
-    const { getRequestIP, setCookie } = await import(
-      "@tanstack/react-start/server"
-    );
+    const { setCookie } = await import("@tanstack/react-start/server");
     const {
       createOrderRecord,
       GUEST_ACCESS_TOKEN_TTL_MS,
@@ -37,8 +35,19 @@ export const createOrder = createServerFn({ method: "POST" })
     const { enforceOrderCreationLimit } = await import(
       "./abuse-protection.server"
     );
-    const requestIp = getRequestIP({ xForwardedFor: true }) || "unknown";
-    await enforceOrderCreationLimit(requestIp, data.email);
+    const { getRequestClientIdentifier } = await import(
+      "./request-client.server"
+    );
+    const { applyRateLimitResponse } = await import("./rate-limit.server");
+    try {
+      await enforceOrderCreationLimit(
+        getRequestClientIdentifier(),
+        data.email,
+      );
+    } catch (error) {
+      applyRateLimitResponse(error);
+      throw error;
+    }
     const result = await createOrderRecord(data, { userId: context.userId });
     setCookie(
       GUEST_ORDER_COOKIE,
@@ -58,7 +67,7 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(orderViewerSchema)
   .handler(async ({ data, context }) => {
-    const { getCookie, getRequestIP, setCookie } = await import(
+    const { getCookie, setCookie } = await import(
       "@tanstack/react-start/server"
     );
     const {
@@ -72,9 +81,20 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
       const { enforceOrderAccessLimit } = await import(
         "./abuse-protection.server"
       );
-      const requestIp = getRequestIP({ xForwardedFor: true }) || "unknown";
+      const { getRequestClientIdentifier } = await import(
+        "./request-client.server"
+      );
+      const { applyRateLimitResponse } = await import("./rate-limit.server");
       const orderReference = data.id ?? data.orderNumber ?? "unknown";
-      await enforceOrderAccessLimit(requestIp, orderReference);
+      try {
+        await enforceOrderAccessLimit(
+          getRequestClientIdentifier(),
+          orderReference,
+        );
+      } catch (error) {
+        applyRateLimitResponse(error);
+        throw error;
+      }
     }
     const cookie = parseGuestOrderCookie(getCookie(GUEST_ORDER_COOKIE));
     const order = await getOrderRecordForViewer({

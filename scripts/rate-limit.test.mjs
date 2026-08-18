@@ -50,7 +50,8 @@ test("rate limiting is atomically persisted without storing the raw identifier",
     (error) =>
       error?.name === "RateLimitError" &&
       error?.status === 429 &&
-      error?.retryAfterMs > 0,
+      error?.retryAfterMs > 0 &&
+      /Probeer over \d+ seconden opnieuw/.test(error?.message ?? ""),
   );
 
   const sql = await getSql();

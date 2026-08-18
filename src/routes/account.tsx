@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getOrderForViewer, listOwnOrders } from "@/lib/server/orders";
+import { rateLimitFeedback } from "@/lib/server-error";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/account")({
@@ -151,8 +152,11 @@ function GuestOrderAccess() {
         },
       });
       await navigate({ to: "/bestelling/$id", params: { id: order.id } });
-    } catch {
-      setError("Bestelling niet gevonden of herstelcode onjuist.");
+    } catch (error) {
+      setError(
+        rateLimitFeedback(error) ??
+          "Bestelling niet gevonden of herstelcode onjuist.",
+      );
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setSubmitting(false);
@@ -221,7 +225,9 @@ function GuestOrderAccess() {
           <LogIn className="mx-auto size-5 text-primary" />
           <p className="mt-2 text-sm font-semibold">Heb je een account?</p>
           <Button className="mt-3" variant="secondary" asChild>
-            <Link to="/login">Inloggen</Link>
+            <Link to="/login" search={{ redirect: "/account" }}>
+              Inloggen
+            </Link>
           </Button>
         </div>
       </div>

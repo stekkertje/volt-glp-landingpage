@@ -2,7 +2,7 @@
 
 Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als vial of kant-en-klare pen.
 
-Cart, contact en checkout zijn **demo**. Geen echte betaling of mail.
+Checkout en contact schrijven naar de database. Betaling en e-mailafhandeling blijven handmatig.
 
 Agent-briefing (eerst lezen als je hieraan werkt): [`GROK.md`](./GROK.md)
 
@@ -15,9 +15,20 @@ npm install
 npm run dev          # 0.0.0.0:8080
 npm run build
 npm run typecheck
+npm run lint
+npm test
 ```
 
 Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
+
+## Productie en beheer
+
+- `DATABASE_URL` is verplicht in productie. Zonder deze variabele stopt de app.
+- `PGLITE_PREVIEW=true` is uitsluitend voor een expliciet vluchtige preview.
+- Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
+- Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
+- In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
+- Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
 
 ## Catalogus
 
@@ -50,45 +61,13 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 | `public/images/producten/` | Productfoto's |
 | `scripts/storefront.test.mjs` | Browserregressies |
 
-## Open gaten
+## Backendroutes
 
-Niet hele branches mergen. Alleen deze vijf punten. Filter-sticky, 5-thumbs-rij en de meeste e2e-flows zitten al in `main`.
+- `/checkout`: gastbestelling met serverprijzen en idempotency.
+- `/bestelling/$id`: beveiligde bevestiging via eigenaar, admin of tijdelijk gastbewijs.
+- `/account`: eigen orders na login of gasttoegang met herstelcode.
+- `/admin`: dagelijkse order- en contactafhandeling.
 
-1. **Cart-persist zonder SSR-flikker**
-   Bron: `cursor/volt-glp-shop-fixes-e10e`
-   `src/lib/cart-store.ts` + nieuw `src/components/cart-hydrate.tsx`
-   Zet `skipHydration: true` en roep `useCartStore.persist.rehydrate()` in `useEffect` aan.
+## Bewust handmatig
 
-2. **Max 10 stuks ook in addToCart en setLineQty**
-   Bron: e10e, `src/lib/cart-store.ts`
-   De stepper is begrensd. `addToCart` / `setLineQty` nog niet. `MAX_LINE_QTY = 10`. Plus-knop disabled bij 10.
-
-3. **Gerelateerd alleen dezelfde stof**
-   Bron: `cursor/complete-conversion-review-0cd3`, `relatedProducts()` in `src/lib/product.ts`
-   Nu: zusje + andere GLP-1's, kop "Vergelijk meer producten".
-   Moet: alleen zelfde `subcat`, kop "Andere sterkte / vorm".
-
-4. **Exact aantal spuiten in de copy**
-   Bron: e10e, `SYRINGE_PACK_COUNT` in `product.ts` + `pack-selector.tsx`
-   Nu: "set voor injecties". Moet: set van X stuks.
-
-5. **Dialog-focus strakker**
-   Bron: 0cd3, `src/lib/use-dialog-focus.ts`
-   Alleen toevoegen: `body { overflow: hidden }`, `requestAnimationFrame` voor focus, `[data-dialog-autofocus]`.
-
-### Niet doen
-
-- Hele branches mergen
-- Foto's wissen of terugzetten
-- `GROK.md` overschrijven
-- e10e `cutoff.ts` (main is slimmer: echte volgende werkdag)
-- `scripts/shop-qa.mjs` van e10e
-- Filter-store, gallery-grid of extra e2e overnemen. Dat zit al in `main`.
-
-### Check
-
-- Refresh: winkelwagen blijft, geen hydration-fout in de console
-- 11x toevoegen blijft op 10
-- Semaglutide-PDP toont alleen het Semaglutide-zusje, geen andere stof
-- Spuiten-optie noemt het aantal
-- Contact/cart: body-scroll lock, focus na open, Escape sluit
+Er is nog geen betaalprovider, automatische e-mail, voorraadbeheer, refundflow of verzendkoppeling.

@@ -11,9 +11,17 @@ export const createContactMessage = createServerFn({ method: "POST" })
   .middleware([sameSiteMiddleware])
   .validator(contactMessageSchema)
   .handler(async ({ data }) => {
-    const { getRequestIP } = await import("@tanstack/react-start/server");
     const { storeContactMessage } = await import("./contact.server");
-    await storeContactMessage(data, getRequestIP({ xForwardedFor: true }) || "unknown");
+    const { getRequestClientIdentifier } = await import(
+      "./request-client.server"
+    );
+    const { applyRateLimitResponse } = await import("./rate-limit.server");
+    try {
+      await storeContactMessage(data, getRequestClientIdentifier());
+    } catch (error) {
+      applyRateLimitResponse(error);
+      throw error;
+    }
     return { success: true as const };
   });
 

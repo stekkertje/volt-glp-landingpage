@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/cart-store";
 import { createOrderSchema } from "@/lib/server/order-schema";
 import { createOrder, getPricingPreview } from "@/lib/server/orders";
+import { rateLimitFeedback } from "@/lib/server-error";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/checkout")({
@@ -148,9 +149,10 @@ function CheckoutPage() {
         to: "/bestelling/$id",
         params: { id: result.order.id },
       });
-    } catch {
+    } catch (error) {
       setFormError(
-        "Bestelling plaatsen is niet gelukt. Je winkelwagen is bewaard. Controleer je gegevens en probeer opnieuw.",
+        rateLimitFeedback(error) ??
+          "Bestelling plaatsen is niet gelukt. Je winkelwagen is bewaard. Controleer je gegevens en probeer opnieuw.",
       );
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
