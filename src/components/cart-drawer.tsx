@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { X, ShoppingBag, Minus, Plus, Trash2, ChevronDown } from "lucide-react";
 import {
   useCartStore,
@@ -28,7 +29,6 @@ export function CartDrawer() {
   const setDiscountCode = useCartStore((s) => s.setDiscountCode);
   const applyDiscount = useCartStore((s) => s.applyDiscount);
   const [showCode, setShowCode] = useState(false);
-  const [checkingOut, setCheckingOut] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -271,21 +271,11 @@ export function CartDrawer() {
             <Button
               className="w-full glow-primary"
               size="lg"
-              disabled={checkingOut}
-              onClick={() => {
-                setCheckingOut(true);
-                window.setTimeout(() => {
-                  setCheckingOut(false);
-                  useCartStore
-                    .getState()
-                    .pushToast(
-                      "Demo-checkout",
-                      "Geen echte betaling in deze preview",
-                    );
-                }, 900);
-              }}
+              asChild
             >
-              {checkingOut ? "Bezig…" : "Veilig afrekenen"}
+              <Link to="/checkout" onClick={close}>
+                Veilig afrekenen
+              </Link>
             </Button>
             <Button variant="ghost" className="w-full" onClick={clear}>
               Winkelwagen legen

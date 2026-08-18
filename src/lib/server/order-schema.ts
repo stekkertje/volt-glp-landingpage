@@ -24,6 +24,13 @@ export const orderLineSchema = z.object({
   qty: z.number().int().min(1).max(10),
 });
 
+export const pricingPreviewSchema = z
+  .object({
+    lines: z.array(orderLineSchema).min(1).max(50),
+    discountCode: optionalText(64),
+  })
+  .strict();
+
 export const createOrderSchema = z
   .object({
     name: z.string().min(1).max(120).transform(collapseWhitespace),

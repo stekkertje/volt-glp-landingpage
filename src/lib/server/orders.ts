@@ -7,11 +7,21 @@ import {
   createOrderSchema,
   orderIdSchema,
   orderViewerSchema,
+  pricingPreviewSchema,
   updateOrderStatusSchema,
 } from "@/lib/server/order-schema";
+import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
 
 export const GUEST_ORDER_COOKIE = "volt-order-access";
 const GUEST_COOKIE_SECONDS = 3 * 24 * 60 * 60;
+
+export const getPricingPreview = createServerFn({ method: "POST" })
+  .middleware([sameSiteMiddleware])
+  .validator(pricingPreviewSchema)
+  .handler(async ({ data }) => {
+    const { calculatePricing } = await import("./pricing");
+    return calculatePricing(data);
+  });
 
 export const createOrder = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])

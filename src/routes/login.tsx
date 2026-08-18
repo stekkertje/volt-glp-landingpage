@@ -30,7 +30,7 @@ function LoginPage() {
               <button
                 key={p.providerId}
                 type="button"
-                onClick={() => signIn(p.providerId, { callbackURL: "/" })}
+                onClick={() => signIn(p.providerId, { callbackURL: "/account" })}
                 className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
               >
                 Doorgaan met {p.label}
