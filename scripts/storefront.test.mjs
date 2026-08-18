@@ -1017,10 +1017,20 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
       await dialog
         .getByLabel("Bericht")
         .fill("Dit bericht controleert de gedeelde rate limit.");
+      const limitedAttempt = page
+        .waitForResponse((response) => response.status() === 429, {
+          timeout: 10_000,
+        })
+        .catch(() => null);
       await dialog.getByRole("button", { name: "Verstuur bericht" }).click();
-      await page.waitForTimeout(250);
-      if (limitedResponse) break;
-      await dialog.waitFor({ state: "hidden", timeout: 5_000 });
+      const outcome = await Promise.race([
+        limitedAttempt,
+        dialog.waitFor({ state: "hidden", timeout: 10_000 }).then(() => null),
+      ]);
+      if (outcome) {
+        limitedResponse = outcome;
+        break;
+      }
     }
 
     assert.ok(limitedResponse);
