@@ -73,7 +73,7 @@ export function UserButton() {
           onClick={() => void signOut()}
           className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline"
         >
-          Sign out
+          Uitloggen
         </button>
       )}
     </div>

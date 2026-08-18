@@ -2,7 +2,7 @@
 
 Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als vial of kant-en-klare pen.
 
-Cart, contact en checkout zijn **demo**. Geen echte betaling of mail.
+Checkout en contact schrijven naar de database. Betaling en e-mailafhandeling blijven handmatig.
 
 Agent-briefing (eerst lezen als je hieraan werkt): [`GROK.md`](./GROK.md)
 
@@ -15,9 +15,84 @@ npm install
 npm run dev          # 0.0.0.0:8080
 npm run build
 npm run typecheck
+npm run lint
+npm test
 ```
 
 Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
+
+## Productie en beheer
+
+- `DATABASE_URL` is verplicht in iedere production runtime en deployment.
+- `MIGRATION_DATABASE_URL` (of de door sommige integraties geleverde
+  `DATABASE_URL_UNPOOLED`) is daarnaast verplicht voor deploymigraties en moet
+  de directe/unpooled PostgreSQL-URL met een expliciete niet-lege gebruiker en
+  wachtwoord zijn. De migrator gebruikt nooit de OS-gebruiker of `~/.pgpass`
+  als credentialfallback. De runtime mag een pooled
+  `DATABASE_URL` gebruiken; de migrator weigert bekende pooler-URL's omdat zijn
+  session advisory lock één vaste databaseverbinding nodig heeft. Bij Neon
+  moeten runtime- en migratie-URL aantoonbaar dezelfde branch en database
+  aanwijzen; een afzonderlijke migratierol/gebruikersnaam is wel toegestaan.
+  Zet de database altijd in het URL-pad (`/...`) zoals `pg` dat werkelijk
+  interpreteert. Een afwijkende `?database=...`-query wordt vóór verbinden
+  geweigerd. Het standaardschema is `public`. Wanneer de URL-instelling
+  `options=-c search_path=...` wordt gebruikt, moeten runtime en migrator exact
+  dezelfde veilige schemazoekvolgorde krijgen. De migrator controleert vóór
+  wijzigingen ook het werkelijk actieve schema; zonder expliciete instelling
+  pinnen migrator, runtime en auth `search_path=public`, onafhankelijk van
+  roldefaults. Geef de migrator geen losse
+  `PGHOST`/`PGPORT`/`PGDATABASE`/`PGOPTIONS` of andere connection-affecting
+  `PG*`-omgevingsvariabelen: alle verbindingsinstellingen horen expliciet in de
+  directe migratie-URL. Openen, sluiten en wachten op de
+  advisory-lock zijn begrensd. Wachten op een gewone PostgreSQL-lock is per
+  statement maximaal 15 seconden; een actief uitgevoerd migratiestatement
+  krijgt geen algemene `statement_timeout`. Zet daarom geen `statement_timeout`,
+  `query_timeout` of `lock_timeout` in de directe migratie-URL of de
+  `options`-parameter; de migrator voegt uitsluitend zijn eigen
+  `lock_timeout=15000` toe.
+- De GitHub-check **Migration integration** start bij iedere push en pull request
+  een tijdelijke PostgreSQL-service. Daarmee draaien ook de echte
+  advisory-lock- en concurrencytests, een echte geblokkeerde statement-locktest
+  én de volledige productiemigrator inclusief 0007 `CREATE INDEX CONCURRENTLY`.
+  De migrator draait daar tweemaal en de tweede run moet idempotent zijn. Lokaal
+  blijven deze tests alleen overgeslagen wanneer
+  `TEST_MIGRATION_DATABASE_URL` niet is ingesteld.
+- PGLite wordt uitsluitend gebruikt tijdens lokale development en tests.
+- Gebruik bij voorkeur een afzonderlijk, stabiel
+  `ORDER_ACCESS_TOKEN_SECRET` van minimaal 32 tekens naast een persistente
+  database. Wanneer dit niet is ingesteld, gebruikt de app het eveneens
+  stabiele `BETTER_AUTH_SECRET` via een domeingescheiden sleutelafleiding.
+  Minstens één van beide moet aanwezig zijn; `DATABASE_URL` wordt nooit als
+  actuele versleutelingssleutel gebruikt.
+- Draai dit geheim veilig door eerst de nieuwe waarde in
+  `ORDER_ACCESS_TOKEN_SECRET` te zetten en de vorige waarde tijdelijk op te
+  nemen in `ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS` (kommagescheiden). Laat oude
+  waarden minimaal 72 uur staan. Een replay versleutelt een geldige code
+  automatisch opnieuw met de actuele sleutel zonder die code in te trekken.
+  Roteer je `BETTER_AUTH_SECRET` terwijl dit ook de fallback voor besteltoegang
+  is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
+  op of stel vooraf een aparte ordersleutel in.
+- Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
+- Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
+- In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
+- Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
+
+### Database-upgradecontrole
+
+Migratie `0007_review_hardening.sql` stopt bewust wanneer historische
+bestellingen dezelfde productvariant meer dan eenmaal bevatten. Controleer dit
+voor een productie-upgrade:
+
+```sql
+select order_id, slug, option_id, count(*) as aantal
+from order_lines
+group by order_id, slug, option_id
+having count(*) > 1;
+```
+
+Los iedere gevonden bestelling handmatig en controleerbaar op voordat de
+migratie opnieuw draait. De migratie verwijdert of combineert nooit stil
+historische orderregels.
 
 ## Catalogus
 
@@ -50,45 +125,13 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 | `public/images/producten/` | Productfoto's |
 | `scripts/storefront.test.mjs` | Browserregressies |
 
-## Open gaten
+## Backendroutes
 
-Niet hele branches mergen. Alleen deze vijf punten. Filter-sticky, 5-thumbs-rij en de meeste e2e-flows zitten al in `main`.
+- `/checkout`: gastbestelling met serverprijzen en idempotency.
+- `/bestelling/$id`: beveiligde bevestiging via eigenaar, admin of tijdelijk gastbewijs.
+- `/account`: eigen orders na login of gasttoegang met herstelcode.
+- `/admin`: dagelijkse order- en contactafhandeling.
 
-1. **Cart-persist zonder SSR-flikker**
-   Bron: `cursor/volt-glp-shop-fixes-e10e`
-   `src/lib/cart-store.ts` + nieuw `src/components/cart-hydrate.tsx`
-   Zet `skipHydration: true` en roep `useCartStore.persist.rehydrate()` in `useEffect` aan.
+## Bewust handmatig
 
-2. **Max 10 stuks ook in addToCart en setLineQty**
-   Bron: e10e, `src/lib/cart-store.ts`
-   De stepper is begrensd. `addToCart` / `setLineQty` nog niet. `MAX_LINE_QTY = 10`. Plus-knop disabled bij 10.
-
-3. **Gerelateerd alleen dezelfde stof**
-   Bron: `cursor/complete-conversion-review-0cd3`, `relatedProducts()` in `src/lib/product.ts`
-   Nu: zusje + andere GLP-1's, kop "Vergelijk meer producten".
-   Moet: alleen zelfde `subcat`, kop "Andere sterkte / vorm".
-
-4. **Exact aantal spuiten in de copy**
-   Bron: e10e, `SYRINGE_PACK_COUNT` in `product.ts` + `pack-selector.tsx`
-   Nu: "set voor injecties". Moet: set van X stuks.
-
-5. **Dialog-focus strakker**
-   Bron: 0cd3, `src/lib/use-dialog-focus.ts`
-   Alleen toevoegen: `body { overflow: hidden }`, `requestAnimationFrame` voor focus, `[data-dialog-autofocus]`.
-
-### Niet doen
-
-- Hele branches mergen
-- Foto's wissen of terugzetten
-- `GROK.md` overschrijven
-- e10e `cutoff.ts` (main is slimmer: echte volgende werkdag)
-- `scripts/shop-qa.mjs` van e10e
-- Filter-store, gallery-grid of extra e2e overnemen. Dat zit al in `main`.
-
-### Check
-
-- Refresh: winkelwagen blijft, geen hydration-fout in de console
-- 11x toevoegen blijft op 10
-- Semaglutide-PDP toont alleen het Semaglutide-zusje, geen andere stof
-- Spuiten-optie noemt het aantal
-- Contact/cart: body-scroll lock, focus na open, Escape sluit
+Er is nog geen betaalprovider, automatische e-mail, voorraadbeheer, refundflow of verzendkoppeling.

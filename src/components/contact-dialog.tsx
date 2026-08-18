@@ -5,6 +5,8 @@ import { useCartStore } from "@/lib/cart-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { createContactMessage } from "@/lib/server/contact";
+import { rateLimitFeedback } from "@/lib/server-error";
 
 export function ContactDialog() {
   const open = useContactStore((s) => s.open);
@@ -15,6 +17,7 @@ export function ContactDialog() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
@@ -31,6 +34,7 @@ export function ContactDialog() {
       setEmail("");
       setMessage("");
       setErrors({});
+      setSubmitError("");
       setSending(false);
     }
   }, [open]);
@@ -50,16 +54,22 @@ export function ContactDialog() {
     return Object.keys(next).length === 0;
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     setSending(true);
-    // Demo: no backend — confirm to user and close
-    window.setTimeout(() => {
-      setSending(false);
+    setSubmitError("");
+    try {
+      await createContactMessage({ data: { name, email, message } });
       close();
       pushToast("Bericht verstuurd", "We reageren binnen 24 uur op werkdagen.");
-    }, 600);
+    } catch (error) {
+      setSubmitError(
+        rateLimitFeedback(error) ??
+          "Je bericht kon niet worden verstuurd. Controleer je gegevens en probeer later opnieuw.",
+      );
+      setSending(false);
+    }
   };
 
   return (
@@ -110,6 +120,14 @@ export function ContactDialog() {
           onSubmit={onSubmit}
           className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5"
         >
+          {submitError && (
+            <p
+              role="alert"
+              className="rounded-xl border border-danger/25 bg-danger/5 px-3.5 py-3 text-sm text-danger"
+            >
+              {submitError}
+            </p>
+          )}
           <div className="space-y-1.5">
             <label
               htmlFor="contact-name"
@@ -124,6 +142,7 @@ export function ContactDialog() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              maxLength={120}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "contact-name-error" : undefined}
               className="h-11 w-full rounded-xl border border-border bg-bg px-3.5 text-sm text-fg outline-none ring-primary/30 placeholder:text-dim focus:border-primary focus:ring-2"
@@ -155,6 +174,7 @@ export function ContactDialog() {
               inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              maxLength={254}
               aria-invalid={Boolean(errors.email)}
               aria-describedby={
                 errors.email ? "contact-email-error" : undefined
@@ -186,6 +206,8 @@ export function ContactDialog() {
               rows={4}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              minLength={10}
+              maxLength={4000}
               aria-invalid={Boolean(errors.message)}
               aria-describedby={
                 errors.message ? "contact-message-error" : undefined

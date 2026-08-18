@@ -1,20 +1,22 @@
+import {
+  postgresConnectionConfig,
+  resolveDatabasePolicy,
+} from "@/lib/db-policy";
+
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
-// An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
-// "unset" — otherwise production would silently run on the PGLite fallback.
-const rawDatabaseUrl =
-  typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const databasePolicy = resolveDatabasePolicy(
+  typeof process !== "undefined" ? process.env : {},
+);
+const databaseUrl = databasePolicy.databaseUrl;
 
 /**
- * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
- * sandbox), otherwise a local embedded **PGLite** (Postgres compiled to WASM) so
- * the app has a working database even with nothing configured — the live preview
- * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
+ * Active backend: real **Neon** when `DATABASE_URL` is set. PGLite is restricted
+ * to development, tests, local builds and explicitly ephemeral previews.
+ * Production runtimes fail during import when persistent Postgres is missing.
  */
-export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+export const dbSource: DbSource = databasePolicy.source;
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -44,6 +46,7 @@ export interface Sql {
  */
 const globalRef = globalThis as typeof globalThis & {
   __pgSqlPromise__?: Promise<Sql>;
+  __pgPoolPromise__?: Promise<import("pg").Pool>;
   __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
   __pgliteMigrateChain__?: Promise<void>;
 };
@@ -83,15 +86,25 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
-function createNeonSql(): Promise<Sql> {
-  globalRef.__pgSqlPromise__ ??= (async () => {
-    // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
-    // pooled endpoint. One pool per process; warm serverless instances reuse it.
+function getNeonPool(): Promise<import("pg").Pool> {
+  globalRef.__pgPoolPromise__ ??= (async () => {
     const { Pool, types } = await import("pg");
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    return new Pool(postgresConnectionConfig(databaseUrl!));
+  })().catch((err) => {
+    globalRef.__pgPoolPromise__ = undefined;
+    throw err;
+  });
+  return globalRef.__pgPoolPromise__;
+}
+
+function createNeonSql(): Promise<Sql> {
+  globalRef.__pgSqlPromise__ ??= (async () => {
+    // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
+    // pooled endpoint. One pool per process; warm serverless instances reuse it.
+    const pool = await getNeonPool();
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -147,10 +160,19 @@ async function createPgliteSql(): Promise<Sql> {
     )) {
       const name = path.split("/").pop() as string;
       if (done.has(name)) continue;
+      // Production can opt one statement out of the transaction for
+      // `CREATE INDEX CONCURRENTLY`. PGLite is a single local connection, so it
+      // runs the equivalent regular index atomically instead.
+      const pgliteText = text
+        .replace(/^-- migrate:no-transaction\s*/i, "")
+        .replace(
+          /\b(create(?:\s+unique)?|drop)\s+index\s+concurrently\b/gi,
+          "$1 index",
+        );
       // Apply + record atomically (parity with scripts/migrate.mjs) so a failed
       // statement can't leave a file half-applied but untracked.
       await pg.transaction(async (tx) => {
-        await tx.exec(text);
+        await tx.exec(pgliteText);
         await tx.query("insert into _migrations (name) values ($1)", [name]);
       });
     }
@@ -192,6 +214,54 @@ export function getSql(): Promise<Sql> {
     throw err;
   });
   return sqlPromise;
+}
+
+/**
+ * Run all queries in `fn` on one database connection and one transaction.
+ *
+ * Neon checks a client out of the same shared pool used by `getSql()`. PGLite's
+ * transaction callback is serialized on its single shared instance. A thrown
+ * error always rolls the transaction back before it reaches the caller.
+ */
+export async function withSqlTransaction<T>(fn: (sql: Sql) => Promise<T>): Promise<T> {
+  if (typeof window !== "undefined") {
+    throw new Error("@/lib/db transactions are server-only");
+  }
+
+  if (dbSource === "neon") {
+    const pool = await getNeonPool();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const txSql = toSql(async <TRow>(text: string, params: unknown[]) => {
+        const result = await client.query(text, params);
+        return result.rows as TRow[];
+      });
+      const result = await fn(txSql);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // Preserve the original failure if the connection itself was lost.
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  await getSql();
+  const pg = await globalRef.__pgliteInstance__;
+  if (!pg) throw new Error("PGLite instance failed to initialize");
+  return pg.transaction(async (tx: import("@electric-sql/pglite").Transaction) => {
+    const txSql = toSql(async <TRow>(text: string, params: unknown[]) => {
+      const result = await tx.query<TRow>(text, params);
+      return result.rows;
+    });
+    return fn(txSql);
+  });
 }
 
 /**

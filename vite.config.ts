@@ -4,6 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
+import { securityHeadersForPath } from "./src/lib/security-headers.ts";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 
@@ -19,8 +20,20 @@ function pgliteBootstrapPlugin(): Plugin {
     async configureServer(server) {
       try {
         const mod = (await server.ssrLoadModule("/src/lib/db.ts")) as {
+          dbSource?: "neon" | "pglite";
           ensureDbReady?: () => Promise<void>;
         };
+        const expectedSource = process.env.VOLT_TEST_EXPECT_DB_SOURCE?.trim();
+        if (expectedSource) {
+          if (mod.dbSource !== expectedSource) {
+            throw new Error(
+              `Expected test database source ${expectedSource}, received ${mod.dbSource ?? "unknown"}`,
+            );
+          }
+          console.log(
+            `[app-builder] verified database source: ${mod.dbSource}`,
+          );
+        }
         if (typeof mod.ensureDbReady === "function") {
           await mod.ensureDbReady();
         }
@@ -28,6 +41,39 @@ function pgliteBootstrapPlugin(): Plugin {
         console.error("[app-builder] DB bootstrap failed:", err);
         throw err;
       }
+    },
+  };
+}
+
+function securityHeadersPlugin(): Plugin {
+  return {
+    name: "volt:security-headers",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url ?? "/").split("?", 1)[0] || "/";
+        const applyHeaders = () => {
+          for (const [name, value] of Object.entries(
+            securityHeadersForPath(pathname, { development: true }),
+          )) {
+            res.setHeader(name, value);
+          }
+        };
+        const originalWriteHead = res.writeHead;
+        res.writeHead = function writeHead(statusCode, ...args) {
+          applyHeaders();
+          if (statusCode === 429 && !res.hasHeader("retry-after")) {
+            const statusMessage =
+              (typeof args[0] === "string" ? args[0] : "") || res.statusMessage;
+            const retryAfter =
+              /Retry-After-(\d+)/.exec(statusMessage)?.[1] ?? "60";
+            res.setHeader("retry-after", retryAfter);
+          }
+          return originalWriteHead.call(this, statusCode, ...args);
+        } as typeof res.writeHead;
+        applyHeaders();
+        next();
+      });
     },
   };
 }
@@ -66,11 +112,15 @@ function authPopupPlugin(): Plugin {
           }
 
           const host = String(
-            req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080",
+            req.headers["x-forwarded-host"] ??
+              req.headers.host ??
+              "localhost:8080",
           );
           const proto = String(
             req.headers["x-forwarded-proto"] ??
-              ((req.socket as { encrypted?: boolean } | undefined)?.encrypted ? "https" : "http"),
+              ((req.socket as { encrypted?: boolean } | undefined)?.encrypted
+                ? "https"
+                : "http"),
           );
           const requestHeaders = new Headers();
           for (const [key, value] of Object.entries(req.headers)) {
@@ -90,7 +140,9 @@ function authPopupPlugin(): Plugin {
             headers: requestHeaders,
           });
 
-          const mod = (await server.ssrLoadModule("/src/lib/auth/popup.server.ts")) as {
+          const mod = (await server.ssrLoadModule(
+            "/src/lib/auth/popup.server.ts",
+          )) as {
             handleAuthPopupRequest: (req: Request) => Promise<Response>;
           };
           const response = await mod.handleAuthPopupRequest(request);
@@ -129,6 +181,14 @@ function authPopupPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command }) => ({
+  ...(process.env.VOLT_TEST_VITE_CACHE_DIR?.trim()
+    ? {
+        cacheDir: process.env.VOLT_TEST_VITE_CACHE_DIR.trim(),
+        // A fresh per-suite cache must not trigger a late dependency-discovery
+        // reload while Playwright is exercising a server-function RPC.
+        optimizeDeps: { noDiscovery: true },
+      }
+    : {}),
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -137,6 +197,7 @@ export default defineConfig(({ command }) => ({
   },
   resolve: { tsconfigPaths: true },
   plugins: [
+    securityHeadersPlugin(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),

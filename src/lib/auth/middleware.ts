@@ -37,10 +37,14 @@ export const authMiddleware = createMiddleware({ type: "function" })
     // (bearer hook on the client). A plain `./isolation` path was renamed to
     // `isolation.server.ts` — keep this import in sync so image `tsc` resolves
     // it, and so Vite does not ship `@tanstack/react-start/server` to the browser.
+    const { setResponseHeader } = await import(
+      "@tanstack/react-start/server"
+    );
     const { assertSameSiteRequest } = await import("./isolation.server");
     const { requireUserId } = await import("./verify.server");
     // Reject scripted cross-site/sibling requests before touching per-user data.
     assertSameSiteRequest();
+    setResponseHeader("cache-control", "no-store");
     const userId = await requireUserId(context.bearerToken);
     return next({ context: { userId } });
   });

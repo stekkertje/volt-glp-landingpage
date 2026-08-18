@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  INITIAL_CART_EPOCH,
+  isValidCartEpoch,
+  nextCartEpoch,
+} from "@/lib/cart-lifecycle";
+import {
   DEFAULT_PRODUCT_SLUG,
   PRODUCTS,
   SITE,
@@ -12,7 +17,7 @@ import {
 } from "@/lib/product";
 
 export const FREE_SHIPPING_CENTS = SITE.freeShippingCents;
-export const MAX_LINE_QTY = 10;
+export const MAX_LINE_QTY = SITE.maxLineQuantity;
 
 export type CartLine = {
   slug: ProductSlug;
@@ -34,6 +39,7 @@ type CartState = {
   selectedOptionId: string;
   selectedQty: number;
   cartOpen: boolean;
+  cartEpoch: number;
   lines: CartLine[];
   discountCode: string;
   discountApplied: boolean;
@@ -49,6 +55,7 @@ type CartState = {
   clearCart: () => void;
   setDiscountCode: (code: string) => void;
   applyDiscount: () => boolean;
+  removeDiscount: () => void;
   pushToast: (message: string, detail?: string, kind?: ToastKind) => void;
   dismissToast: (id: number) => void;
 };
@@ -68,6 +75,7 @@ export const useCartStore = create<CartState>()(
       ),
       selectedQty: 1,
       cartOpen: false,
+      cartEpoch: INITIAL_CART_EPOCH,
       lines: [],
       discountCode: "",
       discountApplied: false,
@@ -94,10 +102,7 @@ export const useCartStore = create<CartState>()(
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
           );
-          const nextQty = Math.min(
-            MAX_LINE_QTY,
-            (existing?.qty ?? 0) + addQty,
-          );
+          const nextQty = Math.min(MAX_LINE_QTY, (existing?.qty ?? 0) + addQty);
           const lines = existing
             ? s.lines.map((l) =>
                 lineKey(l.slug, l.optionId) === lineKey(product.slug, opt)
@@ -116,10 +121,14 @@ export const useCartStore = create<CartState>()(
       setLineQty: (slug, optionId, qty) => {
         set((s) => {
           if (qty <= 0) {
+            const lines = s.lines.filter(
+              (l) => !(l.slug === slug && l.optionId === optionId),
+            );
             return {
-              lines: s.lines.filter(
-                (l) => !(l.slug === slug && l.optionId === optionId),
-              ),
+              lines,
+              ...(lines.length
+                ? null
+                : { cartEpoch: nextCartEpoch(s.cartEpoch) }),
             };
           }
           return {
@@ -131,24 +140,36 @@ export const useCartStore = create<CartState>()(
           };
         });
       },
-      removeLine: (slug, optionId) =>
-        set((s) => ({
-          lines: s.lines.filter(
+      removeLine: (slug, optionId) => {
+        set((s) => {
+          const lines = s.lines.filter(
             (l) => !(l.slug === slug && l.optionId === optionId),
-          ),
-        })),
+          );
+          return {
+            lines,
+            ...(lines.length
+              ? null
+              : { cartEpoch: nextCartEpoch(s.cartEpoch) }),
+          };
+        });
+      },
       openCart: () => set({ cartOpen: true }),
       closeCart: () => set({ cartOpen: false }),
       clearCart: () =>
-        set({ lines: [], cartOpen: false, discountApplied: false }),
+        set((s) => ({
+          lines: [],
+          cartOpen: false,
+          discountApplied: false,
+          cartEpoch: nextCartEpoch(s.cartEpoch),
+        })),
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
         if (code === "VOLT10") {
-          set({ discountApplied: true });
+          set({ discountCode: code, discountApplied: true });
           get().pushToast(
-            "Kortingscode toegepast",
-            "10% extra op je subtotaal",
+            "Kortingscode toegevoegd",
+            "De actuele korting wordt veilig berekend.",
           );
           return true;
         }
@@ -157,11 +178,15 @@ export const useCartStore = create<CartState>()(
         get().pushToast(
           "Code niet geldig",
           alreadyApplied
-            ? "Je actieve VOLT10-korting blijft staan"
-            : "Probeer VOLT10 voor 10% korting",
+            ? "Je actieve kortingscode blijft staan"
+            : "Controleer de code en probeer opnieuw",
           "error",
         );
         return false;
+      },
+      removeDiscount: () => {
+        set({ discountCode: "", discountApplied: false });
+        get().pushToast("Kortingscode verwijderd");
       },
       pushToast: (message, detail, kind = "success") => {
         const id = ++toastSeq;
@@ -174,7 +199,28 @@ export const useCartStore = create<CartState>()(
     {
       name: "volt-cart",
       skipHydration: true,
+      version: 1,
+      migrate: (persistedState) => {
+        const persisted = persistedState as Partial<CartState>;
+        return {
+          ...persisted,
+          cartEpoch: isValidCartEpoch(persisted.cartEpoch)
+            ? persisted.cartEpoch
+            : INITIAL_CART_EPOCH,
+        } as CartState;
+      },
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<CartState>;
+        return {
+          ...currentState,
+          ...persisted,
+          cartEpoch: isValidCartEpoch(persisted.cartEpoch)
+            ? persisted.cartEpoch
+            : INITIAL_CART_EPOCH,
+        };
+      },
       partialize: (s) => ({
+        cartEpoch: s.cartEpoch,
         lines: s.lines,
         discountCode: s.discountCode,
         discountApplied: s.discountApplied,
@@ -209,16 +255,8 @@ export function cartStackDiscountCents(subtotal: number, qty: number) {
   return Math.round(subtotal * (pct / 100));
 }
 
-export function cartCodeDiscountCents(
-  subtotalAfterStack: number,
-  applied: boolean,
-) {
-  if (!applied) return 0;
-  return Math.round(subtotalAfterStack * 0.1);
-}
-
 export function cartShippingCents(subtotalAfterDiscount: number) {
-  return subtotalAfterDiscount >= FREE_SHIPPING_CENTS ? 0 : 495;
+  return subtotalAfterDiscount >= FREE_SHIPPING_CENTS ? 0 : SITE.shippingCents;
 }
 
 export function lineLabel(line: CartLine) {

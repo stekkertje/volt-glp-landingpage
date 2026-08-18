@@ -70,6 +70,11 @@ export function SiteFooter() {
                   </a>
                 </li>
                 <li>
+                  <a href="/account" className="hover:text-bg">
+                    Mijn bestellingen
+                  </a>
+                </li>
+                <li>
                   <button type="button" onClick={openContact} className="hover:text-bg text-left">
                     Contact
                   </button>
@@ -88,7 +93,7 @@ export function SiteFooter() {
         </div>
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40 space-y-1">
           <p>© {new Date().getFullYear()} VOLT Performance. Alle rechten voorbehouden.</p>
-          <p>Projectpreview · winkelwagen, contact en checkout zijn demo.</p>
+          <p>Bestellingen zijn echt opgeslagen · betaling en e-mail blijven handmatig.</p>
         </div>
       </div>
     </footer>

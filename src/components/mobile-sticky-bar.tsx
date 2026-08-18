@@ -18,6 +18,7 @@ export function MobileStickyBar() {
   const [visible, setVisible] = useState(false);
 
   const onProduct = pathname.startsWith("/product/");
+  const onStorefront = pathname === "/" || onProduct;
   const routeProduct = onProduct ? getProduct(pathname.split("/").filter(Boolean).at(-1)) : undefined;
   const product = routeProduct ?? getProduct(selectedSlug);
   const productIsSelected = product?.slug === selectedSlug;
@@ -50,7 +51,7 @@ export function MobileStickyBar() {
     };
   }, [pathname]);
 
-  if (!visible || cartOpen || !product) return null;
+  if (!onStorefront || !visible || cartOpen || !product) return null;
 
   const cover = product.images[0];
   const price = unitPriceCents(product, optionId);
