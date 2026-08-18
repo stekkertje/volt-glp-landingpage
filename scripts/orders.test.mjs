@@ -185,6 +185,31 @@ test("an idempotent retry returns the same guest proof without minting another",
   assert.ok(tokens.every((row) => row.token_hash !== first.guestAccessToken));
 });
 
+test("concurrent legacy-token retries share one replacement proof", async () => {
+  const input = orderInput();
+  const created = await createOrderRecord(input, { userId: null });
+  const sql = await getSql();
+  await sql.query(
+    "update order_access_tokens set token_ciphertext = null where order_id = $1",
+    [created.order.id],
+  );
+
+  const [firstReplay, secondReplay] = await Promise.all([
+    createOrderRecord(input, { userId: null }),
+    createOrderRecord(input, { userId: null }),
+  ]);
+
+  assert.equal(firstReplay.guestAccessToken, secondReplay.guestAccessToken);
+  assert.notEqual(firstReplay.guestAccessToken, created.guestAccessToken);
+  const activeTokens = await sql.query(
+    `select count(*)::int as count
+     from order_access_tokens
+     where order_id = $1 and revoked_at is null and expires_at > now()`,
+    [created.order.id],
+  );
+  assert.deepEqual(activeTokens, [{ count: 1 }]);
+});
+
 test("canonical normalization treats equivalent retry payloads as identical", async () => {
   const input = orderInput({
     lines: [

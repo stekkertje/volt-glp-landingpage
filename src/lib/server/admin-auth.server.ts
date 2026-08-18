@@ -161,7 +161,7 @@ export function logoutAdminSession(): void {
 
 export async function isAdminViewer(bearerToken?: string): Promise<boolean> {
   // A broken admin fallback must never take down public order recovery.
-  // Admin capability checks still surface the configuration error.
+  // Capability probes use the same fail-closed configuration state.
   const configuration = resolveAdminAuthorizationConfiguration(process.env);
   if (!configuration) return false;
   const sessionCookie = getCookie(ADMIN_COOKIE_NAME);

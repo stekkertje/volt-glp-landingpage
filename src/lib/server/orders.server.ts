@@ -459,6 +459,7 @@ async function replayExistingOrder(
     from orders
     where idempotency_key = ${idempotencyKey}
     limit 1
+    for update
   `;
   const existing = rows[0];
   if (!existing) return null;
