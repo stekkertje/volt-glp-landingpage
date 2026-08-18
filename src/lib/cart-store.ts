@@ -49,6 +49,7 @@ type CartState = {
   clearCart: () => void;
   setDiscountCode: (code: string) => void;
   applyDiscount: () => boolean;
+  removeDiscount: () => void;
   pushToast: (message: string, detail?: string, kind?: ToastKind) => void;
   dismissToast: (id: number) => void;
 };
@@ -142,10 +143,10 @@ export const useCartStore = create<CartState>()(
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
         if (code === "VOLT10") {
-          set({ discountApplied: true });
+          set({ discountCode: code, discountApplied: true });
           get().pushToast(
-            "Kortingscode toegepast",
-            "10% extra op je subtotaal",
+            "Kortingscode toegevoegd",
+            "De actuele korting wordt veilig berekend.",
           );
           return true;
         }
@@ -154,11 +155,15 @@ export const useCartStore = create<CartState>()(
         get().pushToast(
           "Code niet geldig",
           alreadyApplied
-            ? "Je actieve VOLT10-korting blijft staan"
-            : "Probeer VOLT10 voor 10% korting",
+            ? "Je actieve kortingscode blijft staan"
+            : "Controleer de code en probeer opnieuw",
           "error",
         );
         return false;
+      },
+      removeDiscount: () => {
+        set({ discountCode: "", discountApplied: false });
+        get().pushToast("Kortingscode verwijderd");
       },
       pushToast: (message, detail, kind = "success") => {
         const id = ++toastSeq;
@@ -204,14 +209,6 @@ export function cartStackDiscountCents(subtotal: number, qty: number) {
   const pct = stackDiscountPct(qty);
   if (!pct) return 0;
   return Math.round(subtotal * (pct / 100));
-}
-
-export function cartCodeDiscountCents(
-  subtotalAfterStack: number,
-  applied: boolean,
-) {
-  if (!applied) return 0;
-  return Math.round(subtotalAfterStack * 0.1);
 }
 
 export function cartShippingCents(subtotalAfterDiscount: number) {

@@ -277,7 +277,7 @@ test("related products stay within the current compound", async () => {
   }
 });
 
-test("an invalid code does not replace an active VOLT10 discount", async () => {
+test("an active discount must be removed before entering another code", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
@@ -293,12 +293,64 @@ test("an invalid code does not replace an active VOLT10 discount", async () => {
     const input = page.getByRole("textbox", { name: "Kortingscode" });
     await input.fill("VOLT10");
     await page.getByRole("button", { name: "Toepassen" }).click();
-    await input.fill("ONGELDIG");
-    await page.getByRole("button", { name: "Toepassen" }).click();
+    await page
+      .getByRole("button", { name: "Kortingscode verwijderen" })
+      .waitFor();
 
     const state = await cartState(page);
     assert.equal(state.discountApplied, true);
     assert.equal(state.discountCode, "VOLT10");
+    assert.equal(await input.count(), 0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("checkout recovers from a persisted server-invalid discount code", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.evaluate(() => {
+      const persisted = JSON.parse(localStorage.getItem("volt-cart") || "{}");
+      persisted.state.discountCode = "INACTIEF";
+      persisted.state.discountApplied = true;
+      localStorage.setItem("volt-cart", JSON.stringify(persisted));
+    });
+    await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
+
+    const placeOrder = page.getByRole("button", {
+      name: "Bestelling plaatsen",
+    });
+    await page
+      .getByRole("alert")
+      .getByText("De actuele totalen konden niet worden berekend.", {
+        exact: true,
+      })
+      .waitFor();
+    assert.equal(await placeOrder.isDisabled(), true);
+
+    await page
+      .getByRole("button", {
+        name: "Kortingscode verwijderen en opnieuw berekenen",
+      })
+      .click();
+    await waitForCheckoutSubmit(page);
+    const state = await cartState(page);
+    assert.equal(state.discountApplied, false);
+    assert.equal(state.discountCode, "");
+
+    await fillCheckout(page, `inactive-code-${randomUUID()}@example.test`);
+    await placeOrder.click();
+    await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    await page
+      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .waitFor();
   } finally {
     await context.close();
   }
@@ -696,11 +748,18 @@ test("cart quantities and discounts survive a reload", async () => {
       .getByRole("button", { name: /Winkelwagen openen, 5 producten/ })
       .first()
       .click();
-    await page.getByText("Stapelkorting (10%)").waitFor({ state: "visible" });
-    await page
-      .getByText("Korting (10%)", { exact: true })
+    const cart = page.getByRole("dialog", { name: "Winkelwagen" });
+    await cart
+      .getByText("Stapelkorting", { exact: true })
       .waitFor({ state: "visible" });
-    assert.equal(await page.getByText("Gratis", { exact: true }).count(), 1);
+    await cart
+      .getByText("Kortingscode VOLT10", { exact: true })
+      .first()
+      .waitFor({ state: "visible" });
+    await cart.getByText(/76,05/, { exact: false }).waitFor();
+    assert.equal(await cart.getByText("Stapelkorting (10%)").count(), 0);
+    assert.equal(await cart.getByText("Korting (10%)").count(), 0);
+    assert.equal(await cart.getByText("Gratis", { exact: true }).count(), 1);
   } finally {
     await context.close();
   }

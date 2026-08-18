@@ -110,6 +110,21 @@ test("VOLT10 is calculated after the stack discount", async () => {
   assert.equal(result.totalCents, 34_425);
 });
 
+test("discount amounts follow the current server-side percentage", async () => {
+  const result = await calculatePricing(
+    {
+      lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
+      discountCode: "FLEX",
+    },
+    async () => ({ code: "FLEX", percent: 17, active: true }),
+  );
+
+  assert.equal(result.discountCode, "FLEX");
+  assert.equal(result.codeDiscountCents, 1_445);
+  assert.equal(result.shippingCents, 495);
+  assert.equal(result.totalCents, 7_550);
+});
+
 test("shipping is 495 cents below 100 euro and free from 100 euro", async () => {
   const paidShipping = await calculatePricing(
     { lines: [{ slug: "retatrutide-10mg", optionId: "none", qty: 1 }] },

@@ -139,6 +139,7 @@ function CheckoutPage() {
   const lines = useCartStore((state) => state.lines);
   const discountCode = useCartStore((state) => state.discountCode);
   const discountApplied = useCartStore((state) => state.discountApplied);
+  const removeDiscount = useCartStore((state) => state.removeDiscount);
   const clearCart = useCartStore((state) => state.clearCart);
   const pushToast = useCartStore((state) => state.pushToast);
   // Keep the server and first client render identical. Zustand's persist API
@@ -686,6 +687,21 @@ function CheckoutPage() {
               <h2 className="text-lg font-extrabold tracking-tight">
                 Je bestelling
               </h2>
+              {discountApplied && !currentPricingError && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2">
+                  <p className="text-xs font-semibold">
+                    Kortingscode {discountCode.trim().toUpperCase()}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={removeDiscount}
+                    aria-label="Kortingscode verwijderen"
+                    className="text-xs font-bold text-danger underline underline-offset-2"
+                  >
+                    Verwijderen
+                  </button>
+                </div>
+              )}
               {currentPricing ? (
                 <>
                   <div className="mt-4 divide-y divide-border">
@@ -741,6 +757,20 @@ function CheckoutPage() {
                     Deze bedragen zijn opnieuw berekend op de server.
                   </p>
                 </>
+              ) : currentPricingError && discountApplied ? (
+                <div
+                  className="mt-4 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+                  role="alert"
+                >
+                  <p>{currentPricingError}</p>
+                  <button
+                    type="button"
+                    onClick={removeDiscount}
+                    className="mt-2 font-bold underline underline-offset-2"
+                  >
+                    Kortingscode verwijderen en opnieuw berekenen
+                  </button>
+                </div>
               ) : (
                 <p
                   className="mt-4 text-sm text-muted"
