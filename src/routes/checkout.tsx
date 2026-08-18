@@ -119,6 +119,7 @@ function CheckoutPage() {
         `volt-order-recovery:${result.order.id}`,
         result.guestAccessToken,
       );
+      emptyRedirected.current = true;
       clearCart();
       await navigate({
         to: "/bestelling/$id",

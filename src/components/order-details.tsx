@@ -1,13 +1,6 @@
 import { formatEuro } from "@/lib/utils";
-import type { OrderStatus, PublicOrder } from "@/lib/server/orders.server";
-
-export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "In afwachting",
-  paid: "Betaald",
-  packed: "Ingepakt",
-  shipped: "Verzonden",
-  cancelled: "Geannuleerd",
-};
+import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/order-status";
+import type { PublicOrder } from "@/lib/server/orders.server";
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   return (

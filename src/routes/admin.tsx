@@ -10,12 +10,9 @@ import {
   Search,
 } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import {
-  OrderDetails,
-  ORDER_STATUS_LABELS,
-  OrderStatusBadge,
-} from "@/components/order-details";
+import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { Button } from "@/components/ui/button";
+import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/order-status";
 import { getAdminSessionState, loginAdmin, logoutAdmin } from "@/lib/server/admin";
 import { listContactMessages, setContactHandled } from "@/lib/server/contact";
 import {
@@ -23,7 +20,6 @@ import {
   listOrders,
   updateOrderStatus,
 } from "@/lib/server/orders";
-import type { OrderStatus } from "@/lib/server/orders.server";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({

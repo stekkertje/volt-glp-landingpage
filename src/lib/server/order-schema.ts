@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ORDER_STATUSES } from "@/lib/order-status";
 
 const collapseWhitespace = (value: string) => value.trim().replace(/\s+/g, " ");
 
@@ -73,13 +74,7 @@ export const orderViewerSchema = z
     message: "Bestelling ontbreekt.",
   });
 
-export const orderStatusSchema = z.enum([
-  "pending",
-  "paid",
-  "packed",
-  "shipped",
-  "cancelled",
-]);
+export const orderStatusSchema = z.enum(ORDER_STATUSES);
 
 export const adminOrderListSchema = z
   .object({

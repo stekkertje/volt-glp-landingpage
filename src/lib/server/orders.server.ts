@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, withSqlTransaction, type Sql } from "@/lib/db";
+import { ORDER_STATUSES, type OrderStatus } from "@/lib/order-status";
 import { calculatePricing, type DiscountCodeRecord } from "@/lib/server/pricing";
 import {
   createOrderSchema,
@@ -7,15 +8,7 @@ import {
   type OrderViewerInput,
 } from "@/lib/server/order-schema";
 
-export const ORDER_STATUSES = [
-  "pending",
-  "paid",
-  "packed",
-  "shipped",
-  "cancelled",
-] as const;
-
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export type { OrderStatus } from "@/lib/order-status";
 
 export type PublicOrderLine = {
   id: string;

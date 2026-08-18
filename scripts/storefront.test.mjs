@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 
 const BASE_URL = "http://127.0.0.1:8080";
+const TEST_ADMIN_PASSWORD = `test-${randomUUID()}`;
+const TEST_ADMIN_SESSION_SECRET = `session-${randomUUID()}-${randomUUID()}`;
 let browser;
 let devServer;
 
@@ -48,8 +51,13 @@ before(async () => {
   if (!(await isHealthy())) {
     devServer = spawn("npm", ["run", "dev"], {
       cwd: process.cwd(),
-      env: process.env,
+      env: {
+        ...process.env,
+        ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
+        ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
+      },
       stdio: "ignore",
+      detached: true,
     });
   }
   await waitForServer();
@@ -61,7 +69,13 @@ before(async () => {
 
 after(async () => {
   await browser?.close();
-  devServer?.kill("SIGTERM");
+  if (devServer?.pid) {
+    try {
+      process.kill(-devServer.pid, "SIGTERM");
+    } catch {
+      // The test-owned process group already exited.
+    }
+  }
 });
 
 test("a related product card always adds one item", async () => {
@@ -599,7 +613,7 @@ test("adding to cart does not show a redundant toast over mobile checkout", asyn
       .getByRole("status")
       .filter({ hasText: "Toegevoegd aan winkelwagen" });
     assert.equal(await toast.count(), 0);
-    await page.getByRole("button", { name: "Veilig afrekenen" }).waitFor({
+    await page.getByRole("link", { name: "Veilig afrekenen" }).waitFor({
       state: "visible",
     });
   } finally {
@@ -631,7 +645,19 @@ test("the mobile menu closes with Escape and navigates to a compound", async () 
   }
 });
 
-test("demo checkout completes without leaving the cart", async () => {
+async function fillCheckout(page, email) {
+  await page.getByLabel("Naam").fill("Noor de Vries");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Telefoon").fill("0612345678");
+  await page.getByLabel("Straat").fill("Teststraat");
+  await page.getByLabel("Huisnummer").fill("12 A");
+  await page.getByLabel("Postcode").fill("1234 AB");
+  await page.getByLabel("Plaats").fill("Utrecht");
+  await page.getByLabel("Land").selectOption("NL");
+  await page.getByLabel(/Opmerking/).fill("Browserregressie voor de checkout.");
+}
+
+test("a product can be ordered and only its authorized guest sees confirmation", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
@@ -641,11 +667,115 @@ test("demo checkout completes without leaving the cart", async () => {
       .getByRole("button", { name: /^In winkelwagen/ })
       .first()
       .click();
-    await page.getByRole("button", { name: "Veilig afrekenen" }).click();
-    await page.getByText("Demo-checkout").waitFor({ state: "visible" });
+    await page.getByRole("link", { name: "Veilig afrekenen" }).click();
+    await page.waitForURL(`${BASE_URL}/checkout`);
+    await fillCheckout(page, `checkout-${randomUUID()}@example.test`);
+    const placeOrder = page.getByRole("button", { name: "Bestelling plaatsen" });
+    await placeOrder.waitFor({ state: "visible" });
+    await assert.doesNotReject(async () => {
+      await placeOrder.click();
+      await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    });
+
+    const orderNumber = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
+    assert.match(orderNumber, /^VOLT-[A-Z0-9]{8}$/);
+    await page.getByRole("heading", { name: "Bewaar je herstelcode" }).waitFor();
+    const recoveryCode = (await page.locator("code").innerText()).trim();
+    assert.deepEqual((await cartState(page)).lines, []);
+
+    const orderUrl = page.url();
+    const denied = await newPage();
+    try {
+      await denied.page.goto(orderUrl, { waitUntil: "networkidle" });
+      await denied.page
+        .getByRole("heading", { name: "Bestelling niet beschikbaar" })
+        .waitFor();
+      assert.equal(await denied.page.getByText(orderNumber, { exact: true }).count(), 0);
+
+      await denied.page.goto(`${BASE_URL}/account`, { waitUntil: "networkidle" });
+      await denied.page.getByLabel("Bestelnummer").fill(orderNumber);
+      await denied.page.getByLabel("Herstelcode").fill(recoveryCode);
+      await denied.page.getByRole("button", { name: "Bestelling bekijken" }).click();
+      await denied.page.waitForURL(/\/bestelling\/[^/]+$/);
+      await denied.page.getByRole("heading", { name: orderNumber }).waitFor();
+    } finally {
+      await denied.context.close();
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("a checkout request failure keeps the cart intact", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
     await page
-      .getByRole("dialog", { name: "Winkelwagen" })
-      .waitFor({ state: "visible" });
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.getByRole("link", { name: "Veilig afrekenen" }).click();
+    await page.waitForURL(`${BASE_URL}/checkout`);
+    await fillCheckout(page, `mislukt-${randomUUID()}@example.test`);
+    const placeOrder = page.getByRole("button", { name: "Bestelling plaatsen" });
+    await placeOrder.waitFor({ state: "visible" });
+
+    await page.route("**/*", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.abort();
+      } else {
+        await route.continue();
+      }
+    });
+    await placeOrder.click();
+    await page.getByText(/Je winkelwagen is bewaard/).waitFor();
+    assert.equal((await cartState(page)).lines.length, 1);
+  } finally {
+    await context.close();
+  }
+});
+
+test("contact is stored and only an authenticated admin can handle it", async () => {
+  const { context, page } = await newPage();
+  const uniqueMessage = `Contacttest ${randomUUID()} met voldoende tekens.`;
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page
+      .getByRole("button", { name: "Contact", exact: true })
+      .last()
+      .click();
+    await page.getByLabel("Naam").fill("Contact Tester");
+    await page.getByLabel("E-mail").fill(`contact-${randomUUID()}@example.test`);
+    await page.getByLabel("Bericht").fill(uniqueMessage);
+    await page.getByRole("button", { name: "Verstuur bericht" }).click();
+    await page.getByText("Bericht verstuurd").waitFor();
+
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Inloggen" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Shopbeheer" }).count(), 0);
+    assert.equal(
+      await page.evaluate(async () => {
+        try {
+          const { listOrders } = await import("/src/lib/server/orders.ts");
+          await listOrders({ data: { status: "all", page: 1, pageSize: 20 } });
+          return false;
+        } catch {
+          return true;
+        }
+      }),
+      true,
+    );
+
+    await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Inloggen" }).click();
+    await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+    await page.getByRole("button", { name: "Contact" }).click();
+    await page.getByText(uniqueMessage).waitFor();
+    await page.getByRole("button", { name: "Markeer afgehandeld" }).click();
+    await page.getByRole("button", { name: "Afgehandeld", exact: true }).click();
+    await page.getByText(uniqueMessage).waitFor();
   } finally {
     await context.close();
   }

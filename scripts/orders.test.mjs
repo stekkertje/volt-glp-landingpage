@@ -7,6 +7,7 @@ let vite;
 let getSql;
 let createOrderRecord;
 let getOrderRecordForViewer;
+let updateOrderStatusRecord;
 
 function orderInput(overrides = {}) {
   const unique = randomUUID();
@@ -34,9 +35,11 @@ before(async () => {
     server: { middlewareMode: true },
   });
   ({ getSql } = await vite.ssrLoadModule("/src/lib/db.ts"));
-  ({ createOrderRecord, getOrderRecordForViewer } = await vite.ssrLoadModule(
-    "/src/lib/server/orders.server.ts",
-  ));
+  ({
+    createOrderRecord,
+    getOrderRecordForViewer,
+    updateOrderStatusRecord,
+  } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
 });
 
 after(async () => {
@@ -176,5 +179,16 @@ test("a wrong recovery code does not expose an order", async () => {
       isAdmin: false,
     }),
     /niet gevonden|toegankelijk/i,
+  );
+});
+
+test("admin status updates accept only known order statuses", async () => {
+  const created = await createOrderRecord(orderInput(), { userId: null });
+  const updated = await updateOrderStatusRecord(created.order.id, "paid");
+  assert.equal(updated.status, "paid");
+
+  await assert.rejects(
+    updateOrderStatusRecord(created.order.id, "onbekend"),
+    /ongeldige bestelstatus/i,
   );
 });
