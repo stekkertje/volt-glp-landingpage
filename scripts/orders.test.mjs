@@ -185,12 +185,41 @@ test("an idempotent retry returns the same guest proof without minting another",
   assert.ok(tokens.every((row) => row.token_hash !== first.guestAccessToken));
 });
 
+test("a replay collapses multiple active proofs to one", async () => {
+  const input = orderInput();
+  const created = await createOrderRecord(input, { userId: null });
+  const sql = await getSql();
+  await sql.query(
+    `insert into order_access_tokens (
+      id, order_id, token_hash, token_ciphertext, issued_at, expires_at, revoked_at
+    )
+    select $1, order_id, $2, null, issued_at - interval '1 minute', expires_at, null
+    from order_access_tokens
+    where order_id = $3 and revoked_at is null`,
+    [randomUUID(), "f".repeat(64), created.order.id],
+  );
+
+  const replay = await createOrderRecord(input, { userId: null });
+  assert.equal(replay.guestAccessToken, created.guestAccessToken);
+  const active = await sql.query(
+    `select token_hash
+     from order_access_tokens
+     where order_id = $1 and revoked_at is null and expires_at > now()`,
+    [created.order.id],
+  );
+  assert.equal(active.length, 1);
+});
+
 test("concurrent legacy-token retries share one replacement proof", async () => {
   const input = orderInput();
   const created = await createOrderRecord(input, { userId: null });
   const sql = await getSql();
   await sql.query(
     "update order_access_tokens set token_ciphertext = null where order_id = $1",
+    [created.order.id],
+  );
+  const before = await sql.query(
+    "select expires_at from order_access_tokens where order_id = $1 and revoked_at is null",
     [created.order.id],
   );
 
@@ -202,12 +231,159 @@ test("concurrent legacy-token retries share one replacement proof", async () => 
   assert.equal(firstReplay.guestAccessToken, secondReplay.guestAccessToken);
   assert.notEqual(firstReplay.guestAccessToken, created.guestAccessToken);
   const activeTokens = await sql.query(
-    `select count(*)::int as count
+    `select expires_at
      from order_access_tokens
      where order_id = $1 and revoked_at is null and expires_at > now()`,
     [created.order.id],
   );
-  assert.deepEqual(activeTokens, [{ count: 1 }]);
+  assert.equal(activeTokens.length, 1);
+  assert.equal(
+    new Date(activeTokens[0].expires_at).getTime(),
+    new Date(before[0].expires_at).getTime(),
+  );
+});
+
+test("an expired idempotent replay never mints a fresh recovery window", async () => {
+  const input = orderInput();
+  const created = await createOrderRecord(input, { userId: null });
+  const sql = await getSql();
+  await sql.query(
+    `update order_access_tokens
+     set issued_at = now() - interval '73 hours',
+         expires_at = now() - interval '1 hour'
+     where order_id = $1`,
+    [created.order.id],
+  );
+
+  await assert.rejects(
+    createOrderRecord(input, { userId: null }),
+    /toegang.*verlopen|verlopen/i,
+  );
+  const tokens = await sql.query(
+    `select expires_at, revoked_at
+     from order_access_tokens
+     where order_id = $1`,
+    [created.order.id],
+  );
+  assert.equal(tokens.length, 1);
+  assert.ok(new Date(tokens[0].expires_at).getTime() < Date.now());
+  assert.equal(tokens[0].revoked_at, null);
+});
+
+test("key rotation rewraps ciphertext without changing or revoking the proof", async () => {
+  const previousCurrent = process.env.ORDER_ACCESS_TOKEN_SECRET;
+  const previousKeyring = process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+  const oldSecret = `oud-${"a".repeat(40)}`;
+  const newSecret = `nieuw-${"b".repeat(40)}`;
+  try {
+    process.env.ORDER_ACCESS_TOKEN_SECRET = oldSecret;
+    delete process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+    const input = orderInput();
+    const created = await createOrderRecord(input, { userId: null });
+    const sql = await getSql();
+    const before = await sql.query(
+      `select token_ciphertext, expires_at
+       from order_access_tokens
+       where order_id = $1 and revoked_at is null`,
+      [created.order.id],
+    );
+
+    process.env.ORDER_ACCESS_TOKEN_SECRET = newSecret;
+    process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS = oldSecret;
+    const replay = await createOrderRecord(input, { userId: null });
+
+    assert.equal(replay.guestAccessToken, created.guestAccessToken);
+    const after = await sql.query(
+      `select token_ciphertext, expires_at, revoked_at
+       from order_access_tokens
+       where order_id = $1`,
+      [created.order.id],
+    );
+    assert.equal(after.length, 1);
+    assert.notEqual(after[0].token_ciphertext, before[0].token_ciphertext);
+    assert.equal(
+      new Date(after[0].expires_at).getTime(),
+      new Date(before[0].expires_at).getTime(),
+    );
+    assert.equal(after[0].revoked_at, null);
+  } finally {
+    if (previousCurrent === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_SECRET = previousCurrent;
+    }
+    if (previousKeyring === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS = previousKeyring;
+    }
+  }
+});
+
+test("an unreadable active ciphertext fails without revoking its valid hash", async () => {
+  const previousCurrent = process.env.ORDER_ACCESS_TOKEN_SECRET;
+  const previousKeyring = process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+  try {
+    process.env.ORDER_ACCESS_TOKEN_SECRET = `eerste-${"c".repeat(40)}`;
+    delete process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+    const input = orderInput();
+    const created = await createOrderRecord(input, { userId: null });
+
+    process.env.ORDER_ACCESS_TOKEN_SECRET = `tweede-${"d".repeat(40)}`;
+    await assert.rejects(
+      createOrderRecord(input, { userId: null }),
+      /niet veilig opnieuw|beheerder/i,
+    );
+
+    const stillAccessible = await getOrderRecordForViewer({
+      id: created.order.id,
+      accessCode: created.guestAccessToken,
+      userId: null,
+      isAdmin: false,
+    });
+    assert.equal(stillAccessible.id, created.order.id);
+    const sql = await getSql();
+    const tokens = await sql.query(
+      "select revoked_at from order_access_tokens where order_id = $1",
+      [created.order.id],
+    );
+    assert.deepEqual(tokens, [{ revoked_at: null }]);
+  } finally {
+    if (previousCurrent === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_SECRET = previousCurrent;
+    }
+    if (previousKeyring === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS = previousKeyring;
+    }
+  }
+});
+
+test("a persistent database refuses to issue tokens without an explicit secret", async () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousCurrent = process.env.ORDER_ACCESS_TOKEN_SECRET;
+  try {
+    process.env.DATABASE_URL = "postgres://configured.example/volt";
+    delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    await assert.rejects(
+      createOrderRecord(orderInput(), { userId: null }),
+      /ORDER_ACCESS_TOKEN_SECRET.*verplicht/i,
+    );
+  } finally {
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+    if (previousCurrent === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_SECRET = previousCurrent;
+    }
+  }
 });
 
 test("canonical normalization treats equivalent retry payloads as identical", async () => {

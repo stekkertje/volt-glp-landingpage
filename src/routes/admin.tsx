@@ -16,6 +16,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
@@ -132,12 +133,17 @@ function AdminFrame({ children }: { children: ReactNode }) {
               VOLT<span className="text-primary">.</span> Beheer
             </span>
           </Link>
-          <Link to="/" className="text-sm font-semibold text-muted hover:text-fg">
+          <Link
+            to="/"
+            className="text-sm font-semibold text-muted hover:text-fg"
+          >
             Terug naar winkel
           </Link>
         </div>
       </header>
-      <main className="container-max section-pad py-8 md:py-12">{children}</main>
+      <main className="container-max section-pad py-8 md:py-12">
+        {children}
+      </main>
     </div>
   );
 }
@@ -160,7 +166,9 @@ function AdminLogin({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
           Beveiligd beheer
         </p>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Inloggen</h1>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
+          Inloggen
+        </h1>
         <p className="mt-2 text-sm text-muted">
           {allowlistConfigured
             ? "Log in met een toegestaan account om het beheer te openen."
@@ -183,7 +191,9 @@ function AdminLogin({
     setError("");
     const fields = new FormData(event.currentTarget);
     try {
-      await loginAdmin({ data: { password: String(fields.get("password") ?? "") } });
+      await loginAdmin({
+        data: { password: String(fields.get("password") ?? "") },
+      });
       await onSuccess();
     } catch (caught) {
       setError(
@@ -208,7 +218,10 @@ function AdminLogin({
         Alleen beheerders kunnen bestellingen en contactberichten bekijken.
       </p>
       {error && (
-        <p role="alert" className="mt-4 rounded-lg border border-danger/25 bg-danger/5 p-3 text-sm text-danger">
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-danger/25 bg-danger/5 p-3 text-sm text-danger"
+        >
           {error}
         </p>
       )}
@@ -250,6 +263,8 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [contactsLoading, setContactsLoading] = useState(false);
   const summaryRequestSequence = useRef(0);
+  const ordersTabRef = useRef<HTMLButtonElement>(null);
+  const contactTabRef = useRef<HTMLButtonElement>(null);
   const refreshBusy =
     refreshing || (tab === "orders" ? ordersLoading : contactsLoading);
 
@@ -293,6 +308,22 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     (loading: boolean) => setContactsLoading(loading),
     [],
   );
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    let nextTab: "orders" | "contact" | null = null;
+    if (event.key === "Home") {
+      nextTab = "orders";
+    } else if (event.key === "End") {
+      nextTab = "contact";
+    } else if (event.key === "ArrowLeft") {
+      nextTab = tab === "orders" ? "contact" : "orders";
+    } else if (event.key === "ArrowRight") {
+      nextTab = tab === "contact" ? "orders" : "contact";
+    }
+    if (!nextTab) return;
+    event.preventDefault();
+    setTab(nextTab);
+    (nextTab === "orders" ? ordersTabRef : contactTabRef).current?.focus();
+  };
 
   return (
     <div>
@@ -301,7 +332,9 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
             Dashboard
           </p>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Shopbeheer</h1>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
+            Shopbeheer
+          </h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -362,9 +395,14 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         aria-label="Beheeronderdelen"
       >
         <button
+          ref={ordersTabRef}
+          id="admin-orders-tab"
           type="button"
           role="tab"
           aria-selected={tab === "orders"}
+          aria-controls="admin-orders-panel"
+          tabIndex={tab === "orders" ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => setTab("orders")}
           className={`border-b-2 px-3 py-3 text-sm font-semibold ${
             tab === "orders"
@@ -376,9 +414,14 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           Bestellingen
         </button>
         <button
+          ref={contactTabRef}
+          id="admin-contact-tab"
           type="button"
           role="tab"
           aria-selected={tab === "contact"}
+          aria-controls="admin-contact-panel"
+          tabIndex={tab === "contact" ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => setTab("contact")}
           className={`border-b-2 px-3 py-3 text-sm font-semibold ${
             tab === "contact"
@@ -392,19 +435,31 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       </div>
 
       {tab === "orders" ? (
-        <OrdersAdmin
-          onUnauthorized={onUnauthorized}
-          refreshVersion={refreshVersion}
-          onDataChanged={refreshAll}
-          onLoadingChange={handleOrdersLoading}
-        />
+        <div
+          id="admin-orders-panel"
+          role="tabpanel"
+          aria-labelledby="admin-orders-tab"
+        >
+          <OrdersAdmin
+            onUnauthorized={onUnauthorized}
+            refreshVersion={refreshVersion}
+            onDataChanged={refreshAll}
+            onLoadingChange={handleOrdersLoading}
+          />
+        </div>
       ) : (
-        <ContactAdmin
-          onUnauthorized={onUnauthorized}
-          refreshVersion={refreshVersion}
-          onDataChanged={refreshAll}
-          onLoadingChange={handleContactsLoading}
-        />
+        <div
+          id="admin-contact-panel"
+          role="tabpanel"
+          aria-labelledby="admin-contact-tab"
+        >
+          <ContactAdmin
+            onUnauthorized={onUnauthorized}
+            refreshVersion={refreshVersion}
+            onDataChanged={refreshAll}
+            onLoadingChange={handleContactsLoading}
+          />
+        </div>
       )}
     </div>
   );
@@ -428,7 +483,9 @@ function OrdersAdmin({
   const [result, setResult] = useState<OrderListResult | null>(null);
   const [selected, setSelected] = useState<AdminOrder | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
-  const [detailRequestedId, setDetailRequestedId] = useState<string | null>(null);
+  const [detailRequestedId, setDetailRequestedId] = useState<string | null>(
+    null,
+  );
   const [detailSaving, setDetailSaving] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -587,9 +644,7 @@ function OrdersAdmin({
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        disabled={
-                          detailSaving || detailLoadingId === order.id
-                        }
+                        disabled={detailSaving || detailLoadingId === order.id}
                         onClick={() => void openOrder(order.id)}
                         className="font-bold text-primary underline-offset-4 hover:underline disabled:opacity-60"
                         aria-label={`Bekijk bestelling ${order.orderNumber}`}
@@ -627,19 +682,27 @@ function OrdersAdmin({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-extrabold text-primary">{order.orderNumber}</p>
-                    <p className="mt-1 text-xs text-muted">{formatDate(order.createdAt)}</p>
+                    <p className="font-extrabold text-primary">
+                      {order.orderNumber}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {formatDate(order.createdAt)}
+                    </p>
                   </div>
                   <OrderStatusBadge status={order.status} />
                 </div>
                 <p className="mt-3 text-sm font-semibold">{order.name}</p>
                 <p className="break-all text-xs text-muted">{order.email}</p>
-                <p className="mt-2 text-sm font-bold">{formatEuro(order.totalCents)}</p>
+                <p className="mt-2 text-sm font-bold">
+                  {formatEuro(order.totalCents)}
+                </p>
               </button>
             ))}
           </div>
           {result?.orders.length === 0 && (
-            <p className="mt-6 text-sm text-muted">Geen bestellingen gevonden.</p>
+            <p className="mt-6 text-sm text-muted">
+              Geen bestellingen gevonden.
+            </p>
           )}
           {result && (
             <Pagination
@@ -652,7 +715,10 @@ function OrdersAdmin({
       )}
 
       {detailLoadingId && (
-        <p className="mt-5 inline-flex items-center gap-2 text-sm text-muted" role="status">
+        <p
+          className="mt-5 inline-flex items-center gap-2 text-sm text-muted"
+          role="status"
+        >
           <Loader2 className="size-4 animate-spin" />
           Bestelling openen…
         </p>
@@ -725,7 +791,9 @@ function OrderAdminDetail({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-muted">Besteldetail</p>
-          <h2 className="text-xl font-extrabold tracking-tight">{order.orderNumber}</h2>
+          <h2 className="text-xl font-extrabold tracking-tight">
+            {order.orderNumber}
+          </h2>
         </div>
         <Button
           type="button"
@@ -747,9 +815,7 @@ function OrderAdminDetail({
               className={inputClass}
               disabled={saving}
             >
-              <option value={order.status}>
-                Kies een volgende status
-              </option>
+              <option value={order.status}>Kies een volgende status</option>
               {nextStatuses.map((value) => (
                 <option key={value} value={value}>
                   {ORDER_STATUS_LABELS[value]}
@@ -774,12 +840,12 @@ function OrderAdminDetail({
               setSuccess("");
               try {
                 const updated = await updateOrderStatus({
-                    data: {
-                      id: order.id,
-                      expectedStatus: order.status,
-                      status,
-                    },
-                  });
+                  data: {
+                    id: order.id,
+                    expectedStatus: order.status,
+                    status,
+                  },
+                });
                 onUpdated(updated);
                 setSuccess(
                   `Status bijgewerkt naar ${ORDER_STATUS_LABELS[updated.status]}.`,
@@ -806,9 +872,17 @@ function OrderAdminDetail({
           Deze status is definitief en kan niet meer worden gewijzigd.
         </p>
       )}
-      {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
       {success && (
-        <p role="status" aria-live="polite" className="mt-3 text-sm text-success">
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-3 text-sm text-success"
+        >
           {success}
         </p>
       )}
@@ -871,9 +945,14 @@ function ContactAdmin({
 
   return (
     <section className="mt-6">
-      <div className="inline-flex rounded-full border border-border bg-surface p-1">
+      <div
+        className="inline-flex rounded-full border border-border bg-surface p-1"
+        role="group"
+        aria-label="Contactberichten filteren"
+      >
         <button
           type="button"
+          aria-pressed={!handled}
           disabled={savingId !== null}
           onClick={() => {
             setHandled(false);
@@ -887,6 +966,7 @@ function ContactAdmin({
         </button>
         <button
           type="button"
+          aria-pressed={handled}
           disabled={savingId !== null}
           onClick={() => {
             setHandled(true);
@@ -900,7 +980,11 @@ function ContactAdmin({
         </button>
       </div>
       {success && (
-        <p role="status" aria-live="polite" className="mt-4 text-sm text-success">
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-4 text-sm text-success"
+        >
           {success}
         </p>
       )}
@@ -921,8 +1005,12 @@ function ContactAdmin({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-bold">{message.name}</p>
-                  <p className="break-all text-xs text-muted">{message.email}</p>
-                  <p className="mt-1 text-xs text-dim">{formatDate(message.createdAt)}</p>
+                  <p className="break-all text-xs text-muted">
+                    {message.email}
+                  </p>
+                  <p className="mt-1 text-xs text-dim">
+                    {formatDate(message.createdAt)}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -972,7 +1060,9 @@ function ContactAdmin({
             </article>
           ))}
           {result?.messages.length === 0 && (
-            <p className="text-sm text-muted">Geen contactberichten in deze lijst.</p>
+            <p className="text-sm text-muted">
+              Geen contactberichten in deze lijst.
+            </p>
           )}
           {result && (
             <Pagination

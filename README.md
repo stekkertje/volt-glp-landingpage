@@ -25,10 +25,36 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 
 - `DATABASE_URL` is verplicht in iedere production runtime en deployment.
 - PGLite wordt uitsluitend gebruikt tijdens lokale development en tests.
+- `ORDER_ACCESS_TOKEN_SECRET` is verplicht naast een persistente database en
+  moet een afzonderlijk, stabiel geheim van minimaal 32 tekens zijn. Genereer
+  bijvoorbeeld 32 willekeurige bytes; hergebruik `DATABASE_URL` of een
+  authenticatiegeheim niet.
+- Draai dit geheim veilig door eerst de nieuwe waarde in
+  `ORDER_ACCESS_TOKEN_SECRET` te zetten en de vorige waarde tijdelijk op te
+  nemen in `ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS` (kommagescheiden). Laat oude
+  waarden minimaal 72 uur staan. Een replay versleutelt een geldige code
+  automatisch opnieuw met de actuele sleutel zonder die code in te trekken.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
 - Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
 - Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
+
+### Database-upgradecontrole
+
+Migratie `0007_review_hardening.sql` stopt bewust wanneer historische
+bestellingen dezelfde productvariant meer dan eenmaal bevatten. Controleer dit
+voor een productie-upgrade:
+
+```sql
+select order_id, slug, option_id, count(*) as aantal
+from order_lines
+group by order_id, slug, option_id
+having count(*) > 1;
+```
+
+Los iedere gevonden bestelling handmatig en controleerbaar op voordat de
+migratie opnieuw draait. De migratie verwijdert of combineert nooit stil
+historische orderregels.
 
 ## Catalogus
 

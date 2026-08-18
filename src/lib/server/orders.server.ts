@@ -125,6 +125,7 @@ const ORDER_ACCESS_ERROR = "Bestelling niet gevonden of niet toegankelijk.";
 export const GUEST_ACCESS_TOKEN_TTL_MS = 72 * 60 * 60 * 1_000;
 const TOKEN_CIPHER_VERSION = "v1";
 const TOKEN_CIPHER_CONTEXT = "volt-order-access-token";
+const ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH = 32;
 
 const globalOrderSecurity = globalThis as typeof globalThis & {
   __voltOrderAccessTokenSecret__?: Buffer;
@@ -143,6 +144,26 @@ export class IdempotencyConflictError extends Error {
   constructor() {
     super("Deze herhaalcode hoort bij een andere bestelling.");
     this.name = "IdempotencyConflictError";
+  }
+}
+
+export class IdempotencyReplayExpiredError extends Error {
+  readonly status = 410;
+
+  constructor() {
+    super("De tijdelijke toegang tot deze bestelling is verlopen.");
+    this.name = "IdempotencyReplayExpiredError";
+  }
+}
+
+export class IdempotencyReplayUnavailableError extends Error {
+  readonly status = 503;
+
+  constructor() {
+    super(
+      "De bestaande bestelling kan niet veilig opnieuw worden geopend. Neem contact op met de beheerder.",
+    );
+    this.name = "IdempotencyReplayUnavailableError";
   }
 }
 
@@ -190,25 +211,101 @@ export function hashGuestAccessToken(token: string): string {
   return sha256(normalizeGuestAccessToken(token));
 }
 
-function accessTokenEncryptionKey(): Buffer {
-  const configuredSecret =
-    process.env.ORDER_ACCESS_TOKEN_SECRET?.trim() ||
-    process.env.BETTER_AUTH_SECRET?.trim() ||
-    process.env.DATABASE_URL?.trim();
-  if (configuredSecret) {
-    return createHash("sha256")
-      .update(TOKEN_CIPHER_CONTEXT)
-      .update("\0")
-      .update(configuredSecret)
-      .digest();
+function deriveAccessTokenEncryptionKey(secret: string): Buffer {
+  return createHash("sha256")
+    .update(TOKEN_CIPHER_CONTEXT)
+    .update("\0")
+    .update(secret)
+    .digest();
+}
+
+function configuredPreviousAccessTokenSecrets(): string[] {
+  return (process.env.ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS ?? "")
+    .split(",")
+    .map((secret) => secret.trim())
+    .filter(Boolean);
+}
+
+function stableAccessTokenSecretRequired(): boolean {
+  const localBuild =
+    ["build", "db:migrate"].includes(process.env.npm_lifecycle_event ?? "") &&
+    process.env.VERCEL !== "1" &&
+    process.env.NETLIFY !== "true" &&
+    process.env.REQUIRE_DATABASE !== "1" &&
+    process.env.REQUIRE_DATABASE?.toLowerCase() !== "true";
+  return Boolean(
+    process.env.DATABASE_URL?.trim() ||
+    process.env.VERCEL === "1" ||
+    process.env.NETLIFY === "true" ||
+    process.env.REQUIRE_DATABASE === "1" ||
+    process.env.REQUIRE_DATABASE?.toLowerCase() === "true" ||
+    (process.env.NODE_ENV === "production" && !localBuild),
+  );
+}
+
+function configuredCurrentAccessTokenSecret(): string | null {
+  const secret = process.env.ORDER_ACCESS_TOKEN_SECRET?.trim() || null;
+  if (secret && secret.length < ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `ORDER_ACCESS_TOKEN_SECRET moet minimaal ${ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH} tekens bevatten.`,
+    );
   }
+  for (const previousSecret of configuredPreviousAccessTokenSecrets()) {
+    if (previousSecret.length < ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH) {
+      throw new Error(
+        `Iedere waarde in ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS moet minimaal ${ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH} tekens bevatten.`,
+      );
+    }
+  }
+  if (!secret && stableAccessTokenSecretRequired()) {
+    throw new Error(
+      "ORDER_ACCESS_TOKEN_SECRET is verplicht bij een persistente of production database.",
+    );
+  }
+  return secret;
+}
+
+function developmentAccessTokenEncryptionKey(): Buffer {
   globalOrderSecurity.__voltOrderAccessTokenSecret__ ??= randomBytes(32);
   return globalOrderSecurity.__voltOrderAccessTokenSecret__;
 }
 
+function currentAccessTokenEncryptionKey(): Buffer {
+  const configuredSecret = configuredCurrentAccessTokenSecret();
+  return configuredSecret
+    ? deriveAccessTokenEncryptionKey(configuredSecret)
+    : developmentAccessTokenEncryptionKey();
+}
+
+// Fail a persistent/production deployment during module bootstrap rather than
+// discovering a missing or weak key on the first checkout request.
+configuredCurrentAccessTokenSecret();
+
+function accessTokenDecryptionKeys(): Buffer[] {
+  const keys: Buffer[] = [currentAccessTokenEncryptionKey()];
+  const legacySecrets = [
+    ...configuredPreviousAccessTokenSecrets(),
+    process.env.BETTER_AUTH_SECRET?.trim(),
+    process.env.DATABASE_URL?.trim(),
+  ].filter((secret): secret is string => Boolean(secret));
+  for (const secret of legacySecrets) {
+    const candidate = deriveAccessTokenEncryptionKey(secret);
+    if (!keys.some((key) => key.equals(candidate))) keys.push(candidate);
+  }
+  const developmentKey = globalOrderSecurity.__voltOrderAccessTokenSecret__;
+  if (developmentKey && !keys.some((key) => key.equals(developmentKey))) {
+    keys.push(developmentKey);
+  }
+  return keys;
+}
+
 function encryptGuestAccessToken(orderId: string, token: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", accessTokenEncryptionKey(), iv);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    currentAccessTokenEncryptionKey(),
+    iv,
+  );
   cipher.setAAD(Buffer.from(`${TOKEN_CIPHER_CONTEXT}\0${orderId}`, "utf8"));
   const ciphertext = Buffer.concat([
     cipher.update(token, "utf8"),
@@ -225,7 +322,7 @@ function encryptGuestAccessToken(orderId: string, token: string): string {
 function decryptGuestAccessToken(
   orderId: string,
   encryptedToken: string,
-): string | null {
+): { token: string; keyIndex: number } | null {
   const [version, ivValue, tagValue, ciphertextValue, ...extra] =
     encryptedToken.split(".");
   if (
@@ -237,21 +334,28 @@ function decryptGuestAccessToken(
   ) {
     return null;
   }
-  try {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      accessTokenEncryptionKey(),
-      Buffer.from(ivValue, "base64url"),
-    );
-    decipher.setAAD(Buffer.from(`${TOKEN_CIPHER_CONTEXT}\0${orderId}`, "utf8"));
-    decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextValue, "base64url")),
-      decipher.final(),
-    ]).toString("utf8");
-  } catch {
-    return null;
+  const keys = accessTokenDecryptionKeys();
+  for (const [keyIndex, key] of keys.entries()) {
+    try {
+      const decipher = createDecipheriv(
+        "aes-256-gcm",
+        key,
+        Buffer.from(ivValue, "base64url"),
+      );
+      decipher.setAAD(
+        Buffer.from(`${TOKEN_CIPHER_CONTEXT}\0${orderId}`, "utf8"),
+      );
+      decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
+      const token = Buffer.concat([
+        decipher.update(Buffer.from(ciphertextValue, "base64url")),
+        decipher.final(),
+      ]).toString("utf8");
+      return { token, keyIndex };
+    } catch {
+      // Try the next configured rotation or legacy key.
+    }
   }
+  return null;
 }
 
 function canonicalPayloadHash(input: CreateOrderInput): string {
@@ -295,20 +399,11 @@ async function issueAccessToken(
   orderId: string,
   token: string,
   issuedAt: Date,
+  expiresAt = new Date(issuedAt.getTime() + GUEST_ACCESS_TOKEN_TTL_MS),
 ): Promise<void> {
-  const expiresAt = new Date(issuedAt.getTime() + GUEST_ACCESS_TOKEN_TTL_MS);
-  await sql`
-    delete from order_access_tokens
-    where order_id = ${orderId}
-      and (expires_at <= ${issuedAt.toISOString()} or revoked_at is not null)
-  `;
-  await sql`
-    update order_access_tokens
-    set revoked_at = ${issuedAt.toISOString()}
-    where order_id = ${orderId}
-      and revoked_at is null
-      and expires_at > ${issuedAt.toISOString()}
-  `;
+  if (expiresAt.getTime() <= issuedAt.getTime()) {
+    throw new IdempotencyReplayExpiredError();
+  }
   await sql`
     insert into order_access_tokens (
       id, order_id, token_hash, token_ciphertext, issued_at, expires_at, revoked_at
@@ -320,28 +415,89 @@ async function issueAccessToken(
   `;
 }
 
-async function reusableAccessToken(
+type ReplayAccessTokenState =
+  | { kind: "active"; token: string }
+  | { kind: "legacy"; id: string; expiresAt: Date }
+  | { kind: "expired" }
+  | { kind: "missing" }
+  | { kind: "corrupt" };
+
+async function replayAccessTokenState(
   sql: Sql,
   orderId: string,
-): Promise<string | null> {
+): Promise<ReplayAccessTokenState> {
   const rows = await sql<{
+    id: string;
     token_hash: string;
     token_ciphertext: string | null;
+    expires_at: Date | string;
+    active: boolean;
   }>`
-    select token_hash, token_ciphertext
+    select id, token_hash, token_ciphertext, expires_at,
+      (revoked_at is null and expires_at > now()) as active
     from order_access_tokens
     where order_id = ${orderId}
-      and revoked_at is null
-      and expires_at > now()
-    order by issued_at desc
+    order by (revoked_at is null and expires_at > now()) desc, issued_at desc
     limit 1
   `;
   const row = rows[0];
-  if (!row?.token_ciphertext) return null;
-  const token = decryptGuestAccessToken(orderId, row.token_ciphertext);
-  if (!token || !hashMatches(hashGuestAccessToken(token), row.token_hash)) {
-    return null;
+  if (!row) return { kind: "missing" };
+  if (!row.active) return { kind: "expired" };
+  if (!row.token_ciphertext) {
+    return {
+      kind: "legacy",
+      id: row.id,
+      expiresAt: new Date(row.expires_at),
+    };
   }
+  const decrypted = decryptGuestAccessToken(orderId, row.token_ciphertext);
+  if (
+    !decrypted ||
+    !hashMatches(hashGuestAccessToken(decrypted.token), row.token_hash)
+  ) {
+    return { kind: "corrupt" };
+  }
+  if (decrypted.keyIndex > 0) {
+    await sql`
+      update order_access_tokens
+      set token_ciphertext = ${encryptGuestAccessToken(orderId, decrypted.token)}
+      where id = ${row.id}
+        and token_ciphertext = ${row.token_ciphertext}
+    `;
+  }
+  await sql`
+    update order_access_tokens
+    set revoked_at = now()
+    where order_id = ${orderId}
+      and id <> ${row.id}
+      and revoked_at is null
+      and expires_at > now()
+  `;
+  return { kind: "active", token: decrypted.token };
+}
+
+async function replaceLegacyAccessToken(
+  sql: Sql,
+  orderId: string,
+  legacy: Extract<ReplayAccessTokenState, { kind: "legacy" }>,
+): Promise<string> {
+  const issuedAt = new Date();
+  if (legacy.expiresAt.getTime() <= issuedAt.getTime()) {
+    throw new IdempotencyReplayExpiredError();
+  }
+  const revoked = await sql<{ id: string }>`
+    update order_access_tokens
+    set revoked_at = ${issuedAt.toISOString()}
+    where order_id = ${orderId}
+      and revoked_at is null
+      and expires_at > ${issuedAt.toISOString()}
+    returning id
+  `;
+  if (!revoked.some((row) => row.id === legacy.id)) {
+    throw new IdempotencyReplayExpiredError();
+  }
+  const token = generateGuestAccessToken();
+  await issueAccessToken(sql, orderId, token, issuedAt, legacy.expiresAt);
   return token;
 }
 
@@ -469,12 +625,28 @@ async function replayExistingOrder(
   ) {
     throw new IdempotencyConflictError();
   }
-  let guestAccessToken = await reusableAccessToken(sql, existing.id);
-  if (!guestAccessToken) {
-    // Legacy rows have only a one-way hash. A replacement is unavoidable there;
-    // revoke the old proof so a replay can never accumulate valid 72-hour tokens.
-    guestAccessToken = generateGuestAccessToken();
-    await issueAccessToken(sql, existing.id, guestAccessToken, new Date());
+  const tokenState = await replayAccessTokenState(sql, existing.id);
+  let guestAccessToken: string;
+  switch (tokenState.kind) {
+    case "active":
+      guestAccessToken = tokenState.token;
+      break;
+    case "legacy":
+      // Legacy hashes cannot reveal the original proof. Replace it once, under
+      // the order lock, but never extend the original access deadline.
+      guestAccessToken = await replaceLegacyAccessToken(
+        sql,
+        existing.id,
+        tokenState,
+      );
+      break;
+    case "expired":
+      throw new IdempotencyReplayExpiredError();
+    case "missing":
+    case "corrupt":
+      // Missing/undecryptable ciphertext is an operational incident, not a
+      // legacy row. Fail without revoking the still-valid hashed proof.
+      throw new IdempotencyReplayUnavailableError();
   }
   const row = await loadOrderById(sql, existing.id);
   return row

@@ -11,11 +11,44 @@ import {
   updateOrderStatusSchema,
 } from "@/lib/server/order-schema";
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
+import {
+  createPublicServerErrorMiddleware,
+  ORDER_CONFLICT_ERROR_MESSAGE,
+  type PublicServerErrorPolicy,
+} from "@/lib/server-error";
+
+export const ORDER_SERVER_ERROR_POLICY = {
+  fallbackMessage: "De bestelling kon niet worden verwerkt.",
+  allowedNames: new Set([
+    "IdempotencyReplayExpiredError",
+    "IdempotencyReplayUnavailableError",
+    "OrderAccessError",
+    "OrderStatusConflictError",
+    "OrderStatusTransitionError",
+    "PricingError",
+  ]),
+  messageByName: {
+    IdempotencyConflictError: ORDER_CONFLICT_ERROR_MESSAGE,
+  },
+  statusByName: {
+    IdempotencyConflictError: 409,
+    IdempotencyReplayExpiredError: 410,
+    IdempotencyReplayUnavailableError: 503,
+    OrderAccessError: 404,
+    OrderStatusConflictError: 409,
+    OrderStatusTransitionError: 409,
+    PricingError: 400,
+  },
+} satisfies PublicServerErrorPolicy;
+
+const orderServerErrorMiddleware = createPublicServerErrorMiddleware(
+  ORDER_SERVER_ERROR_POLICY,
+);
 
 export const GUEST_ORDER_COOKIE = "__Host-volt-order-access";
 
 export const getPricingPreview = createServerFn({ method: "POST" })
-  .middleware([sameSiteMiddleware])
+  .middleware([orderServerErrorMiddleware, sameSiteMiddleware])
   .validator(pricingPreviewSchema)
   .handler(async ({ data }) => {
     const { enforcePricingPreviewLimit } =
@@ -34,7 +67,7 @@ export const getPricingPreview = createServerFn({ method: "POST" })
   });
 
 export const createOrder = createServerFn({ method: "POST" })
-  .middleware([optionalAuthMiddleware])
+  .middleware([orderServerErrorMiddleware, optionalAuthMiddleware])
   .validator(createOrderSchema)
   .handler(async ({ data, context }) => {
     const { assertSameOriginMutation } = await import("./admin-auth.server");
@@ -72,7 +105,7 @@ export const createOrder = createServerFn({ method: "POST" })
   });
 
 export const getOrderForViewer = createServerFn({ method: "POST" })
-  .middleware([optionalAuthMiddleware])
+  .middleware([orderServerErrorMiddleware, optionalAuthMiddleware])
   .validator(orderViewerSchema)
   .handler(async ({ data, context }) => {
     const { getCookie, setCookie } =
@@ -127,14 +160,14 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
   });
 
 export const listOwnOrders = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([orderServerErrorMiddleware, authMiddleware])
   .handler(async ({ context }) => {
     const { listOwnOrderRecords } = await import("./orders.server");
     return listOwnOrderRecords(context.userId);
   });
 
 export const listOrders = createServerFn({ method: "GET" })
-  .middleware([adminMiddleware])
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
   .validator(adminOrderListSchema)
   .handler(async ({ data }) => {
     const { listAdminOrderRecords } = await import("./orders.server");
@@ -142,7 +175,7 @@ export const listOrders = createServerFn({ method: "GET" })
   });
 
 export const getOrderForAdmin = createServerFn({ method: "GET" })
-  .middleware([adminMiddleware])
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
   .validator(orderIdSchema)
   .handler(async ({ data }) => {
     const { getAdminOrderRecord } = await import("./orders.server");
@@ -150,7 +183,7 @@ export const getOrderForAdmin = createServerFn({ method: "GET" })
   });
 
 export const updateOrderStatus = createServerFn({ method: "POST" })
-  .middleware([adminMiddleware])
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
   .validator(updateOrderStatusSchema)
   .handler(async ({ data }) => {
     const { assertSameOriginMutation } = await import("./admin-auth.server");

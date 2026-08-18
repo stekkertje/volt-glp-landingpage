@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, Copy, ReceiptText } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
@@ -26,14 +26,34 @@ export const Route = createFileRoute("/bestelling/$id")({
 
 function OrderConfirmationPage() {
   const order = Route.useLoaderData();
-  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const orderId = order?.id;
+  const [stagedRecovery, setStagedRecovery] = useState<{
+    orderId: string;
+    code: string;
+  } | null>(null);
+  const [copyState, setCopyState] = useState<
+    "idle" | "copying" | "copied" | "error"
+  >("idle");
+  const lastConsumedOrderId = useRef<string | null>(null);
+  const copyRequestSequence = useRef(0);
+  const recoveryCode =
+    stagedRecovery && stagedRecovery.orderId === orderId
+      ? stagedRecovery.code
+      : null;
 
   useEffect(() => {
-    if (!order) return;
-    const code = consumeOrderRecoveryCode(order.id);
-    if (code) setRecoveryCode(code);
-  }, [order]);
+    copyRequestSequence.current += 1;
+    setCopyState("idle");
+    if (!orderId) {
+      lastConsumedOrderId.current = null;
+      setStagedRecovery(null);
+      return;
+    }
+    if (lastConsumedOrderId.current === orderId) return;
+    lastConsumedOrderId.current = orderId;
+    const code = consumeOrderRecoveryCode(orderId);
+    setStagedRecovery(code ? { orderId, code } : null);
+  }, [orderId]);
 
   if (!order) {
     return (
@@ -104,15 +124,45 @@ function OrderConfirmationPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(recoveryCode);
-                      setCopied(true);
+                    disabled={copyState === "copying"}
+                    aria-busy={copyState === "copying"}
+                    onClick={async () => {
+                      if (copyState === "copying") return;
+                      const requestSequence = ++copyRequestSequence.current;
+                      setCopyState("copying");
+                      try {
+                        await navigator.clipboard.writeText(recoveryCode);
+                        if (requestSequence === copyRequestSequence.current) {
+                          setCopyState("copied");
+                        }
+                      } catch {
+                        if (requestSequence === copyRequestSequence.current) {
+                          setCopyState("error");
+                        }
+                      }
                     }}
                   >
                     <Copy className="size-4" aria-hidden />
-                    {copied ? "Gekopieerd" : "Kopieer"}
+                    {copyState === "copying"
+                      ? "Kopiëren…"
+                      : copyState === "copied"
+                        ? "Gekopieerd"
+                        : copyState === "error"
+                          ? "Opnieuw kopiëren"
+                          : "Kopieer"}
                   </Button>
                 </div>
+                {copyState === "copied" && (
+                  <p role="status" aria-live="polite" className="sr-only">
+                    Herstelcode gekopieerd.
+                  </p>
+                )}
+                {copyState === "error" && (
+                  <p role="alert" className="mt-3 text-sm text-danger">
+                    Kopiëren is niet gelukt. Selecteer de code en kopieer deze
+                    handmatig.
+                  </p>
+                )}
               </section>
             )}
 

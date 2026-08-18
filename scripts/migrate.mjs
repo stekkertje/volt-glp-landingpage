@@ -3,8 +3,9 @@
  * Deploy-time database migrator (node-postgres, `pg`).
  *
  * Runs during `npm run build` — on every Vercel deploy — applying pending files
- * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
- * recorded in a `_migrations` table, so it runs once and is safe to re-run.
+ * in ../migrations to DATABASE_URL. Normal files apply transactionally;
+ * `-- migrate:no-transaction` files contain individually idempotent statements
+ * for operations such as CREATE INDEX CONCURRENTLY.
  *
  * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
  * the same files at startup instead (see src/lib/db.ts).
@@ -14,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { withMigrationLock } from "./migration-lock.mjs";
+import { splitPostgresStatements } from "./migration-sql.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
@@ -82,10 +84,7 @@ async function main() {
             // Required for operations such as CREATE INDEX CONCURRENTLY. These
             // files must be idempotent because applying + tracking cannot be one
             // transaction.
-            const statements = sqlText
-              .split(";")
-              .map((statement) => statement.trim())
-              .filter(Boolean);
+            const statements = splitPostgresStatements(sqlText);
             for (const statement of statements) {
               await client.query(statement);
             }
@@ -130,7 +129,16 @@ async function main() {
 main().catch((err) => {
   console.error("[migrate] failed:", err?.message || err);
   // pg errors carry the context needed to debug a bad SQL file.
-  for (const key of ["code", "detail", "hint", "position", "where"]) {
+  for (const key of [
+    "code",
+    "constraint",
+    "schema",
+    "table",
+    "detail",
+    "hint",
+    "position",
+    "where",
+  ]) {
     if (err?.[key] != null) console.error(`[migrate]   ${key}: ${err[key]}`);
   }
   process.exit(1);

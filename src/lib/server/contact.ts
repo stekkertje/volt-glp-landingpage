@@ -6,9 +6,14 @@ import {
   contactMessageSchema,
 } from "@/lib/server/contact-schema";
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
+import { createPublicServerErrorMiddleware } from "@/lib/server-error";
+
+const contactServerErrorMiddleware = createPublicServerErrorMiddleware({
+  fallbackMessage: "Het contactverzoek kon niet worden verwerkt.",
+});
 
 export const createContactMessage = createServerFn({ method: "POST" })
-  .middleware([sameSiteMiddleware])
+  .middleware([contactServerErrorMiddleware, sameSiteMiddleware])
   .validator(contactMessageSchema)
   .handler(async ({ data }) => {
     const { assertSameOriginMutation } = await import("./admin-auth.server");
@@ -27,7 +32,7 @@ export const createContactMessage = createServerFn({ method: "POST" })
   });
 
 export const listContactMessages = createServerFn({ method: "GET" })
-  .middleware([adminMiddleware])
+  .middleware([contactServerErrorMiddleware, adminMiddleware])
   .validator(contactListSchema)
   .handler(async ({ data }) => {
     const { listContactMessageRecords } = await import("./contact.server");
@@ -35,7 +40,7 @@ export const listContactMessages = createServerFn({ method: "GET" })
   });
 
 export const setContactHandled = createServerFn({ method: "POST" })
-  .middleware([adminMiddleware])
+  .middleware([contactServerErrorMiddleware, adminMiddleware])
   .validator(contactHandledSchema)
   .handler(async ({ data }) => {
     const { assertSameOriginMutation } = await import("./admin-auth.server");

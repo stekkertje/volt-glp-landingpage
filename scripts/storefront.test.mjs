@@ -749,6 +749,9 @@ test("direct checkout navigation and hard reload hydrate a persisted cart", asyn
 test("a product can be ordered and only its authorized guest sees confirmation", async () => {
   const { context, page } = await newPage();
   try {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+      origin: BASE_URL,
+    });
     await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
       waitUntil: "networkidle",
     });
@@ -776,6 +779,45 @@ test("a product can be ordered and only its authorized guest sees confirmation",
       .getByRole("heading", { name: "Bewaar je herstelcode" })
       .waitFor();
     const recoveryCode = (await page.locator("code").innerText()).trim();
+    await page.getByRole("button", { name: "Kopieer" }).click();
+    await page.getByRole("button", { name: "Gekopieerd" }).waitFor();
+    assert.equal(
+      await page.evaluate(() => navigator.clipboard.readText()),
+      recoveryCode,
+    );
+
+    const clipboardPageErrors = [];
+    const captureClipboardPageError = (error) => {
+      clipboardPageErrors.push(error.message);
+    };
+    page.on("pageerror", captureClipboardPageError);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: () =>
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new DOMException("Geweigerd", "NotAllowedError")),
+              100,
+            );
+          }),
+      });
+    });
+    await page.getByRole("button", { name: "Gekopieerd" }).click();
+    const copyingButton = page.getByRole("button", { name: "Kopiëren…" });
+    await copyingButton.waitFor();
+    assert.equal(await copyingButton.isDisabled(), true);
+    await page.getByRole("button", { name: "Opnieuw kopiëren" }).waitFor();
+    await page
+      .getByRole("alert")
+      .getByText(
+        "Kopiëren is niet gelukt. Selecteer de code en kopieer deze handmatig.",
+        { exact: true },
+      )
+      .waitFor();
+    await page.waitForTimeout(0);
+    assert.deepEqual(clipboardPageErrors, []);
+    page.off("pageerror", captureClipboardPageError);
     assert.deepEqual((await cartState(page)).lines, []);
     assert.deepEqual(
       await page.evaluate(() =>
@@ -818,6 +860,80 @@ test("a product can be ordered and only its authorized guest sees confirmation",
     } finally {
       await denied.context.close();
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("order confirmation never carries a recovery code to another order", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const [firstOrder, secondOrder] = await page.evaluate(async () => {
+      const { createOrder } = await import("/src/lib/server/orders.ts");
+      const createTestOrder = (label) =>
+        createOrder({
+          data: {
+            name: `Routewissel ${label}`,
+            email: `routewissel-${label}-${crypto.randomUUID()}@example.test`,
+            phone: "0612345678",
+            street: "Teststraat",
+            houseNumber: "12",
+            postcode: "1234 AB",
+            city: "Utrecht",
+            country: "NL",
+            note: "Herstelcode mag niet naar een andere bestelling lekken.",
+            lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
+            idempotencyKey: crypto.randomUUID(),
+          },
+        });
+      return Promise.all([createTestOrder("a"), createTestOrder("b")]);
+    });
+
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
+    await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Inloggen" }).click();
+    await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+
+    const stagedCode = "ALLEEN-VOOR-BESTELLING-A";
+    await page.evaluate(
+      async ({ orderId, code }) => {
+        const { stageOrderRecoveryCode } =
+          await import("/src/lib/order-recovery-memory.ts");
+        stageOrderRecoveryCode(orderId, code);
+        await window.__TSR_ROUTER__.navigate({
+          to: "/bestelling/$id",
+          params: { id: orderId },
+        });
+      },
+      { orderId: firstOrder.order.id, code: stagedCode },
+    );
+    await page
+      .getByRole("heading", { name: firstOrder.order.orderNumber })
+      .waitFor();
+    await page.getByText(stagedCode, { exact: true }).waitFor();
+
+    await page.evaluate(async (orderId) => {
+      await window.__TSR_ROUTER__.navigate({
+        to: "/bestelling/$id",
+        params: { id: orderId },
+      });
+    }, secondOrder.order.id);
+    await page
+      .getByRole("heading", { name: secondOrder.order.orderNumber })
+      .waitFor();
+    assert.equal(await page.getByText(stagedCode, { exact: true }).count(), 0);
+
+    await page.evaluate(async (orderId) => {
+      await window.__TSR_ROUTER__.navigate({
+        to: "/bestelling/$id",
+        params: { id: orderId },
+      });
+    }, firstOrder.order.id);
+    await page
+      .getByRole("heading", { name: firstOrder.order.orderNumber })
+      .waitFor();
+    assert.equal(await page.getByText(stagedCode, { exact: true }).count(), 0);
   } finally {
     await context.close();
   }
@@ -880,6 +996,81 @@ test("checkout shows server-shared postcode feedback without clearing the cart",
   }
 });
 
+test("checkout shows real idempotency conflict feedback and an account link", async () => {
+  const { context, page } = await newPage();
+  const idempotencyKey = randomUUID();
+  try {
+    await page.addInitScript((fixedKey) => {
+      Object.defineProperty(globalThis.crypto, "randomUUID", {
+        configurable: true,
+        value: () => fixedKey,
+      });
+    }, idempotencyKey);
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    assert.equal(
+      await page.evaluate(() => crypto.randomUUID()),
+      idempotencyKey,
+    );
+
+    await page.evaluate(async (fixedKey) => {
+      const { createOrder } = await import("/src/lib/server/orders.ts");
+      await createOrder({
+        data: {
+          name: "Eerste conflictbestelling",
+          email: `conflict-eerste-${Date.now()}@example.test`,
+          phone: "0612345678",
+          street: "Eerste straat",
+          houseNumber: "1",
+          postcode: "1234 AB",
+          city: "Utrecht",
+          country: "NL",
+          note: "Bestaande bestelling voor de echte RPC-conflicttest.",
+          lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
+          idempotencyKey: fixedKey,
+        },
+      });
+    }, idempotencyKey);
+
+    await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: /^In winkelwagen/ })
+      .first()
+      .click();
+    await page.getByRole("link", { name: "Veilig afrekenen" }).click();
+    await page.waitForURL(`${BASE_URL}/checkout`);
+    await fillCheckout(page, `conflict-tweede-${Date.now()}@example.test`);
+
+    const conflictResponse = page.waitForResponse(
+      (response) => response.status() === 409,
+    );
+    await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
+    assert.equal((await conflictResponse).status(), 409);
+
+    const conflictAlert = page.getByRole("alert");
+    await conflictAlert.waitFor();
+    assert.match(
+      await conflictAlert.innerText(),
+      /^Deze bestelling is al geplaatst\./,
+    );
+    const accountLink = conflictAlert.getByRole("link", {
+      name: "Bekijk je bestellingen.",
+    });
+    await accountLink.waitFor();
+    assert.equal(await accountLink.getAttribute("href"), "/account");
+    assert.equal(
+      await conflictAlert.evaluate(
+        (element) => element === document.activeElement,
+      ),
+      true,
+    );
+    assert.equal((await cartState(page)).lines.length, 1);
+  } finally {
+    await context.close();
+  }
+});
+
 test("admin only offers valid next order statuses", async () => {
   const { context, page } = await newPage();
   try {
@@ -927,6 +1118,18 @@ test("admin only offers valid next order statuses", async () => {
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
     assert.equal(await page.getByLabel("Beheerwachtwoord").count(), 0);
+    const ordersTab = page.getByRole("tab", { name: "Bestellingen" });
+    const contactTab = page.getByRole("tab", { name: "Contact" });
+    const assertActiveTab = async (activeTab, inactiveTab) => {
+      assert.equal(await activeTab.getAttribute("aria-selected"), "true");
+      assert.equal(await inactiveTab.getAttribute("aria-selected"), "false");
+      assert.equal(
+        await activeTab.evaluate(
+          (element) => element === document.activeElement,
+        ),
+        true,
+      );
+    };
     await page
       .getByRole("group", { name: "Nieuw / in afwachting" })
       .getByText(/^\d+$/)
@@ -955,6 +1158,21 @@ test("admin only offers valid next order statuses", async () => {
     await page.unroute("**/*");
     await page.getByRole("button", { name: "Opnieuw proberen" }).click();
     await page.getByText("Geen bestellingen gevonden.").waitFor();
+
+    await ordersTab.focus();
+    await page.keyboard.press("ArrowLeft");
+    await assertActiveTab(contactTab, ordersTab);
+    await page.keyboard.press("ArrowLeft");
+    await assertActiveTab(ordersTab, contactTab);
+    await page.keyboard.press("ArrowRight");
+    await assertActiveTab(contactTab, ordersTab);
+    await page.keyboard.press("ArrowRight");
+    await assertActiveTab(ordersTab, contactTab);
+    await page.keyboard.press("End");
+    await assertActiveTab(contactTab, ordersTab);
+    await page.keyboard.press("Home");
+    await assertActiveTab(ordersTab, contactTab);
+    await page.waitForLoadState("networkidle");
 
     await page.getByPlaceholder("Nummer, naam of e-mail").fill(orderNumber);
     await page.getByRole("button", { name: "Zoeken" }).click();
@@ -1081,6 +1299,15 @@ test("contact is stored and only an authenticated admin can handle it", async ()
     );
     await page.getByRole("tab", { name: "Contact" }).click();
     await page.getByText(uniqueMessage).waitFor();
+    const contactFilters = page.getByRole("group", {
+      name: "Contactberichten filteren",
+    });
+    assert.equal(
+      await contactFilters
+        .getByRole("button", { name: "Open", exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
     const contactCard = page
       .locator("article")
       .filter({ hasText: uniqueMessage });
@@ -1093,6 +1320,12 @@ test("contact is stored and only an authenticated admin can handle it", async ()
     await page
       .getByRole("button", { name: "Afgehandeld", exact: true })
       .click();
+    assert.equal(
+      await contactFilters
+        .getByRole("button", { name: "Afgehandeld", exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
     await page.getByText(uniqueMessage).waitFor();
   } finally {
     await context.close();

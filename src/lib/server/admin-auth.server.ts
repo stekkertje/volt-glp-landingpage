@@ -29,6 +29,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1_000;
 const MAX_LOGIN_FAILURES = 8;
 const MAX_LOGIN_ATTEMPTS = 20;
 const MIN_LOGIN_RESPONSE_MS = 250;
+const MAX_LOGIN_BACKOFF_MS = 4_000;
 
 export class AdminUnauthorizedError extends Error {
   readonly status = 401;
@@ -63,6 +64,7 @@ function wait(milliseconds: number): Promise<void> {
 export function assertSameOriginMutation(): void {
   const request = getRequest();
   if (!isSameOriginMutationRequest(request)) {
+    setResponseStatus(403);
     throw new SameOriginRequiredError();
   }
 }
@@ -89,6 +91,21 @@ export function isSameOriginMutationRequest(request: Request): boolean {
   return fetchSite === "same-origin" || Boolean(origin) || Boolean(referer);
 }
 
+export function adminLoginBackoffMs(failureCount: number): number {
+  const normalizedCount = Math.max(1, Math.trunc(failureCount));
+  return Math.min(
+    MAX_LOGIN_BACKOFF_MS,
+    MIN_LOGIN_RESPONSE_MS * 2 ** Math.min(normalizedCount - 1, 4),
+  );
+}
+
+async function waitForMinimumDuration(
+  startedAt: number,
+  minimumDurationMs: number,
+): Promise<void> {
+  await wait(Math.max(0, minimumDurationMs - (Date.now() - startedAt)));
+}
+
 export async function loginAdminWithPassword(password: string): Promise<void> {
   const startedAt = Date.now();
   assertSameOriginMutation();
@@ -105,6 +122,7 @@ export async function loginAdminWithPassword(password: string): Promise<void> {
       now: new Date(now),
     });
   } catch (error) {
+    await waitForMinimumDuration(startedAt, MIN_LOGIN_RESPONSE_MS);
     applyRateLimitResponse(error);
     throw error;
   }
@@ -115,26 +133,35 @@ export async function loginAdminWithPassword(password: string): Promise<void> {
       : null;
   if (!matchedPasswordLogin) {
     try {
-      await consumeRateLimit({
+      const failure = await consumeRateLimit({
         scope: "admin-login-failure",
         identifier: key,
         limit: MAX_LOGIN_FAILURES,
         windowMs: LOGIN_WINDOW_MS,
         now: new Date(now),
       });
+      await waitForMinimumDuration(
+        startedAt,
+        adminLoginBackoffMs(failure.count),
+      );
     } catch (error) {
       if (!(error instanceof RateLimitError)) throw error;
-      await wait(Math.min(error.retryAfterMs, 4_000));
+      await waitForMinimumDuration(
+        startedAt,
+        Math.max(
+          MIN_LOGIN_RESPONSE_MS,
+          Math.min(error.retryAfterMs, MAX_LOGIN_BACKOFF_MS),
+        ),
+      );
       applyRateLimitResponse(error);
       throw error;
     }
-    await wait(Math.max(0, MIN_LOGIN_RESPONSE_MS - (Date.now() - startedAt)));
     setResponseStatus(401);
     throw new AdminUnauthorizedError();
   }
 
   await clearRateLimit("admin-login-failure", key);
-  await wait(Math.max(0, MIN_LOGIN_RESPONSE_MS - (Date.now() - startedAt)));
+  await waitForMinimumDuration(startedAt, MIN_LOGIN_RESPONSE_MS);
   const expiresAt = now + ADMIN_SESSION_SECONDS * 1_000;
   setCookie(
     ADMIN_COOKIE_NAME,
