@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  INITIAL_CART_EPOCH,
+  isValidCartEpoch,
+  nextCartEpoch,
+} from "@/lib/cart-lifecycle";
+import {
   DEFAULT_PRODUCT_SLUG,
   PRODUCTS,
   SITE,
@@ -34,6 +39,7 @@ type CartState = {
   selectedOptionId: string;
   selectedQty: number;
   cartOpen: boolean;
+  cartEpoch: number;
   lines: CartLine[];
   discountCode: string;
   discountApplied: boolean;
@@ -69,6 +75,7 @@ export const useCartStore = create<CartState>()(
       ),
       selectedQty: 1,
       cartOpen: false,
+      cartEpoch: INITIAL_CART_EPOCH,
       lines: [],
       discountCode: "",
       discountApplied: false,
@@ -114,10 +121,14 @@ export const useCartStore = create<CartState>()(
       setLineQty: (slug, optionId, qty) => {
         set((s) => {
           if (qty <= 0) {
+            const lines = s.lines.filter(
+              (l) => !(l.slug === slug && l.optionId === optionId),
+            );
             return {
-              lines: s.lines.filter(
-                (l) => !(l.slug === slug && l.optionId === optionId),
-              ),
+              lines,
+              ...(lines.length
+                ? null
+                : { cartEpoch: nextCartEpoch(s.cartEpoch) }),
             };
           }
           return {
@@ -129,16 +140,28 @@ export const useCartStore = create<CartState>()(
           };
         });
       },
-      removeLine: (slug, optionId) =>
-        set((s) => ({
-          lines: s.lines.filter(
+      removeLine: (slug, optionId) => {
+        set((s) => {
+          const lines = s.lines.filter(
             (l) => !(l.slug === slug && l.optionId === optionId),
-          ),
-        })),
+          );
+          return {
+            lines,
+            ...(lines.length
+              ? null
+              : { cartEpoch: nextCartEpoch(s.cartEpoch) }),
+          };
+        });
+      },
       openCart: () => set({ cartOpen: true }),
       closeCart: () => set({ cartOpen: false }),
       clearCart: () =>
-        set({ lines: [], cartOpen: false, discountApplied: false }),
+        set((s) => ({
+          lines: [],
+          cartOpen: false,
+          discountApplied: false,
+          cartEpoch: nextCartEpoch(s.cartEpoch),
+        })),
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
@@ -176,7 +199,28 @@ export const useCartStore = create<CartState>()(
     {
       name: "volt-cart",
       skipHydration: true,
+      version: 1,
+      migrate: (persistedState) => {
+        const persisted = persistedState as Partial<CartState>;
+        return {
+          ...persisted,
+          cartEpoch: isValidCartEpoch(persisted.cartEpoch)
+            ? persisted.cartEpoch
+            : INITIAL_CART_EPOCH,
+        } as CartState;
+      },
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<CartState>;
+        return {
+          ...currentState,
+          ...persisted,
+          cartEpoch: isValidCartEpoch(persisted.cartEpoch)
+            ? persisted.cartEpoch
+            : INITIAL_CART_EPOCH,
+        };
+      },
       partialize: (s) => ({
+        cartEpoch: s.cartEpoch,
         lines: s.lines,
         discountCode: s.discountCode,
         discountApplied: s.discountApplied,

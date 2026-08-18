@@ -6,6 +6,7 @@ import { createServer } from "vite";
 let vite;
 let CHECKOUT_ATTEMPT_STORAGE_KEY;
 let CHECKOUT_ATTEMPT_TTL_MS;
+let COMPLETED_CART_EPOCH_STORAGE_KEY;
 let CHECKOUT_REPLAY_EXPIRED_ERROR_MESSAGE;
 let checkoutAttemptMarkerCookieDirective;
 let checkoutAttemptMarkerCookieName;
@@ -17,6 +18,7 @@ let loadCheckoutAttemptSeed;
 let isCheckoutReplayExpiredError;
 let markCheckoutAttemptReplayExpired;
 let markCheckoutAttemptWithCommittedCart;
+let markCheckoutCartEpochCompleted;
 let parseCheckoutAttemptMarkerCookies;
 let persistCheckoutAttemptSeed;
 let prepareCheckoutAttemptSeedForSubmit;
@@ -58,11 +60,15 @@ before(async () => {
     loadCheckoutAttemptSeed,
     markCheckoutAttemptReplayExpired,
     markCheckoutAttemptWithCommittedCart,
+    markCheckoutCartEpochCompleted,
     parseCheckoutAttemptMarkerCookies,
     persistCheckoutAttemptSeed,
     prepareCheckoutAttemptSeedForSubmit,
     refreshCheckoutAttemptSeed,
   } = await vite.ssrLoadModule("/src/lib/checkout-idempotency.ts"));
+  ({ COMPLETED_CART_EPOCH_STORAGE_KEY } = await vite.ssrLoadModule(
+    "/src/lib/cart-lifecycle.ts",
+  ));
 });
 
 after(async () => {
@@ -96,9 +102,13 @@ test("confirmed checkout proves a recovery URL before clearing the cart", async 
     "if (!committedUrlReady)",
     proveCommittedUrl,
   );
+  const markCompletedCartEpoch = source.indexOf(
+    "await markCheckoutCartEpochCompleted(cartEpoch)",
+    preserveReplayableState,
+  );
   const clearPersistedCart = source.indexOf(
     "clearCart()",
-    preserveReplayableState,
+    markCompletedCartEpoch,
   );
   const finalizeAttempt = source.indexOf(
     "await finalizeCheckoutAttemptAfterSuccess(confirmedAttempt)",
@@ -112,7 +122,8 @@ test("confirmed checkout proves a recovery URL before clearing the cart", async 
   assert.ok(startNavigation > suppressEmptyRedirect);
   assert.ok(proveCommittedUrl > startNavigation);
   assert.ok(preserveReplayableState > proveCommittedUrl);
-  assert.ok(clearPersistedCart > preserveReplayableState);
+  assert.ok(markCompletedCartEpoch > preserveReplayableState);
+  assert.ok(clearPersistedCart > markCompletedCartEpoch);
   assert.ok(finalizeAttempt > clearPersistedCart);
 });
 
@@ -171,6 +182,38 @@ test("submitting late extends the same seed through the complete replay window",
     await checkoutIdempotencyKeyFromSeed(refreshed.seed),
     await checkoutIdempotencyKeyFromSeed(initial.seed),
   );
+});
+
+test("a completed cart epoch blocks stale tabs but permits the next generation", async () => {
+  const now = Date.parse("2026-08-18T12:00:00.000Z");
+  const storage = new MemoryStorage();
+  const attempt = await initializeCheckoutAttemptSeed(storage, now, () =>
+    "6".repeat(64),
+  );
+  assert.ok(attempt);
+
+  assert.equal(await markCheckoutCartEpochCompleted(7, storage), true);
+  assert.equal(storage.getItem(COMPLETED_CART_EPOCH_STORAGE_KEY), "7");
+  assert.deepEqual(
+    await prepareCheckoutAttemptSeedForSubmit(
+      attempt,
+      storage,
+      now + 1,
+      () => "7".repeat(64),
+      7,
+    ),
+    { ok: false, reason: "completed-cart" },
+  );
+
+  const fresh = await prepareCheckoutAttemptSeedForSubmit(
+    attempt,
+    storage,
+    now + 1,
+    () => "7".repeat(64),
+    8,
+  );
+  assert.equal(fresh.ok, true);
+  assert.equal(fresh.ok ? fresh.attempt.seed : null, attempt.seed);
 });
 
 test("a backward clock correction never rotates an unresolved checkout seed", async () => {

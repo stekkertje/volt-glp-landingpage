@@ -1,4 +1,9 @@
 import type { CreateOrderInput } from "@/lib/server/order-schema";
+import {
+  isValidCartEpoch,
+  persistCompletedCartEpoch,
+  readCompletedCartEpoch,
+} from "@/lib/cart-lifecycle";
 
 type CheckoutPayload = Omit<CreateOrderInput, "idempotencyKey">;
 
@@ -43,7 +48,12 @@ export type CheckoutAttemptPreparation =
   | {
       ok: false;
       reason:
-        "stale" | "storage" | "lock" | "replay-expired" | "committed-cart";
+        | "stale"
+        | "storage"
+        | "lock"
+        | "replay-expired"
+        | "committed-cart"
+        | "completed-cart";
     };
 
 class CheckoutStorageLockError extends Error {
@@ -434,11 +444,24 @@ export async function prepareCheckoutAttemptSeedForSubmit(
   storage: CheckoutStorage | null = browserCheckoutStorage(),
   now: number = Date.now(),
   createSeed: () => string = randomCheckoutSeed,
+  cartEpoch?: number,
 ): Promise<CheckoutAttemptPreparation> {
   try {
     return await withCheckoutStorageLock(async () => {
       if (!checkoutStorageIsReadable(storage)) {
         return { ok: false, reason: "storage" };
+      }
+      if (cartEpoch !== undefined) {
+        if (!isValidCartEpoch(cartEpoch)) {
+          return { ok: false, reason: "storage" };
+        }
+        const completedCart = readCompletedCartEpoch(storage);
+        if (!completedCart.ok) {
+          return { ok: false, reason: "storage" };
+        }
+        if (cartEpoch <= completedCart.completedEpoch) {
+          return { ok: false, reason: "completed-cart" };
+        }
       }
       const durable = await loadUsableCheckoutAttemptSeed(storage, now);
       if (expected && durable?.attempt.seed !== expected.seed) {
@@ -469,6 +492,19 @@ export async function prepareCheckoutAttemptSeedForSubmit(
       ok: false,
       reason: error instanceof CheckoutStorageLockError ? "lock" : "storage",
     };
+  }
+}
+
+export async function markCheckoutCartEpochCompleted(
+  cartEpoch: number,
+  storage: CheckoutStorage | null = browserCheckoutStorage(),
+): Promise<boolean> {
+  try {
+    return await withCheckoutStorageLock(async () =>
+      persistCompletedCartEpoch(cartEpoch, storage),
+    );
+  } catch {
+    return false;
   }
 }
 

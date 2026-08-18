@@ -1974,6 +1974,121 @@ test("a cart persistence failure after commit cannot submit the order twice", as
   }
 });
 
+test("a stale cart tab cannot restore and resubmit a completed cart generation", async () => {
+  const { context, page: checkoutTab } = await newPage();
+  const staleTab = await context.newPage();
+  const observedKeys = [];
+  const captureOrders = async (route) => {
+    const request = route.request();
+    const key = (request.postData() ?? "").match(
+      /checkout-v2-[a-f0-9]{64}/,
+    )?.[0];
+    if (request.method() !== "POST" || !key) {
+      await route.continue();
+      return;
+    }
+    observedKeys.push(key);
+    const response = await route.fetch();
+    assert.equal(response.status(), 200, "Checkout kreeg geen 200-response");
+    await route.fulfill({ response });
+  };
+
+  try {
+    await context.route("**/*", captureOrders);
+    await addPenAndOpenCheckout(checkoutTab);
+    const completedEpoch = (await cartState(checkoutTab)).cartEpoch;
+    assert.ok(Number.isSafeInteger(completedEpoch));
+
+    await staleTab.goto(BASE_URL, { waitUntil: "networkidle" });
+    await staleTab.waitForFunction(async () => {
+      const { useCartStore } = await import("/src/lib/cart-store.ts");
+      return useCartStore.getState().lines.length === 1;
+    });
+    assert.equal(
+      await staleTab.evaluate(async () => {
+        const { useCartStore } = await import("/src/lib/cart-store.ts");
+        return useCartStore.getState().cartEpoch;
+      }),
+      completedEpoch,
+    );
+
+    await fillCheckout(
+      checkoutTab,
+      `cart-epoch-first-${randomUUID()}@example.test`,
+    );
+    const firstSubmit = await waitForCheckoutSubmit(checkoutTab);
+    await firstSubmit.click();
+    await checkoutTab.waitForURL(/\/bestelling\/[^/]+$/, {
+      timeout: 15_000,
+    });
+    await checkoutTab
+      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .waitFor();
+    assert.equal(observedKeys.length, 1);
+    assert.equal(
+      await checkoutTab.evaluate(() =>
+        JSON.parse(
+          localStorage.getItem("volt-cart-completed-epoch-v1") || "null",
+        ),
+      ),
+      completedEpoch,
+    );
+
+    // This tab still owns the pre-checkout Zustand state. Its write restores
+    // the old cart object, but must not be allowed to invent a new order after
+    // a hard reload has created/adopted another checkout attempt.
+    await staleTab.evaluate(async () => {
+      const { useCartStore } = await import("/src/lib/cart-store.ts");
+      const line = useCartStore.getState().lines[0];
+      useCartStore.getState().setLineQty(line.slug, line.optionId, 2);
+    });
+    assert.equal((await cartState(staleTab)).cartEpoch, completedEpoch);
+    assert.equal((await cartState(staleTab)).lines[0].qty, 2);
+
+    await staleTab.reload({ waitUntil: "networkidle" });
+    await staleTab.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
+    await staleTab
+      .getByRole("heading", { name: "Waar mogen we bezorgen?" })
+      .waitFor();
+    await fillCheckout(
+      staleTab,
+      `cart-epoch-stale-${randomUUID()}@example.test`,
+    );
+    const staleSubmit = await waitForCheckoutSubmit(staleTab);
+    await staleSubmit.click();
+    await staleTab
+      .getByRole("alert")
+      .getByText(/eerder opgeslagen winkelwagen kan niet opnieuw/i)
+      .waitFor();
+    assert.equal(observedKeys.length, 1);
+
+    const freshEpoch = await staleTab.evaluate(async () => {
+      const { useCartStore } = await import("/src/lib/cart-store.ts");
+      useCartStore.getState().clearCart();
+      return useCartStore.getState().cartEpoch;
+    });
+    assert.ok(freshEpoch > completedEpoch);
+
+    await addPenAndOpenCheckout(staleTab);
+    assert.equal((await cartState(staleTab)).cartEpoch, freshEpoch);
+    await fillCheckout(
+      staleTab,
+      `cart-epoch-fresh-${randomUUID()}@example.test`,
+    );
+    const freshSubmit = await waitForCheckoutSubmit(staleTab);
+    await freshSubmit.click();
+    await staleTab.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    await staleTab
+      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .waitFor();
+    assert.equal(observedKeys.length, 2);
+    assert.notEqual(observedKeys[1], observedKeys[0]);
+  } finally {
+    await context.unroute("**/*", captureOrders).catch(() => {});
+    await context.close();
+  }
+});
+
 test("a crash while confirmation navigation is pending safely replays the same order", async () => {
   const { context, page } = await newPage();
   const checkoutEmail = `navigate-pending-${randomUUID()}@example.test`;

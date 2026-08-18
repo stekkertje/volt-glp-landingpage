@@ -9,6 +9,7 @@ import {
   finalizeCheckoutAttemptAfterSuccess,
   initializeCheckoutAttemptSeed,
   isCheckoutReplayExpiredError,
+  markCheckoutCartEpochCompleted,
   markCheckoutAttemptReplayExpired,
   markCheckoutAttemptWithCommittedCart,
   prepareCheckoutAttemptSeedForSubmit,
@@ -132,11 +133,12 @@ const inputClass =
 const replayExpiredFeedback =
   "De veilige herhaaltermijn van deze bestelling is verlopen. Plaats de bestelling niet opnieuw. Neem via Contact contact op en vermeld je e-mailadres, zodat we de bestaande bestelling kunnen terugvinden.";
 const committedCartFeedback =
-  "Deze bestelling is al geplaatst. De eerder opgeslagen winkelwagen kan niet opnieuw worden verstuurd. Neem via Contact contact op als je de bevestiging niet meer kunt openen.";
+  "Deze bestelling is al geplaatst. De eerder opgeslagen winkelwagen kan niet opnieuw worden verstuurd. Maak de winkelwagen leeg en voeg producten opnieuw toe als je bewust een nieuwe bestelling wilt plaatsen. Neem via Contact contact op als je de bevestiging niet meer kunt openen.";
 
 function CheckoutPage() {
   const navigate = useNavigate();
   const lines = useCartStore((state) => state.lines);
+  const cartEpoch = useCartStore((state) => state.cartEpoch);
   const discountCode = useCartStore((state) => state.discountCode);
   const discountApplied = useCartStore((state) => state.discountApplied);
   const removeDiscount = useCartStore((state) => state.removeDiscount);
@@ -309,12 +311,17 @@ function CheckoutPage() {
         checkoutAttempt.current,
         undefined,
         now,
+        undefined,
+        cartEpoch,
       );
       if (!preparation.ok) {
         if (preparation.reason === "replay-expired") {
           setCheckoutAttemptBlocked(true);
           setFormError(replayExpiredFeedback);
         } else if (preparation.reason === "committed-cart") {
+          setCheckoutAttemptBlocked(true);
+          setFormError(committedCartFeedback);
+        } else if (preparation.reason === "completed-cart") {
           setCheckoutAttemptBlocked(true);
           setFormError(committedCartFeedback);
         } else if (preparation.reason === "stale") {
@@ -408,6 +415,22 @@ function CheckoutPage() {
       // The order is committed, but neither router nor history has a proven
       // recovery URL. Preserve the cart and seed so a reload can safely replay
       // the same idempotency key instead of losing the only recovery path.
+      setSubmitting(false);
+      return;
+    }
+
+    const cartEpochPersistedCompleted =
+      await markCheckoutCartEpochCompleted(cartEpoch);
+    if (!cartEpochPersistedCompleted) {
+      // Do not clear or rotate the original attempt when the terminal cart
+      // generation cannot be proven durable. The seed marker keeps any old
+      // persisted cart fail-closed after reload without storing checkout data.
+      try {
+        await markCheckoutAttemptWithCommittedCart(confirmedAttempt);
+      } catch {
+        // The in-memory committed state still prevents a second submit here.
+      }
+      checkoutAttempt.current = confirmedAttempt;
       setSubmitting(false);
       return;
     }
