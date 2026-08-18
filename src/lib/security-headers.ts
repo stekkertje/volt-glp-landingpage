@@ -20,7 +20,7 @@ export function isSensitiveDocumentPath(pathname: string): boolean {
 
 export function securityHeadersForPath(
   pathname: string,
-  options: { development?: boolean } = {},
+  options: { development?: boolean; hsts?: boolean } = {},
 ): Record<string, string> {
   const scriptSources = ["'self'", "'unsafe-inline'"];
   if (options.development) scriptSources.push("'unsafe-eval'");
@@ -44,6 +44,9 @@ export function securityHeadersForPath(
     "referrer-policy": "strict-origin-when-cross-origin",
     "x-content-type-options": "nosniff",
   };
+  if (options.hsts) {
+    headers["strict-transport-security"] = "max-age=31536000";
+  }
   if (isSensitiveDocumentPath(pathname)) {
     headers["cache-control"] = "no-store";
     headers.pragma = "no-cache";

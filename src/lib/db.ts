@@ -163,7 +163,7 @@ async function createPgliteSql(): Promise<Sql> {
       const pgliteText = text
         .replace(/^-- migrate:no-transaction\s*/i, "")
         .replace(
-          /\b(create|drop)\s+index\s+concurrently\b/gi,
+          /\b(create(?:\s+unique)?|drop)\s+index\s+concurrently\b/gi,
           "$1 index",
         );
       // Apply + record atomically (parity with scripts/migrate.mjs) so a failed

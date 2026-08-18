@@ -8,6 +8,7 @@ let getSql;
 let consumeRateLimit;
 let enforceOrderCreationLimit;
 let enforceOrderAccessLimit;
+let enforcePricingPreviewLimit;
 
 before(async () => {
   vite = await createServer({
@@ -19,10 +20,11 @@ before(async () => {
   ({ consumeRateLimit } = await vite.ssrLoadModule(
     "/src/lib/server/rate-limit.server.ts",
   ));
-  ({ enforceOrderCreationLimit, enforceOrderAccessLimit } =
-    await vite.ssrLoadModule(
-      "/src/lib/server/abuse-protection.server.ts",
-    ));
+  ({
+    enforceOrderCreationLimit,
+    enforceOrderAccessLimit,
+    enforcePricingPreviewLimit,
+  } = await vite.ssrLoadModule("/src/lib/server/abuse-protection.server.ts"));
 });
 
 after(async () => {
@@ -106,6 +108,17 @@ test("recovery-code attempts are limited per request source and order", async ()
   }
   await assert.rejects(
     enforceOrderAccessLimit(requestIp, reference),
+    (error) => error?.name === "RateLimitError" && error?.status === 429,
+  );
+});
+
+test("pricing previews are rate limited per request source", async () => {
+  const requestIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}-${randomUUID()}`;
+  for (let index = 0; index < 60; index += 1) {
+    await enforcePricingPreviewLimit(requestIp);
+  }
+  await assert.rejects(
+    enforcePricingPreviewLimit(requestIp),
     (error) => error?.name === "RateLimitError" && error?.status === 429,
   );
 });

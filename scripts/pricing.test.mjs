@@ -5,7 +5,9 @@ import { createServer } from "vite";
 let vite;
 let calculatePricing;
 
-const activeCodes = new Map([["VOLT10", { code: "VOLT10", percent: 10, active: true }]]);
+const activeCodes = new Map([
+  ["VOLT10", { code: "VOLT10", percent: 10, active: true }],
+]);
 const resolveCode = async (code) => activeCodes.get(code) ?? null;
 
 before(async () => {
@@ -14,7 +16,9 @@ before(async () => {
     logLevel: "silent",
     server: { middlewareMode: true },
   });
-  ({ calculatePricing } = await vite.ssrLoadModule("/src/lib/server/pricing.ts"));
+  ({ calculatePricing } = await vite.ssrLoadModule(
+    "/src/lib/server/pricing.ts",
+  ));
 });
 
 after(async () => {
@@ -56,6 +60,39 @@ test("pricing applies twenty percent stack discount at ten items", async () => {
   assert.equal(result.subtotalCents, 85_000);
   assert.equal(result.stackDiscountCents, 17_000);
   assert.equal(result.totalCents, 68_000);
+});
+
+test("pricing coalesces duplicate variants before totals and discounts", async () => {
+  const result = await calculatePricing(
+    {
+      lines: [
+        { slug: "semaglutide-2mg", optionId: "none", qty: 2 },
+        { slug: "semaglutide-2mg", optionId: "none", qty: 3 },
+      ],
+    },
+    resolveCode,
+  );
+
+  assert.equal(result.lines.length, 1);
+  assert.equal(result.lines[0].qty, 5);
+  assert.equal(result.lines[0].lineTotalCents, 42_500);
+  assert.equal(result.subtotalCents, 42_500);
+  assert.equal(result.stackDiscountCents, 4_250);
+});
+
+test("pricing rejects a duplicate variant above the combined line cap", async () => {
+  await assert.rejects(
+    calculatePricing(
+      {
+        lines: [
+          { slug: "semaglutide-2mg", optionId: "none", qty: 6 },
+          { slug: "semaglutide-2mg", optionId: "none", qty: 5 },
+        ],
+      },
+      resolveCode,
+    ),
+    /maximaal 10 stuks/i,
+  );
 });
 
 test("VOLT10 is calculated after the stack discount", async () => {
@@ -100,7 +137,9 @@ test("pricing rejects an unknown product slug", async () => {
 test("pricing rejects an invalid product option", async () => {
   await assert.rejects(
     calculatePricing(
-      { lines: [{ slug: "semaglutide-2mg", optionId: "bestaat-niet", qty: 1 }] },
+      {
+        lines: [{ slug: "semaglutide-2mg", optionId: "bestaat-niet", qty: 1 }],
+      },
       resolveCode,
     ),
     /optie/i,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
+import { consumeOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { getOrderForViewer } from "@/lib/server/orders";
 
 export const Route = createFileRoute("/bestelling/$id")({
@@ -30,12 +31,8 @@ function OrderConfirmationPage() {
 
   useEffect(() => {
     if (!order) return;
-    const key = `volt-order-recovery:${order.id}`;
-    const code = sessionStorage.getItem(key);
-    if (code) {
-      setRecoveryCode(code);
-      sessionStorage.removeItem(key);
-    }
+    const code = consumeOrderRecoveryCode(order.id);
+    if (code) setRecoveryCode(code);
   }, [order]);
 
   if (!order) {
@@ -97,7 +94,8 @@ function OrderConfirmationPage() {
                   Bewaar je herstelcode
                 </h2>
                 <p className="mt-1 text-sm text-muted">
-                  Hiermee kun je deze bestelling 72 uur lang als gast terugvinden.
+                  Hiermee kun je deze bestelling 72 uur lang als gast
+                  terugvinden.
                 </p>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <code className="min-w-0 flex-1 break-all rounded-lg border border-border bg-surface px-3 py-2.5 text-sm font-bold tracking-wide text-fg">
@@ -121,7 +119,9 @@ function OrderConfirmationPage() {
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">{createdAt}</p>
-                <p className="mt-1 text-xs text-muted">Status van je bestelling</p>
+                <p className="mt-1 text-xs text-muted">
+                  Status van je bestelling
+                </p>
               </div>
               <OrderStatusBadge status={order.status} />
             </div>

@@ -85,14 +85,13 @@ test("createOrder writes customer, order and lines using server prices", async (
     [result.order.id],
   );
   const security = await sql.query(
-    `select idempotency_payload_hash, idempotency_viewer_hash,
-       guest_access_token_hash
+    `select idempotency_payload_hash, idempotency_viewer_hash
      from orders
      where id = $1`,
     [result.order.id],
   );
   const accessTokens = await sql.query(
-    `select token_hash, issued_at, expires_at
+    `select token_hash, token_ciphertext, issued_at, expires_at
      from order_access_tokens
      where order_id = $1`,
     [result.order.id],
@@ -132,9 +131,15 @@ test("createOrder writes customer, order and lines using server prices", async (
   assert.ok(result.guestAccessToken.length >= 20);
   assert.match(security[0].idempotency_payload_hash, /^[a-f0-9]{64}$/);
   assert.match(security[0].idempotency_viewer_hash, /^[a-f0-9]{64}$/);
-  assert.equal(security[0].guest_access_token_hash, null);
   assert.equal(accessTokens.length, 1);
   assert.match(accessTokens[0].token_hash, /^[a-f0-9]{64}$/);
+  assert.match(accessTokens[0].token_ciphertext, /^v1\.[^.]+\.[^.]+\.[^.]+$/);
+  assert.equal(
+    accessTokens[0].token_ciphertext.includes(
+      result.guestAccessToken.replaceAll("-", ""),
+    ),
+    false,
+  );
   assert.equal(
     new Date(accessTokens[0].expires_at).getTime() -
       new Date(accessTokens[0].issued_at).getTime(),
@@ -142,28 +147,23 @@ test("createOrder writes customer, order and lines using server prices", async (
   );
 });
 
-test("an idempotent retry keeps every issued guest proof valid", async () => {
+test("an idempotent retry returns the same guest proof without minting another", async () => {
   const input = orderInput();
   const first = await createOrderRecord(input, { userId: null });
   const second = await createOrderRecord(input, { userId: null });
 
   assert.equal(second.order.id, first.order.id);
   assert.equal(second.order.orderNumber, first.order.orderNumber);
-  assert.notEqual(second.guestAccessToken, first.guestAccessToken);
+  assert.equal(second.guestAccessToken, first.guestAccessToken);
   assert.equal(second.replayed, true);
 
-  for (const accessCode of [
-    first.guestAccessToken,
-    second.guestAccessToken,
-  ]) {
-    const accessible = await getOrderRecordForViewer({
-      id: first.order.id,
-      accessCode,
-      userId: null,
-      isAdmin: false,
-    });
-    assert.equal(accessible.id, first.order.id);
-  }
+  const accessible = await getOrderRecordForViewer({
+    id: first.order.id,
+    accessCode: second.guestAccessToken,
+    userId: null,
+    isAdmin: false,
+  });
+  assert.equal(accessible.id, first.order.id);
 
   const sql = await getSql();
   const orderCount = await sql.query(
@@ -180,19 +180,18 @@ test("an idempotent retry keeps every issued guest proof valid", async () => {
     `select token_hash from order_access_tokens where order_id = $1 order by issued_at`,
     [first.order.id],
   );
-  assert.equal(tokens.length, 2);
+  assert.equal(tokens.length, 1);
   assert.ok(tokens.every((row) => /^[a-f0-9]{64}$/.test(row.token_hash)));
-  assert.ok(
-    tokens.every(
-      (row) =>
-        row.token_hash !== first.guestAccessToken &&
-        row.token_hash !== second.guestAccessToken,
-    ),
-  );
+  assert.ok(tokens.every((row) => row.token_hash !== first.guestAccessToken));
 });
 
 test("canonical normalization treats equivalent retry payloads as identical", async () => {
-  const input = orderInput();
+  const input = orderInput({
+    lines: [
+      { slug: "semaglutide-2mg", optionId: "none", qty: 1 },
+      { slug: "semaglutide-2mg", optionId: "none", qty: 1 },
+    ],
+  });
   const first = await createOrderRecord(input, { userId: null });
   const replay = await createOrderRecord(
     {
@@ -206,7 +205,7 @@ test("canonical normalization treats equivalent retry payloads as identical", as
       city: "Utrecht",
       country: "NL",
       note: "Bel aan bij de buren.",
-      lines: [...input.lines].reverse(),
+      lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 2 }],
     },
     { userId: null },
   );
@@ -214,7 +213,7 @@ test("canonical normalization treats equivalent retry payloads as identical", as
   assert.equal(replay.order.id, first.order.id);
 });
 
-test("concurrent identical retries create one order and keep both proofs valid", async () => {
+test("concurrent identical retries create one order and return the same proof", async () => {
   const input = orderInput();
   const [first, second] = await Promise.all([
     createOrderRecord(input, { userId: null }),
@@ -222,20 +221,15 @@ test("concurrent identical retries create one order and keep both proofs valid",
   ]);
 
   assert.equal(first.order.id, second.order.id);
-  assert.notEqual(first.guestAccessToken, second.guestAccessToken);
+  assert.equal(first.guestAccessToken, second.guestAccessToken);
 
-  for (const accessCode of [
-    first.guestAccessToken,
-    second.guestAccessToken,
-  ]) {
-    const order = await getOrderRecordForViewer({
-      id: first.order.id,
-      accessCode,
-      userId: null,
-      isAdmin: false,
-    });
-    assert.equal(order.id, first.order.id);
-  }
+  const order = await getOrderRecordForViewer({
+    id: first.order.id,
+    accessCode: second.guestAccessToken,
+    userId: null,
+    isAdmin: false,
+  });
+  assert.equal(order.id, first.order.id);
 
   const sql = await getSql();
   const counts = await sql.query(
@@ -243,6 +237,11 @@ test("concurrent identical retries create one order and keep both proofs valid",
     [input.idempotencyKey],
   );
   assert.deepEqual(counts, [{ count: 1 }]);
+  const tokens = await sql.query(
+    "select count(*)::int as count from order_access_tokens where order_id = $1",
+    [first.order.id],
+  );
+  assert.deepEqual(tokens, [{ count: 1 }]);
 });
 
 test("an idempotency key rejects a different canonical payload", async () => {
@@ -411,7 +410,8 @@ test("the server enforces every allowed and forbidden order-status transition", 
         current,
         created.order.id,
       ]);
-      const allowed = ALLOWED_ORDER_STATUS_TRANSITIONS[current].includes(target);
+      const allowed =
+        ALLOWED_ORDER_STATUS_TRANSITIONS[current].includes(target);
       if (allowed) {
         const updated = await updateOrderStatusRecord(
           created.order.id,

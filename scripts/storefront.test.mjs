@@ -102,7 +102,11 @@ test("document responses include central security and privacy headers", async ()
     "/bestelling/bestaat-niet",
   ]) {
     const response = await fetch(`${BASE_URL}${path}`);
-    assert.match(response.headers.get("cache-control") ?? "", /no-store/i, path);
+    assert.match(
+      response.headers.get("cache-control") ?? "",
+      /no-store/i,
+      path,
+    );
     if (path === "/checkout") {
       const body = await response.text();
       assert.doesNotMatch(
@@ -755,18 +759,39 @@ test("a product can be ordered and only its authorized guest sees confirmation",
     await page.getByRole("link", { name: "Veilig afrekenen" }).click();
     await page.waitForURL(`${BASE_URL}/checkout`);
     await fillCheckout(page, `checkout-${randomUUID()}@example.test`);
-    const placeOrder = page.getByRole("button", { name: "Bestelling plaatsen" });
+    const placeOrder = page.getByRole("button", {
+      name: "Bestelling plaatsen",
+    });
     await placeOrder.waitFor({ state: "visible" });
     await assert.doesNotReject(async () => {
       await placeOrder.click();
       await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
     });
 
-    const orderNumber = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
+    const orderNumber = (
+      await page.getByRole("heading", { level: 1 }).innerText()
+    ).trim();
     assert.match(orderNumber, /^VOLT-[A-Z0-9]{8}$/);
-    await page.getByRole("heading", { name: "Bewaar je herstelcode" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .waitFor();
     const recoveryCode = (await page.locator("code").innerText()).trim();
     assert.deepEqual((await cartState(page)).lines, []);
+    assert.deepEqual(
+      await page.evaluate(() =>
+        Object.keys(sessionStorage).filter((key) =>
+          key.startsWith("volt-order-recovery:"),
+        ),
+      ),
+      [],
+    );
+    const guestCookie = (await context.cookies()).find(
+      (cookie) => cookie.name === "__Host-volt-order-access",
+    );
+    assert.ok(guestCookie);
+    assert.equal(guestCookie.secure, true);
+    assert.equal(guestCookie.path, "/");
+    assert.equal(guestCookie.sameSite, "Strict");
 
     const orderUrl = page.url();
     const denied = await newPage();
@@ -775,12 +800,19 @@ test("a product can be ordered and only its authorized guest sees confirmation",
       await denied.page
         .getByRole("heading", { name: "Bestelling niet beschikbaar" })
         .waitFor();
-      assert.equal(await denied.page.getByText(orderNumber, { exact: true }).count(), 0);
+      assert.equal(
+        await denied.page.getByText(orderNumber, { exact: true }).count(),
+        0,
+      );
 
-      await denied.page.goto(`${BASE_URL}/account`, { waitUntil: "networkidle" });
+      await denied.page.goto(`${BASE_URL}/account`, {
+        waitUntil: "networkidle",
+      });
       await denied.page.getByLabel("Bestelnummer").fill(orderNumber);
       await denied.page.getByLabel("Herstelcode").fill(recoveryCode);
-      await denied.page.getByRole("button", { name: "Bestelling bekijken" }).click();
+      await denied.page
+        .getByRole("button", { name: "Bestelling bekijken" })
+        .click();
       await denied.page.waitForURL(/\/bestelling\/[^/]+$/);
       await denied.page.getByRole("heading", { name: orderNumber }).waitFor();
     } finally {
@@ -804,7 +836,9 @@ test("a checkout request failure keeps the cart intact", async () => {
     await page.getByRole("link", { name: "Veilig afrekenen" }).click();
     await page.waitForURL(`${BASE_URL}/checkout`);
     await fillCheckout(page, `mislukt-${randomUUID()}@example.test`);
-    const placeOrder = page.getByRole("button", { name: "Bestelling plaatsen" });
+    const placeOrder = page.getByRole("button", {
+      name: "Bestelling plaatsen",
+    });
     await placeOrder.waitFor({ state: "visible" });
 
     await page.route("**/*", async (route) => {
@@ -838,9 +872,7 @@ test("checkout shows server-shared postcode feedback without clearing the cart",
     await page.getByLabel("Postcode").fill("abc");
     await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
 
-    await page
-      .getByText("Vul een geldige Nederlandse postcode in.")
-      .waitFor();
+    await page.getByText("Vul een geldige Nederlandse postcode in.").waitFor();
     assert.equal(page.url(), `${BASE_URL}/checkout`);
     assert.equal((await cartState(page)).lines.length, 1);
   } finally {
@@ -875,12 +907,23 @@ test("admin only offers valid next order statuses", async () => {
       (response) => response.status() === 401,
     );
     await page.getByLabel("Beheerwachtwoord").fill("onjuist-wachtwoord");
+    const rejectedAt = Date.now();
     await page.getByRole("button", { name: "Inloggen" }).click();
     assert.equal((await rejectedLogin).status(), 401);
+    assert.ok(Date.now() - rejectedAt >= 200);
     await page.getByText(/Inloggen mislukt/).waitFor();
     await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
+    const acceptedAt = Date.now();
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+    assert.ok(Date.now() - acceptedAt >= 200);
+    const adminCookie = (await context.cookies()).find(
+      (cookie) => cookie.name === "__Host-volt-admin-session",
+    );
+    assert.ok(adminCookie);
+    assert.equal(adminCookie.secure, true);
+    assert.equal(adminCookie.path, "/");
+    assert.equal(adminCookie.sameSite, "Strict");
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
     assert.equal(await page.getByLabel("Beheerwachtwoord").count(), 0);
@@ -923,11 +966,13 @@ test("admin only offers valid next order statuses", async () => {
     await page.keyboard.press("Enter");
     const detail = page.getByLabel(`Besteldetail ${orderNumber}`);
     await detail.waitFor({ state: "visible" });
-    assert.equal(await detail.evaluate((element) => element === document.activeElement), true);
+    assert.equal(
+      await detail.evaluate((element) => element === document.activeElement),
+      true,
+    );
     await detail.getByRole("button", { name: "Sluiten" }).click();
     await page.waitForFunction(
-      (label) =>
-        document.activeElement?.getAttribute("aria-label") === label,
+      (label) => document.activeElement?.getAttribute("aria-label") === label,
       `Bekijk bestelling ${orderNumber}`,
     );
     await page.keyboard.press("Enter");
@@ -989,14 +1034,19 @@ test("contact is stored and only an authenticated admin can handle it", async ()
       .last()
       .click();
     await page.getByLabel("Naam").fill("Contact Tester");
-    await page.getByLabel("E-mail").fill(`contact-${randomUUID()}@example.test`);
+    await page
+      .getByLabel("E-mail")
+      .fill(`contact-${randomUUID()}@example.test`);
     await page.getByLabel("Bericht").fill(uniqueMessage);
     await page.getByRole("button", { name: "Verstuur bericht" }).click();
     await page.getByText("Bericht verstuurd").waitFor();
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Inloggen" }).waitFor();
-    assert.equal(await page.getByRole("heading", { name: "Shopbeheer" }).count(), 0);
+    assert.equal(
+      await page.getByRole("heading", { name: "Shopbeheer" }).count(),
+      0,
+    );
     let unauthorizedStatus;
     const captureUnauthorized = (response) => {
       if (response.status() === 401) unauthorizedStatus = 401;
@@ -1027,20 +1077,22 @@ test("contact is stored and only an authenticated admin can handle it", async ()
     );
     assert.ok(summaryBoxes.every(Boolean));
     assert.ok(
-      summaryBoxes.every(
-        (box) => Math.abs(box.y - summaryBoxes[0].y) <= 2,
-      ),
+      summaryBoxes.every((box) => Math.abs(box.y - summaryBoxes[0].y) <= 2),
     );
     await page.getByRole("tab", { name: "Contact" }).click();
     await page.getByText(uniqueMessage).waitFor();
-    const contactCard = page.locator("article").filter({ hasText: uniqueMessage });
+    const contactCard = page
+      .locator("article")
+      .filter({ hasText: uniqueMessage });
     await contactCard
       .getByRole("button", { name: "Markeer afgehandeld" })
       .click();
     await page
       .getByText("Contactbericht gemarkeerd als afgehandeld.")
       .waitFor();
-    await page.getByRole("button", { name: "Afgehandeld", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Afgehandeld", exact: true })
+      .click();
     await page.getByText(uniqueMessage).waitFor();
   } finally {
     await context.close();

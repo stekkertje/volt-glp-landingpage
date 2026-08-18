@@ -17,6 +17,13 @@ export function isUnauthorizedServerError(error: unknown): boolean {
   );
 }
 
+export function isConflictServerError(error: unknown): boolean {
+  const candidate = asErrorLike(error);
+  return (
+    candidate.status === 409 || candidate.name === "IdempotencyConflictError"
+  );
+}
+
 export function rateLimitFeedback(error: unknown): string | null {
   const candidate = asErrorLike(error);
   const message =

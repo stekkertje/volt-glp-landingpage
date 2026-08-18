@@ -23,11 +23,12 @@ import {
 } from "@/lib/server/admin-policy.server";
 import { getRequestClientIdentifier } from "@/lib/server/request-client.server";
 
-export const ADMIN_COOKIE_NAME = "volt-admin-session";
+export const ADMIN_COOKIE_NAME = "__Host-volt-admin-session";
 const ADMIN_SESSION_SECONDS = 4 * 60 * 60;
 const LOGIN_WINDOW_MS = 15 * 60 * 1_000;
 const MAX_LOGIN_FAILURES = 8;
 const MAX_LOGIN_ATTEMPTS = 20;
+const MIN_LOGIN_RESPONSE_MS = 250;
 
 export class AdminUnauthorizedError extends Error {
   readonly status = 401;
@@ -47,10 +48,6 @@ export class SameOriginRequiredError extends Error {
   }
 }
 
-function productionCookie(): boolean {
-  return process.env.NODE_ENV === "production";
-}
-
 function requestKey(): string {
   try {
     return getRequestClientIdentifier();
@@ -65,24 +62,35 @@ function wait(milliseconds: number): Promise<void> {
 
 export function assertSameOriginMutation(): void {
   const request = getRequest();
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite === "same-origin") return;
-
-  const origin = request.headers.get("origin");
-  if (origin) {
-    const forwardedHost =
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const forwardedProtocol =
-      request.headers.get("x-forwarded-proto") ?? new URL(request.url).protocol.slice(0, -1);
-    const expectedOrigin = forwardedHost
-      ? `${forwardedProtocol}://${forwardedHost}`
-      : new URL(request.url).origin;
-    if (origin === expectedOrigin) return;
+  if (!isSameOriginMutationRequest(request)) {
+    throw new SameOriginRequiredError();
   }
-  throw new SameOriginRequiredError();
+}
+
+function originOf(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+export function isSameOriginMutationRequest(request: Request): boolean {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin") return false;
+
+  const expectedOrigin = new URL(request.url).origin;
+  const origin = request.headers.get("origin");
+  if (origin && originOf(origin) !== expectedOrigin) return false;
+
+  const referer = request.headers.get("referer");
+  if (referer && originOf(referer) !== expectedOrigin) return false;
+
+  return fetchSite === "same-origin" || Boolean(origin) || Boolean(referer);
 }
 
 export async function loginAdminWithPassword(password: string): Promise<void> {
+  const startedAt = Date.now();
   assertSameOriginMutation();
   const configuration = resolveAdminConfiguration(process.env);
   const passwordLogin = configuration.passwordLogin;
@@ -101,43 +109,40 @@ export async function loginAdminWithPassword(password: string): Promise<void> {
     throw error;
   }
 
-  if (
-    !passwordLogin ||
-    !timingSafePasswordEqual(password, passwordLogin.password)
-  ) {
+  const matchedPasswordLogin =
+    passwordLogin && timingSafePasswordEqual(password, passwordLogin.password)
+      ? passwordLogin
+      : null;
+  if (!matchedPasswordLogin) {
     try {
-      const failure = await consumeRateLimit({
+      await consumeRateLimit({
         scope: "admin-login-failure",
         identifier: key,
         limit: MAX_LOGIN_FAILURES,
         windowMs: LOGIN_WINDOW_MS,
         now: new Date(now),
       });
-      await wait(
-        Math.min(
-          4_000,
-          250 * 2 ** Math.min(failure.count - 1, 4),
-        ),
-      );
     } catch (error) {
       if (!(error instanceof RateLimitError)) throw error;
       await wait(Math.min(error.retryAfterMs, 4_000));
       applyRateLimitResponse(error);
       throw error;
     }
+    await wait(Math.max(0, MIN_LOGIN_RESPONSE_MS - (Date.now() - startedAt)));
     setResponseStatus(401);
     throw new AdminUnauthorizedError();
   }
 
   await clearRateLimit("admin-login-failure", key);
+  await wait(Math.max(0, MIN_LOGIN_RESPONSE_MS - (Date.now() - startedAt)));
   const expiresAt = now + ADMIN_SESSION_SECONDS * 1_000;
   setCookie(
     ADMIN_COOKIE_NAME,
-    signAdminSession(passwordLogin.sessionSecret, expiresAt),
+    signAdminSession(matchedPasswordLogin.sessionSecret, expiresAt),
     {
       httpOnly: true,
       sameSite: "strict",
-      secure: productionCookie(),
+      secure: true,
       path: "/",
       maxAge: ADMIN_SESSION_SECONDS,
     },
@@ -149,7 +154,7 @@ export function logoutAdminSession(): void {
   deleteCookie(ADMIN_COOKIE_NAME, {
     httpOnly: true,
     sameSite: "strict",
-    secure: productionCookie(),
+    secure: true,
     path: "/",
   });
 }
@@ -161,10 +166,7 @@ export async function isAdminViewer(bearerToken?: string): Promise<boolean> {
   if (!configuration) return false;
   const sessionCookie = getCookie(ADMIN_COOKIE_NAME);
   if (
-    hasConfiguredAdminAccess(
-      { sessionCookie, userEmail: null },
-      configuration,
-    )
+    hasConfiguredAdminAccess({ sessionCookie, userEmail: null }, configuration)
   ) {
     return true;
   }
@@ -180,11 +182,19 @@ export async function requireAdmin(bearerToken?: string): Promise<void> {
   if (!(await isAdminViewer(bearerToken))) throw new AdminUnauthorizedError();
 }
 
-export function getAdminCapabilities(): {
+export function getAdminCapabilities(
+  environment: Record<string, string | undefined> = process.env,
+): {
   passwordLoginAvailable: boolean;
   allowlistConfigured: boolean;
 } {
-  const configuration = resolveAdminConfiguration(process.env);
+  const configuration = resolveAdminAuthorizationConfiguration(environment);
+  if (!configuration) {
+    return {
+      passwordLoginAvailable: false,
+      allowlistConfigured: false,
+    };
+  }
   return {
     passwordLoginAvailable: Boolean(configuration.passwordLogin),
     allowlistConfigured: configuration.adminEmails.size > 0,

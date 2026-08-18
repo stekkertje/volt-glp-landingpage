@@ -1,21 +1,17 @@
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Loader2, LockKeyhole } from "lucide-react";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/lib/cart-store";
+import {
+  checkoutIdempotencyForPayload,
+  type CheckoutIdempotencyState,
+} from "@/lib/checkout-idempotency";
+import { stageOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { createOrderSchema } from "@/lib/server/order-schema";
 import { createOrder, getPricingPreview } from "@/lib/server/orders";
-import { rateLimitFeedback } from "@/lib/server-error";
+import { isConflictServerError, rateLimitFeedback } from "@/lib/server-error";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/checkout")({
@@ -25,8 +21,10 @@ export const Route = createFileRoute("/checkout")({
       { title: "Afrekenen | VOLT" },
       {
         name: "description",
-        content: "Plaats je VOLT-bestelling voor levering in Nederland of België.",
+        content:
+          "Plaats je VOLT-bestelling voor levering in Nederland of België.",
       },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
 });
@@ -50,8 +48,9 @@ function CheckoutPage() {
   const [pricingError, setPricingError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [orderConflict, setOrderConflict] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const idempotencyKey = useRef<string | null>(null);
+  const idempotency = useRef<CheckoutIdempotencyState | null>(null);
   const emptyRedirected = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -83,7 +82,11 @@ function CheckoutPage() {
     setPricingError("");
     void getPricingPreview({
       data: {
-        lines: lines.map(({ slug, optionId, qty }) => ({ slug, optionId, qty })),
+        lines: lines.map(({ slug, optionId, qty }) => ({
+          slug,
+          optionId,
+          qty,
+        })),
         discountCode: discountApplied ? discountCode : undefined,
       },
     })
@@ -105,10 +108,10 @@ function CheckoutPage() {
     if (!lines.length || submitting) return;
     setSubmitting(true);
     setFormError("");
+    setOrderConflict(false);
     setFieldErrors({});
     const form = event.currentTarget;
     const fields = new FormData(form);
-    idempotencyKey.current ??= crypto.randomUUID();
     const validation = createOrderSchema.safeParse({
       name: String(fields.get("name") ?? ""),
       email: String(fields.get("email") ?? ""),
@@ -121,7 +124,7 @@ function CheckoutPage() {
       note: String(fields.get("note") ?? ""),
       lines: lines.map(({ slug, optionId, qty }) => ({ slug, optionId, qty })),
       discountCode: discountApplied ? discountCode : undefined,
-      idempotencyKey: idempotencyKey.current,
+      idempotencyKey: idempotency.current?.key ?? crypto.randomUUID(),
     });
     if (!validation.success) {
       const nextErrors: Record<string, string> = {};
@@ -143,13 +146,17 @@ function CheckoutPage() {
     }
 
     try {
-      const result = await createOrder({
-        data: validation.data,
-      });
-      sessionStorage.setItem(
-        `volt-order-recovery:${result.order.id}`,
-        result.guestAccessToken,
+      idempotency.current = await checkoutIdempotencyForPayload(
+        validation.data,
+        idempotency.current,
       );
+      const result = await createOrder({
+        data: {
+          ...validation.data,
+          idempotencyKey: idempotency.current.key,
+        },
+      });
+      stageOrderRecoveryCode(result.order.id, result.guestAccessToken);
       emptyRedirected.current = true;
       clearCart();
       await navigate({
@@ -157,10 +164,15 @@ function CheckoutPage() {
         params: { id: result.order.id },
       });
     } catch (error) {
-      setFormError(
-        rateLimitFeedback(error) ??
-          "Bestelling plaatsen is niet gelukt. Je winkelwagen is bewaard. Controleer je gegevens en probeer opnieuw.",
-      );
+      if (isConflictServerError(error)) {
+        setOrderConflict(true);
+        setFormError("Deze bestelling is al geplaatst.");
+      } else {
+        setFormError(
+          rateLimitFeedback(error) ??
+            "Bestelling plaatsen is niet gelukt. Je winkelwagen is bewaard. Controleer je gegevens en probeer opnieuw.",
+        );
+      }
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setSubmitting(false);
@@ -214,6 +226,14 @@ function CheckoutPage() {
                     className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger outline-none"
                   >
                     {formError}
+                    {orderConflict && (
+                      <Link
+                        to="/account"
+                        className="ml-1 font-bold underline underline-offset-2"
+                      >
+                        Bekijk je bestellingen.
+                      </Link>
+                    )}
                   </div>
                 )}
 
@@ -291,7 +311,9 @@ function CheckoutPage() {
                       className={inputClass}
                       aria-invalid={Boolean(fieldErrors.country)}
                       aria-describedby={
-                        fieldErrors.country ? "checkout-country-error" : undefined
+                        fieldErrors.country
+                          ? "checkout-country-error"
+                          : undefined
                       }
                     >
                       <option value="NL">Nederland</option>
@@ -311,7 +333,8 @@ function CheckoutPage() {
 
                 <label className="block space-y-1.5">
                   <span className="text-xs font-semibold text-fg">
-                    Opmerking <span className="font-normal text-dim">(optioneel)</span>
+                    Opmerking{" "}
+                    <span className="font-normal text-dim">(optioneel)</span>
                   </span>
                   <textarea
                     name="note"
@@ -362,7 +385,9 @@ function CheckoutPage() {
             </section>
 
             <aside className="rounded-xl border border-border bg-surface p-5 shadow-sm lg:sticky lg:top-28">
-              <h2 className="text-lg font-extrabold tracking-tight">Je bestelling</h2>
+              <h2 className="text-lg font-extrabold tracking-tight">
+                Je bestelling
+              </h2>
               {pricing ? (
                 <>
                   <div className="mt-4 divide-y divide-border">
@@ -479,10 +504,14 @@ function PriceRow({
   free?: boolean;
 }) {
   return (
-    <div className={`flex justify-between ${discount ? "text-success" : "text-muted"}`}>
+    <div
+      className={`flex justify-between ${discount ? "text-success" : "text-muted"}`}
+    >
       <dt>{label}</dt>
       <dd className="tabular-nums text-current">
-        {free ? "Gratis" : `${cents < 0 ? "−" : ""}${formatEuro(Math.abs(cents))}`}
+        {free
+          ? "Gratis"
+          : `${cents < 0 ? "−" : ""}${formatEuro(Math.abs(cents))}`}
       </dd>
     </div>
   );

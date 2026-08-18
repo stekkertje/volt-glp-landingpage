@@ -12,7 +12,7 @@ import {
 } from "@/lib/product";
 
 export const FREE_SHIPPING_CENTS = SITE.freeShippingCents;
-export const MAX_LINE_QTY = 10;
+export const MAX_LINE_QTY = SITE.maxLineQuantity;
 
 export type CartLine = {
   slug: ProductSlug;
@@ -94,10 +94,7 @@ export const useCartStore = create<CartState>()(
           const existing = s.lines.find(
             (l) => lineKey(l.slug, l.optionId) === lineKey(product.slug, opt),
           );
-          const nextQty = Math.min(
-            MAX_LINE_QTY,
-            (existing?.qty ?? 0) + addQty,
-          );
+          const nextQty = Math.min(MAX_LINE_QTY, (existing?.qty ?? 0) + addQty);
           const lines = existing
             ? s.lines.map((l) =>
                 lineKey(l.slug, l.optionId) === lineKey(product.slug, opt)
@@ -218,7 +215,7 @@ export function cartCodeDiscountCents(
 }
 
 export function cartShippingCents(subtotalAfterDiscount: number) {
-  return subtotalAfterDiscount >= FREE_SHIPPING_CENTS ? 0 : 495;
+  return subtotalAfterDiscount >= FREE_SHIPPING_CENTS ? 0 : SITE.shippingCents;
 }
 
 export function lineLabel(line: CartLine) {

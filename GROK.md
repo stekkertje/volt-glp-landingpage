@@ -21,7 +21,7 @@ Regels:
 - Preview/dev: 0.0.0.0:8080. Niet vragen om lokaal te runnen.
 - Catalogus met zes producten en afzonderlijke productpagina's.
 - Primair doel: een passende vorm kiezen en direct toevoegen.
-- Cart, contactformulier en checkout zijn DEMO (geen echte betaling/mail).
+- Cart is clientstate. Checkout plaatst echte gastorders en contact wordt opgeslagen. Betaling en mail blijven handmatig.
 - Wijzig alleen wat gevraagd wordt. Geen extra features zonder opdracht.
 
 Bevestig kort dat je GROK.md hebt gelezen en wacht op de volgende opdracht.
@@ -81,13 +81,13 @@ React 19, TypeScript, Vite 8, TanStack Start/Router, Tailwind v4, Zustand, Lucid
 | `src/components/landing-page.tsx`      | Homepage en productcatalogus                           |
 | `src/components/product-page.tsx`      | Productdetailpagina                                    |
 | `src/lib/product.ts`                   | Productdata, opties, FAQ, reviews en copy              |
-| `src/lib/cart-store.ts`                | Winkelwagen (client-only, demo)                        |
+| `src/lib/cart-store.ts`                | Persistente winkelwagenstate in de browser             |
 | `src/lib/contact-store.ts`             | Contactmodal open/dicht                                |
 | `src/components/pack-selector.tsx`     | Extra-keuze, aantal, korting en CTA                    |
 | `src/components/site-header.tsx`       | Sticky header + marquee + hide-on-scroll + mobiel menu |
 | `src/components/announce-bar.tsx`      | Altijd zichtbare marquee (niet sluitbaar)              |
 | `src/components/cart-drawer.tsx`       | Winkelwagen-drawer                                     |
-| `src/components/contact-dialog.tsx`    | Contactformulier (alleen na klik, demo-submit)         |
+| `src/components/contact-dialog.tsx`    | Contactformulier dat berichten in de backend opslaat   |
 | `src/components/delivery-promise.tsx`  | Countdown tot 23:00                                    |
 | `src/components/product-gallery.tsx`   | Productafbeeldingen en thumbnails                      |
 | `src/components/mobile-sticky-bar.tsx` | Mobiele sticky koopbalk                                |
@@ -147,18 +147,20 @@ Productpagina:
 - Mobiele sticky “Kopen” gebruikt hetzelfde aantal en dezelfde optie als de productselector.
 - Cookiebanner en sticky koopbalk mogen elkaar nooit overlappen.
 - Footer Levering: Nederland & België, 1–2 werkdagen, gratis vanaf €100.
-- Cart bevat geen betaalproviderknoppen; checkout blijft expliciet demo.
+- Cart bevat geen betaalproviderknoppen; checkout slaat een echte gastorder op en vermeldt dat betaling later volgt.
 - Contact opent alleen na een bewuste klik en gebruikt een modal.
 - Producttitels blijven productspecifiek, ook met een winkelwagenaantal in de browsertab.
 
 ---
 
-## Demo vs live (niet “fixen” tenzij gevraagd)
+## Live status
 
-- Cart: Zustand, geen backend
-- Contact: timeout + toast, geen echte mail
-- Checkout in drawer: nep-success
-- Auth/login, PGLite en `/__grok` PWA: template-infrastructuur, niet gekoppeld aan de shop
+- Cart: Zustand-state in de browser; prijzen worden bij checkout opnieuw op de server berekend
+- Contact: gevalideerde berichten worden opgeslagen; er wordt nog geen e-mail verstuurd
+- Checkout: `/checkout` slaat echte gastorders op; betaling blijft een handmatig betaalverzoek
+- Auth/login: gekoppeld aan accountbestellingen en optionele admin-allowlist
+- PGLite: alleen lokale preview/testfallback; productie vereist Postgres via `DATABASE_URL`
+- `/__grok` PWA: platforminfrastructuur voor installatie
 - Hostinger shared: niet compatible zonder static export
 
 ---
@@ -186,6 +188,7 @@ npm run typecheck
 6. Voeg voor geldstromen en navigatie een browserregressie toe in `scripts/storefront.test.mjs`.
 
 ## Echte shopbackend
+
 - `/checkout` plaatst echte gastorders en contactberichten worden opgeslagen.
 - Betaling en e-mailafhandeling blijven handmatig.
 - `/admin` beheert bestellingen, statussen en contactberichten.

@@ -13,13 +13,16 @@ export default async function securityHeadersMiddleware(
 
   const headers = new Headers(result.headers);
   for (const [name, value] of Object.entries(
-    securityHeadersForPath(event.url.pathname),
+    securityHeadersForPath(event.url.pathname, {
+      hsts:
+        process.env.NODE_ENV === "production" &&
+        event.url.protocol === "https:",
+    }),
   )) {
     headers.set(name, value);
   }
   if (result.status === 429 && !headers.has("retry-after")) {
-    const retryAfter =
-      /Retry-After-(\d+)/.exec(result.statusText)?.[1] ?? "60";
+    const retryAfter = /Retry-After-(\d+)/.exec(result.statusText)?.[1] ?? "60";
     headers.set("retry-after", retryAfter);
   }
   return new Response(result.body, {

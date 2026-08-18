@@ -12,12 +12,23 @@ import {
 } from "@/lib/server/order-schema";
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
 
-export const GUEST_ORDER_COOKIE = "volt-order-access";
+export const GUEST_ORDER_COOKIE = "__Host-volt-order-access";
 
 export const getPricingPreview = createServerFn({ method: "POST" })
   .middleware([sameSiteMiddleware])
   .validator(pricingPreviewSchema)
   .handler(async ({ data }) => {
+    const { enforcePricingPreviewLimit } =
+      await import("./abuse-protection.server");
+    const { getRequestClientIdentifier } =
+      await import("./request-client.server");
+    const { applyRateLimitResponse } = await import("./rate-limit.server");
+    try {
+      await enforcePricingPreviewLimit(getRequestClientIdentifier());
+    } catch (error) {
+      applyRateLimitResponse(error);
+      throw error;
+    }
     const { calculatePricing } = await import("./pricing");
     return calculatePricing(data);
   });
@@ -26,24 +37,21 @@ export const createOrder = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(createOrderSchema)
   .handler(async ({ data, context }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    assertSameOriginMutation();
     const { setCookie } = await import("@tanstack/react-start/server");
     const {
       createOrderRecord,
       GUEST_ACCESS_TOKEN_TTL_MS,
       guestOrderCookieValue,
     } = await import("./orders.server");
-    const { enforceOrderCreationLimit } = await import(
-      "./abuse-protection.server"
-    );
-    const { getRequestClientIdentifier } = await import(
-      "./request-client.server"
-    );
+    const { enforceOrderCreationLimit } =
+      await import("./abuse-protection.server");
+    const { getRequestClientIdentifier } =
+      await import("./request-client.server");
     const { applyRateLimitResponse } = await import("./rate-limit.server");
     try {
-      await enforceOrderCreationLimit(
-        getRequestClientIdentifier(),
-        data.email,
-      );
+      await enforceOrderCreationLimit(getRequestClientIdentifier(), data.email);
     } catch (error) {
       applyRateLimitResponse(error);
       throw error;
@@ -55,7 +63,7 @@ export const createOrder = createServerFn({ method: "POST" })
       {
         httpOnly: true,
         sameSite: "strict",
-        secure: process.env.NODE_ENV === "production",
+        secure: true,
         path: "/",
         maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
       },
@@ -67,9 +75,8 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator(orderViewerSchema)
   .handler(async ({ data, context }) => {
-    const { getCookie, setCookie } = await import(
-      "@tanstack/react-start/server"
-    );
+    const { getCookie, setCookie } =
+      await import("@tanstack/react-start/server");
     const {
       GUEST_ACCESS_TOKEN_TTL_MS,
       getOrderRecordForViewer,
@@ -78,12 +85,10 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
     } = await import("./orders.server");
     const { isAdminViewer } = await import("./admin-auth.server");
     if (data.accessCode) {
-      const { enforceOrderAccessLimit } = await import(
-        "./abuse-protection.server"
-      );
-      const { getRequestClientIdentifier } = await import(
-        "./request-client.server"
-      );
+      const { enforceOrderAccessLimit } =
+        await import("./abuse-protection.server");
+      const { getRequestClientIdentifier } =
+        await import("./request-client.server");
       const { applyRateLimitResponse } = await import("./rate-limit.server");
       const orderReference = data.id ?? data.orderNumber ?? "unknown";
       try {
@@ -112,7 +117,7 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
         {
           httpOnly: true,
           sameSite: "strict",
-          secure: process.env.NODE_ENV === "production",
+          secure: true,
           path: "/",
           maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
         },
@@ -151,9 +156,5 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     const { assertSameOriginMutation } = await import("./admin-auth.server");
     const { updateOrderStatusRecord } = await import("./orders.server");
     assertSameOriginMutation();
-    return updateOrderStatusRecord(
-      data.id,
-      data.expectedStatus,
-      data.status,
-    );
+    return updateOrderStatusRecord(data.id, data.expectedStatus, data.status);
   });

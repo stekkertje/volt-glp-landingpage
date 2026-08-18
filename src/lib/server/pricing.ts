@@ -69,8 +69,14 @@ async function resolveDiscountCodeFromDatabase(
 }
 
 function normalizeLine(line: PricingLineInput): PricedLine {
-  if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > 10) {
-    throw new PricingError("Het aantal per product moet een geheel getal van 1 tot en met 10 zijn.");
+  if (
+    !Number.isInteger(line.qty) ||
+    line.qty < 1 ||
+    line.qty > SITE.maxLineQuantity
+  ) {
+    throw new PricingError(
+      `Het aantal per product moet een geheel getal van 1 tot en met ${SITE.maxLineQuantity} zijn.`,
+    );
   }
 
   const product = getProduct(line.slug);
@@ -82,7 +88,9 @@ function normalizeLine(line: PricingLineInput): PricedLine {
     ? product.options.some((option) => option.id === line.optionId)
     : line.optionId === "default";
   if (!hasValidOption) {
-    throw new PricingError(`De gekozen optie voor ${product.name} bestaat niet.`);
+    throw new PricingError(
+      `De gekozen optie voor ${product.name} bestaat niet.`,
+    );
   }
 
   const option = getOption(product, line.optionId);
@@ -98,6 +106,34 @@ function normalizeLine(line: PricingLineInput): PricedLine {
   };
 }
 
+function coalesceLines(inputLines: PricingLineInput[]): PricedLine[] {
+  const byVariant = new Map<string, PricedLine>();
+
+  for (const inputLine of inputLines) {
+    const line = normalizeLine(inputLine);
+    const key = `${line.slug}\0${line.optionId}`;
+    const existing = byVariant.get(key);
+    if (!existing) {
+      byVariant.set(key, line);
+      continue;
+    }
+
+    const qty = existing.qty + line.qty;
+    if (qty > SITE.maxLineQuantity) {
+      throw new PricingError(
+        `Van ${line.name} (${line.optionLabel}) kun je maximaal ${SITE.maxLineQuantity} stuks bestellen.`,
+      );
+    }
+    byVariant.set(key, {
+      ...existing,
+      qty,
+      lineTotalCents: existing.unitPriceCents * qty,
+    });
+  }
+
+  return [...byVariant.values()];
+}
+
 export async function calculatePricing(
   input: PricingInput,
   resolveDiscountCode: DiscountCodeResolver = resolveDiscountCodeFromDatabase,
@@ -109,9 +145,17 @@ export async function calculatePricing(
     throw new PricingError("Je winkelwagen bevat te veel productregels.");
   }
 
-  const lines = input.lines.map(normalizeLine);
-  const subtotalCents = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+  const lines = coalesceLines(input.lines);
+  const subtotalCents = lines.reduce(
+    (sum, line) => sum + line.lineTotalCents,
+    0,
+  );
   const totalQty = lines.reduce((sum, line) => sum + line.qty, 0);
+  if (totalQty > SITE.maxOrderQuantity) {
+    throw new PricingError(
+      `Een bestelling mag maximaal ${SITE.maxOrderQuantity} stuks bevatten.`,
+    );
+  }
   const stackPercent = totalQty >= 10 ? 20 : totalQty >= 5 ? 10 : 0;
   const stackDiscountCents = Math.round(subtotalCents * (stackPercent / 100));
   const afterStackCents = subtotalCents - stackDiscountCents;
@@ -129,7 +173,8 @@ export async function calculatePricing(
   }
 
   const afterDiscountCents = afterStackCents - codeDiscountCents;
-  const shippingCents = afterDiscountCents < SITE.freeShippingCents ? 495 : 0;
+  const shippingCents =
+    afterDiscountCents < SITE.freeShippingCents ? SITE.shippingCents : 0;
   const totalCents = afterDiscountCents + shippingCents;
 
   return {

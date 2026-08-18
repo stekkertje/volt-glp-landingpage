@@ -48,4 +48,14 @@ test("admin and order documents are never cacheable", () => {
 test("development policy allows Vite evaluation without weakening production", () => {
   const headers = securityHeadersForPath("/", { development: true });
   assert.match(headers["content-security-policy"], /unsafe-eval/);
+  assert.equal(headers["strict-transport-security"], undefined);
+});
+
+test("HSTS is opt-in for a production HTTPS response only", () => {
+  const headers = securityHeadersForPath("/", { hsts: true });
+  assert.equal(headers["strict-transport-security"], "max-age=31536000");
+  assert.doesNotMatch(
+    headers["strict-transport-security"],
+    /includeSubDomains/i,
+  );
 });

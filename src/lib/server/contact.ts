@@ -11,10 +11,11 @@ export const createContactMessage = createServerFn({ method: "POST" })
   .middleware([sameSiteMiddleware])
   .validator(contactMessageSchema)
   .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    assertSameOriginMutation();
     const { storeContactMessage } = await import("./contact.server");
-    const { getRequestClientIdentifier } = await import(
-      "./request-client.server"
-    );
+    const { getRequestClientIdentifier } =
+      await import("./request-client.server");
     const { applyRateLimitResponse } = await import("./rate-limit.server");
     try {
       await storeContactMessage(data, getRequestClientIdentifier());

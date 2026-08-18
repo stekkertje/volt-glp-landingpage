@@ -48,10 +48,11 @@ function AccountPage() {
                 <Loader2 className="size-4 animate-spin" />
                 Account laden…
               </p>
-            ) : user ? (
-              <SignedInOrders />
             ) : (
-              <GuestOrderAccess />
+              <>
+                {user && !user.isDevFallback && <SignedInOrders />}
+                <GuestOrderAccess showLogin={!user} />
+              </>
             )}
           </div>
         </div>
@@ -82,10 +83,15 @@ function SignedInOrders() {
     <section className="mt-8 space-y-5">
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
         <UserButton />
-        <p className="text-xs text-muted">Alleen bestellingen van dit account</p>
+        <p className="text-xs text-muted">
+          Alleen bestellingen van dit account
+        </p>
       </div>
       {error && (
-        <p role="alert" className="rounded-xl border border-danger/25 bg-danger/5 p-4 text-sm text-danger">
+        <p
+          role="alert"
+          className="rounded-xl border border-danger/25 bg-danger/5 p-4 text-sm text-danger"
+        >
           {error}
         </p>
       )}
@@ -94,7 +100,9 @@ function SignedInOrders() {
       )}
       {orders?.length === 0 && (
         <div className="rounded-xl border border-border bg-surface p-6 text-center">
-          <p className="text-sm text-muted">Er staan nog geen bestellingen op dit account.</p>
+          <p className="text-sm text-muted">
+            Er staan nog geen bestellingen op dit account.
+          </p>
           <Button className="mt-4" asChild>
             <Link to="/" hash="producten">
               Bekijk producten
@@ -113,11 +121,13 @@ function SignedInOrders() {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-extrabold tracking-tight">{order.orderNumber}</p>
+                  <p className="font-extrabold tracking-tight">
+                    {order.orderNumber}
+                  </p>
                   <p className="mt-1 text-xs text-muted">
-                    {new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" }).format(
-                      new Date(order.createdAt),
-                    )}
+                    {new Intl.DateTimeFormat("nl-NL", {
+                      dateStyle: "medium",
+                    }).format(new Date(order.createdAt))}
                   </p>
                 </div>
                 <OrderStatusBadge status={order.status} />
@@ -133,7 +143,7 @@ function SignedInOrders() {
   );
 }
 
-function GuestOrderAccess() {
+function GuestOrderAccess({ showLogin }: { showLogin: boolean }) {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -164,7 +174,9 @@ function GuestOrderAccess() {
   };
 
   return (
-    <div className="mt-8 grid gap-5 md:grid-cols-[1fr_auto]">
+    <div
+      className={showLogin ? "mt-8 grid gap-5 md:grid-cols-[1fr_auto]" : "mt-8"}
+    >
       <form
         onSubmit={onSubmit}
         className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6"
@@ -178,8 +190,8 @@ function GuestOrderAccess() {
               Bestelling als gast
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Gebruik het VOLT-nummer en de herstelcode die na bestellen één keer
-              is getoond.
+              Gebruik het VOLT-nummer en de herstelcode die na bestellen één
+              keer is getoond.
             </p>
           </div>
         </div>
@@ -220,17 +232,19 @@ function GuestOrderAccess() {
         </Button>
       </form>
 
-      <div className="flex items-center justify-center text-center md:w-52">
-        <div>
-          <LogIn className="mx-auto size-5 text-primary" />
-          <p className="mt-2 text-sm font-semibold">Heb je een account?</p>
-          <Button className="mt-3" variant="secondary" asChild>
-            <Link to="/login" search={{ redirect: "/account" }}>
-              Inloggen
-            </Link>
-          </Button>
+      {showLogin && (
+        <div className="flex items-center justify-center text-center md:w-52">
+          <div>
+            <LogIn className="mx-auto size-5 text-primary" />
+            <p className="mt-2 text-sm font-semibold">Heb je een account?</p>
+            <Button className="mt-3" variant="secondary" asChild>
+              <Link to="/login" search={{ redirect: "/account" }}>
+                Inloggen
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

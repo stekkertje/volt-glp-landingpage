@@ -50,3 +50,14 @@ export async function enforceContactCreationLimit(
     windowMs: TEN_MINUTES_MS,
   });
 }
+
+export async function enforcePricingPreviewLimit(
+  requestIp: string,
+): Promise<void> {
+  await consumeRateLimit({
+    scope: "pricing-preview",
+    identifier: requestIp,
+    limit: 60,
+    windowMs: TEN_MINUTES_MS,
+  });
+}

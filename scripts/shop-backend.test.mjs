@@ -58,7 +58,8 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
     ],
   );
 
-  const codes = await sql`select code, percent, active from discount_codes where code = 'VOLT10'`;
+  const codes =
+    await sql`select code, percent, active from discount_codes where code = 'VOLT10'`;
   assert.deepEqual(codes, [{ code: "VOLT10", percent: 10, active: true }]);
   const foreignKeys = await sql.query(
     "select conname from pg_constraint where conname = 'orders_user_id_fkey'",
@@ -68,11 +69,76 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
     `select index_class.relname as indexname, index_meta.indisvalid
      from pg_index as index_meta
      join pg_class as index_class on index_class.oid = index_meta.indexrelid
-     where index_class.relname = 'orders_user_id_idx'`,
+     where index_class.relname = any($1)
+     order by index_class.relname`,
+    [["order_lines_order_variant_uidx", "orders_user_id_idx"]],
   );
   assert.deepEqual(indexes, [
+    { indexname: "order_lines_order_variant_uidx", indisvalid: true },
     { indexname: "orders_user_id_idx", indisvalid: true },
   ]);
+
+  const legacyColumns = await sql.query(
+    `select column_name
+     from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'orders'
+       and column_name = 'guest_access_token_hash'`,
+  );
+  assert.deepEqual(legacyColumns, []);
+  const tokenColumns = await sql.query(
+    `select column_name
+     from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'order_access_tokens'
+       and column_name = 'token_ciphertext'`,
+  );
+  assert.deepEqual(tokenColumns, [{ column_name: "token_ciphertext" }]);
+});
+
+test("the database rejects duplicate variants within one order", async () => {
+  const orderId = randomUUID();
+  await assert.rejects(
+    withSqlTransaction(async (tx) => {
+      await tx.query(
+        `insert into orders (
+          id, order_number, email, name, street, house_number, postcode, city, country,
+          status, subtotal_cents, stack_discount_cents, code_discount_cents,
+          shipping_cents, total_cents
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, 0, 0, $11)`,
+        [
+          orderId,
+          `VOLT-${randomUUID().slice(0, 8).toUpperCase()}`,
+          `${orderId}@example.test`,
+          "Unieke variant",
+          "Teststraat",
+          "1",
+          "1234 AB",
+          "Utrecht",
+          "NL",
+          "pending",
+          17_000,
+        ],
+      );
+      for (let index = 0; index < 2; index += 1) {
+        await tx.query(
+          `insert into order_lines (
+            id, order_id, slug, option_id, name, option_label,
+            unit_price_cents, qty, line_total_cents
+          ) values ($1, $2, 'semaglutide-2mg', 'none', 'Semaglutide 2mg',
+            'Geen extra''s', 8500, 1, 8500)`,
+          [randomUUID(), orderId],
+        );
+      }
+    }),
+    /unique|duplicate|order_lines_order_variant/i,
+  );
+
+  const sql = await getSql();
+  assert.deepEqual(
+    await sql.query("select id from orders where id = $1", [orderId]),
+    [],
+  );
 });
 
 test("withSqlTransaction rolls an order back when its line insert fails", async () => {

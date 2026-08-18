@@ -1,11 +1,22 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import { getSql, withSqlTransaction, type Sql } from "@/lib/db";
+import { canonicalCheckoutPayload } from "@/lib/checkout-idempotency";
 import {
   ORDER_STATUSES,
   isOrderStatusTransitionAllowed,
   type OrderStatus,
 } from "@/lib/order-status";
-import { calculatePricing, type DiscountCodeRecord } from "@/lib/server/pricing";
+import {
+  calculatePricing,
+  type DiscountCodeRecord,
+} from "@/lib/server/pricing";
 import {
   createOrderSchema,
   type CreateOrderInput,
@@ -112,6 +123,12 @@ export type OrderViewer = OrderViewerInput & {
 const TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ORDER_ACCESS_ERROR = "Bestelling niet gevonden of niet toegankelijk.";
 export const GUEST_ACCESS_TOKEN_TTL_MS = 72 * 60 * 60 * 1_000;
+const TOKEN_CIPHER_VERSION = "v1";
+const TOKEN_CIPHER_CONTEXT = "volt-order-access-token";
+
+const globalOrderSecurity = globalThis as typeof globalThis & {
+  __voltOrderAccessTokenSecret__?: Buffer;
+};
 
 export class OrderAccessError extends Error {
   constructor() {
@@ -159,7 +176,10 @@ export function generateGuestAccessToken(): string {
 }
 
 export function normalizeGuestAccessToken(token: string): string {
-  return token.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return token
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function sha256(value: string): string {
@@ -170,36 +190,78 @@ export function hashGuestAccessToken(token: string): string {
   return sha256(normalizeGuestAccessToken(token));
 }
 
-function canonicalPayloadHash(input: CreateOrderInput): string {
-  const lines = [...input.lines]
-    .map((line) => ({
-      slug: line.slug,
-      optionId: line.optionId,
-      qty: line.qty,
-    }))
-    .sort((left, right) =>
-      `${left.slug}\0${left.optionId}`.localeCompare(
-        `${right.slug}\0${right.optionId}`,
-      ),
-    );
-  return sha256(
-    JSON.stringify({
-      name: input.name,
-      email: input.email,
-      phone: input.phone ?? null,
-      street: input.street,
-      houseNumber: input.houseNumber,
-      postcode: input.postcode,
-      city: input.city,
-      country: input.country,
-      note: input.note ?? null,
-      discountCode: input.discountCode?.toUpperCase() ?? null,
-      lines,
-    }),
-  );
+function accessTokenEncryptionKey(): Buffer {
+  const configuredSecret =
+    process.env.ORDER_ACCESS_TOKEN_SECRET?.trim() ||
+    process.env.BETTER_AUTH_SECRET?.trim() ||
+    process.env.DATABASE_URL?.trim();
+  if (configuredSecret) {
+    return createHash("sha256")
+      .update(TOKEN_CIPHER_CONTEXT)
+      .update("\0")
+      .update(configuredSecret)
+      .digest();
+  }
+  globalOrderSecurity.__voltOrderAccessTokenSecret__ ??= randomBytes(32);
+  return globalOrderSecurity.__voltOrderAccessTokenSecret__;
 }
 
-function viewerBindingHash(input: CreateOrderInput, userId: string | null): string {
+function encryptGuestAccessToken(orderId: string, token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", accessTokenEncryptionKey(), iv);
+  cipher.setAAD(Buffer.from(`${TOKEN_CIPHER_CONTEXT}\0${orderId}`, "utf8"));
+  const ciphertext = Buffer.concat([
+    cipher.update(token, "utf8"),
+    cipher.final(),
+  ]);
+  return [
+    TOKEN_CIPHER_VERSION,
+    iv.toString("base64url"),
+    cipher.getAuthTag().toString("base64url"),
+    ciphertext.toString("base64url"),
+  ].join(".");
+}
+
+function decryptGuestAccessToken(
+  orderId: string,
+  encryptedToken: string,
+): string | null {
+  const [version, ivValue, tagValue, ciphertextValue, ...extra] =
+    encryptedToken.split(".");
+  if (
+    version !== TOKEN_CIPHER_VERSION ||
+    !ivValue ||
+    !tagValue ||
+    !ciphertextValue ||
+    extra.length
+  ) {
+    return null;
+  }
+  try {
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      accessTokenEncryptionKey(),
+      Buffer.from(ivValue, "base64url"),
+    );
+    decipher.setAAD(Buffer.from(`${TOKEN_CIPHER_CONTEXT}\0${orderId}`, "utf8"));
+    decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextValue, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function canonicalPayloadHash(input: CreateOrderInput): string {
+  return sha256(canonicalCheckoutPayload(input));
+}
+
+function viewerBindingHash(
+  input: CreateOrderInput,
+  userId: string | null,
+): string {
   return sha256(userId ? `user:${userId}` : `guest:${input.email}`);
 }
 
@@ -231,7 +293,7 @@ export function parseGuestOrderCookie(
 async function issueAccessToken(
   sql: Sql,
   orderId: string,
-  tokenHash: string,
+  token: string,
   issuedAt: Date,
 ): Promise<void> {
   const expiresAt = new Date(issuedAt.getTime() + GUEST_ACCESS_TOKEN_TTL_MS);
@@ -241,13 +303,46 @@ async function issueAccessToken(
       and (expires_at <= ${issuedAt.toISOString()} or revoked_at is not null)
   `;
   await sql`
+    update order_access_tokens
+    set revoked_at = ${issuedAt.toISOString()}
+    where order_id = ${orderId}
+      and revoked_at is null
+      and expires_at > ${issuedAt.toISOString()}
+  `;
+  await sql`
     insert into order_access_tokens (
-      id, order_id, token_hash, issued_at, expires_at, revoked_at
+      id, order_id, token_hash, token_ciphertext, issued_at, expires_at, revoked_at
     ) values (
-      ${randomUUID()}, ${orderId}, ${tokenHash}, ${issuedAt.toISOString()},
+      ${randomUUID()}, ${orderId}, ${hashGuestAccessToken(token)},
+      ${encryptGuestAccessToken(orderId, token)}, ${issuedAt.toISOString()},
       ${expiresAt.toISOString()}, null
     )
   `;
+}
+
+async function reusableAccessToken(
+  sql: Sql,
+  orderId: string,
+): Promise<string | null> {
+  const rows = await sql<{
+    token_hash: string;
+    token_ciphertext: string | null;
+  }>`
+    select token_hash, token_ciphertext
+    from order_access_tokens
+    where order_id = ${orderId}
+      and revoked_at is null
+      and expires_at > now()
+    order by issued_at desc
+    limit 1
+  `;
+  const row = rows[0];
+  if (!row?.token_ciphertext) return null;
+  const token = decryptGuestAccessToken(orderId, row.token_ciphertext);
+  if (!token || !hashMatches(hashGuestAccessToken(token), row.token_hash)) {
+    return null;
+  }
+  return token;
 }
 
 async function hasValidAccessToken(
@@ -269,7 +364,9 @@ async function hasValidAccessToken(
 }
 
 function asIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 function toPublicOrder(row: OrderRow, lines: OrderLineRow[]): PublicOrder {
@@ -320,7 +417,10 @@ async function loadOrderById(sql: Sql, id: string): Promise<OrderRow | null> {
   return rows[0] ?? null;
 }
 
-async function loadOrderByNumber(sql: Sql, orderNumber: string): Promise<OrderRow | null> {
+async function loadOrderByNumber(
+  sql: Sql,
+  orderNumber: string,
+): Promise<OrderRow | null> {
   const rows = await sql<OrderRow>`
     select id, order_number, user_id, email, name, phone, street, house_number,
       postcode, city, country, status, subtotal_cents, stack_discount_cents,
@@ -349,9 +449,7 @@ async function replayExistingOrder(
   idempotencyKey: string,
   payloadHash: string,
   viewerHash: string,
-  tokenHash: string,
-  issuedAt: Date,
-): Promise<PublicOrder | null> {
+): Promise<{ order: PublicOrder; guestAccessToken: string } | null> {
   const rows = await sql<{
     id: string;
     idempotency_payload_hash: string | null;
@@ -370,14 +468,26 @@ async function replayExistingOrder(
   ) {
     throw new IdempotencyConflictError();
   }
-  await issueAccessToken(sql, existing.id, tokenHash, issuedAt);
+  let guestAccessToken = await reusableAccessToken(sql, existing.id);
+  if (!guestAccessToken) {
+    // Legacy rows have only a one-way hash. A replacement is unavoidable there;
+    // revoke the old proof so a replay can never accumulate valid 72-hour tokens.
+    guestAccessToken = generateGuestAccessToken();
+    await issueAccessToken(sql, existing.id, guestAccessToken, new Date());
+  }
   const row = await loadOrderById(sql, existing.id);
-  return row ? loadPublicOrder(sql, row) : null;
+  return row
+    ? { order: await loadPublicOrder(sql, row), guestAccessToken }
+    : null;
 }
 
 function uniqueConstraint(error: unknown): string {
   if (!error || typeof error !== "object") return "";
-  const value = error as { code?: string; constraint?: string; message?: string };
+  const value = error as {
+    code?: string;
+    constraint?: string;
+    message?: string;
+  };
   if (value.code !== "23505") return "";
   return `${value.constraint ?? ""} ${value.message ?? ""}`.toLowerCase();
 }
@@ -388,7 +498,7 @@ async function createNewOrder(
   userId: string | null,
   payloadHash: string,
   viewerHash: string,
-  tokenHash: string,
+  guestAccessToken: string,
   issuedAt: Date,
 ): Promise<PublicOrder> {
   const pricing = await calculatePricing(
@@ -425,7 +535,7 @@ async function createNewOrder(
       idempotency_viewer_hash, customer_id, user_id, email, name, phone, street,
       house_number, postcode, city, country, status, subtotal_cents,
       stack_discount_cents, code_discount_cents, shipping_cents, total_cents,
-      discount_code, note, guest_access_token_hash, created_at, updated_at
+      discount_code, note, created_at, updated_at
     ) values (
       ${orderId}, ${orderNumber}, ${input.idempotencyKey}, ${payloadHash},
       ${viewerHash}, ${customer.id}, ${userId}, ${input.email}, ${input.name},
@@ -434,7 +544,7 @@ async function createNewOrder(
       ${pricing.subtotalCents}, ${pricing.stackDiscountCents},
       ${pricing.codeDiscountCents}, ${pricing.shippingCents},
       ${pricing.totalCents}, ${pricing.discountCode}, ${input.note ?? null},
-      null, now(), now()
+      now(), now()
     )
   `;
 
@@ -450,7 +560,7 @@ async function createNewOrder(
       )
     `;
   }
-  await issueAccessToken(sql, orderId, tokenHash, issuedAt);
+  await issueAccessToken(sql, orderId, guestAccessToken, issuedAt);
 
   const row = await loadOrderById(sql, orderId);
   if (!row) throw new Error("Bestelling kon niet worden opgeslagen.");
@@ -462,12 +572,9 @@ export async function createOrderRecord(
   viewer: { userId?: string | null } = {},
 ): Promise<CreateOrderRecordResult> {
   const input = createOrderSchema.parse(rawInput);
-  const guestAccessToken = generateGuestAccessToken();
-  const tokenHash = hashGuestAccessToken(guestAccessToken);
   const userId = viewer.userId ?? null;
   const payloadHash = canonicalPayloadHash(input);
   const viewerHash = viewerBindingHash(input, userId);
-  const issuedAt = new Date();
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -477,22 +584,21 @@ export async function createOrderRecord(
           input.idempotencyKey,
           payloadHash,
           viewerHash,
-          tokenHash,
-          issuedAt,
         );
-        if (replay) return { order: replay, replayed: true };
+        if (replay) return { ...replay, replayed: true };
+        const guestAccessToken = generateGuestAccessToken();
         const order = await createNewOrder(
           sql,
           input,
           userId,
           payloadHash,
           viewerHash,
-          tokenHash,
-          issuedAt,
+          guestAccessToken,
+          new Date(),
         );
-        return { order, replayed: false };
+        return { order, guestAccessToken, replayed: false };
       });
-      return { ...result, guestAccessToken };
+      return result;
     } catch (error) {
       const constraint = uniqueConstraint(error);
       if (constraint.includes("idempotency")) {
@@ -502,12 +608,10 @@ export async function createOrderRecord(
             input.idempotencyKey,
             payloadHash,
             viewerHash,
-            tokenHash,
-            issuedAt,
           ),
         );
         if (replay) {
-          return { order: replay, guestAccessToken, replayed: true };
+          return { ...replay, replayed: true };
         }
       }
       if (constraint.includes("order_number") && attempt < 2) continue;
@@ -518,7 +622,9 @@ export async function createOrderRecord(
   throw new Error("Bestelling kon niet worden opgeslagen.");
 }
 
-export async function getOrderRecordForViewer(viewer: OrderViewer): Promise<PublicOrder> {
+export async function getOrderRecordForViewer(
+  viewer: OrderViewer,
+): Promise<PublicOrder> {
   const sql = await getSql();
   const row = viewer.id
     ? await loadOrderById(sql, viewer.id)
@@ -541,7 +647,9 @@ export async function getOrderRecordForViewer(viewer: OrderViewer): Promise<Publ
   return loadPublicOrder(sql, row);
 }
 
-export async function listOwnOrderRecords(userId: string): Promise<OrderSummary[]> {
+export async function listOwnOrderRecords(
+  userId: string,
+): Promise<OrderSummary[]> {
   const sql = await getSql();
   const rows = await sql<{
     id: string;
