@@ -1004,6 +1004,33 @@ test("a product can be ordered and only its authorized guest sees confirmation",
     assert.equal(guestCookie.sameSite, "Strict");
 
     const orderUrl = page.url();
+    let serverRenderedWithoutViewer = "";
+    const stripViewerFromDocumentRequest = async (route) => {
+      const request = route.request();
+      if (request.resourceType() !== "document") {
+        await route.continue();
+        return;
+      }
+      const headers = { ...request.headers() };
+      delete headers.cookie;
+      const response = await route.fetch({ headers });
+      serverRenderedWithoutViewer = await response.text();
+      await route.fulfill({ response, body: serverRenderedWithoutViewer });
+    };
+    await page.route("**/*", stripViewerFromDocumentRequest);
+    try {
+      await page.reload({ waitUntil: "networkidle" });
+      assert.match(serverRenderedWithoutViewer, /Bestelling laden/);
+      assert.equal(serverRenderedWithoutViewer.includes(orderNumber), false);
+      await page
+        .getByRole("heading", { level: 1, name: orderNumber })
+        .waitFor();
+    } finally {
+      await page
+        .unroute("**/*", stripViewerFromDocumentRequest)
+        .catch(() => {});
+    }
+
     const denied = await newPage();
     try {
       await denied.page.goto(orderUrl, { waitUntil: "networkidle" });
@@ -2838,46 +2865,54 @@ test("contact is stored and only an authenticated admin can handle it", async ()
 
 test("contact abuse protection returns 429 with retry feedback", async () => {
   const { context, page } = await newPage();
-  let limitedResponse;
-  page.on("response", (response) => {
-    if (response.status() === 429) limitedResponse = response;
-  });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      if (limitedResponse) break;
-      const dialog = page.getByRole("dialog", { name: "Contact" });
-      if (!(await dialog.isVisible())) {
-        await page
-          .getByRole("button", { name: "Contact", exact: true })
-          .last()
-          .click();
+    const seededLimit = await page.evaluate(async () => {
+      const [{ createContactMessage }, { rateLimitFeedback }] =
+        await Promise.all([
+          import("/src/lib/server/contact.ts"),
+          import("/src/lib/server-error.ts"),
+        ]);
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try {
+          await createContactMessage({
+            data: {
+              name: "Rate Limit Seeder",
+              email: `rate-seed-${attempt}-${crypto.randomUUID()}@example.test`,
+              message: "Dit bericht vult bewust de publieke contactlimiet.",
+            },
+          });
+        } catch (error) {
+          return {
+            attempts: attempt + 1,
+            limited: Boolean(rateLimitFeedback(error)),
+          };
+        }
       }
-      await dialog.getByLabel("Naam").fill("Rate Limit Tester");
-      await dialog
-        .getByLabel("E-mail")
-        .fill(`rate-${attempt}-${randomUUID()}@example.test`);
-      await dialog
-        .getByLabel("Bericht")
-        .fill("Dit bericht controleert de gedeelde rate limit.");
-      const limitedAttempt = page
-        .waitForResponse((response) => response.status() === 429, {
-          timeout: 10_000,
-        })
-        .catch(() => null);
-      await dialog.getByRole("button", { name: "Verstuur bericht" }).click();
-      const outcome = await Promise.race([
-        limitedAttempt,
-        dialog.waitFor({ state: "hidden", timeout: 10_000 }).then(() => null),
-      ]);
-      if (outcome) {
-        limitedResponse = outcome;
-        break;
-      }
-      if (limitedResponse) break;
-    }
+      return { attempts: 10, limited: false };
+    });
+    assert.equal(seededLimit.limited, true);
+    assert.ok(seededLimit.attempts <= 10);
 
-    assert.ok(limitedResponse);
+    await page
+      .getByRole("button", { name: "Contact", exact: true })
+      .last()
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Contact" });
+    await dialog.getByLabel("Naam").fill("Rate Limit Tester");
+    await dialog
+      .getByLabel("E-mail")
+      .fill(`rate-ui-${randomUUID()}@example.test`);
+    await dialog
+      .getByLabel("Bericht")
+      .fill("Dit bericht controleert de gedeelde rate limit.");
+    const limitedAttempt = page.waitForResponse(
+      (response) =>
+        response.status() === 429 && response.request().method() === "POST",
+      { timeout: 15_000 },
+    );
+    await dialog.getByRole("button", { name: "Verstuur bericht" }).click();
+    const limitedResponse = await limitedAttempt;
     const feedback = page.getByText(
       /Te veel pogingen. Probeer over \d+ seconden opnieuw/,
     );

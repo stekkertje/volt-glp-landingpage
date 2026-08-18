@@ -1,9 +1,13 @@
-const FRAME_ANCESTORS = [
+const TRUSTED_PLATFORM_FRAME_ANCESTORS = [
   "'self'",
   "https://grok.com",
   "https://*.grok.com",
   "https://x.ai",
   "https://*.x.ai",
+].join(" ");
+
+const PUBLIC_FRAME_ANCESTORS = [
+  TRUSTED_PLATFORM_FRAME_ANCESTORS,
   "https://*.grok.me",
 ].join(" ");
 
@@ -22,6 +26,9 @@ export function securityHeadersForPath(
   pathname: string,
   options: { development?: boolean; hsts?: boolean } = {},
 ): Record<string, string> {
+  const frameAncestors = isSensitiveDocumentPath(pathname)
+    ? TRUSTED_PLATFORM_FRAME_ANCESTORS
+    : PUBLIC_FRAME_ANCESTORS;
   const scriptSources = ["'self'", "'unsafe-inline'"];
   if (options.development) scriptSources.push("'unsafe-eval'");
   const headers: Record<string, string> = {
@@ -37,7 +44,7 @@ export function securityHeadersForPath(
       "manifest-src 'self'",
       "worker-src 'self' blob:",
       "form-action 'self'",
-      `frame-ancestors ${FRAME_ANCESTORS}`,
+      `frame-ancestors ${frameAncestors}`,
     ].join("; "),
     "permissions-policy":
       "camera=(), microphone=(), geolocation=(), payment=(), usb=()",

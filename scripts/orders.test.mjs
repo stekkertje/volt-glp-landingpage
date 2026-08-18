@@ -362,15 +362,66 @@ test("an unreadable active ciphertext fails without revoking its valid hash", as
   }
 });
 
-test("a persistent database refuses to issue tokens without an explicit secret", async () => {
+test("a persistent database uses the stable auth secret fallback and rotates to an explicit order secret", async () => {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousCurrent = process.env.ORDER_ACCESS_TOKEN_SECRET;
+  const previousAuth = process.env.BETTER_AUTH_SECRET;
   try {
     process.env.DATABASE_URL = "postgres://configured.example/volt";
     delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    process.env.BETTER_AUTH_SECRET = `auth-${"e".repeat(40)}`;
+    const input = orderInput();
+    const created = await createOrderRecord(input, { userId: null });
+    const sql = await getSql();
+    const before = await sql.query(
+      "select token_ciphertext from order_access_tokens where order_id = $1",
+      [created.order.id],
+    );
+
+    process.env.ORDER_ACCESS_TOKEN_SECRET = `order-${"f".repeat(40)}`;
+    const replay = await createOrderRecord(input, { userId: null });
+    const after = await sql.query(
+      "select token_ciphertext, revoked_at from order_access_tokens where order_id = $1",
+      [created.order.id],
+    );
+    assert.equal(replay.guestAccessToken, created.guestAccessToken);
+    assert.notEqual(after[0].token_ciphertext, before[0].token_ciphertext);
+    assert.equal(after[0].revoked_at, null);
+  } finally {
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+    if (previousCurrent === undefined) {
+      delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    } else {
+      process.env.ORDER_ACCESS_TOKEN_SECRET = previousCurrent;
+    }
+    if (previousAuth === undefined) {
+      delete process.env.BETTER_AUTH_SECRET;
+    } else {
+      process.env.BETTER_AUTH_SECRET = previousAuth;
+    }
+  }
+});
+
+test("a persistent database fails closed without either stable secret", async () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousCurrent = process.env.ORDER_ACCESS_TOKEN_SECRET;
+  const previousAuth = process.env.BETTER_AUTH_SECRET;
+  try {
+    process.env.DATABASE_URL = "postgres://configured.example/volt";
+    delete process.env.ORDER_ACCESS_TOKEN_SECRET;
+    delete process.env.BETTER_AUTH_SECRET;
     await assert.rejects(
       createOrderRecord(orderInput(), { userId: null }),
-      /ORDER_ACCESS_TOKEN_SECRET.*verplicht/i,
+      /ORDER_ACCESS_TOKEN_SECRET.*BETTER_AUTH_SECRET.*verplicht/i,
+    );
+    process.env.BETTER_AUTH_SECRET = "te-kort";
+    await assert.rejects(
+      createOrderRecord(orderInput(), { userId: null }),
+      /BETTER_AUTH_SECRET.*minimaal 32/i,
     );
   } finally {
     if (previousDatabaseUrl === undefined) {
@@ -382,6 +433,11 @@ test("a persistent database refuses to issue tokens without an explicit secret",
       delete process.env.ORDER_ACCESS_TOKEN_SECRET;
     } else {
       process.env.ORDER_ACCESS_TOKEN_SECRET = previousCurrent;
+    }
+    if (previousAuth === undefined) {
+      delete process.env.BETTER_AUTH_SECRET;
+    } else {
+      process.env.BETTER_AUTH_SECRET = previousAuth;
     }
   }
 });

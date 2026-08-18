@@ -272,6 +272,42 @@ test("origin guards return HTTP 403 at the real server-function endpoint", async
   assert.match(await conflictingOrigin.text(), /Ongeldige aanvraag/);
 });
 
+test("anonymous order-id probes are rate limited without an access code", async () => {
+  const attempts = await withPage((page) =>
+    page.evaluate(
+      async ({ id }) => {
+        const { getOrderForViewer } = await import("/src/lib/server/orders.ts");
+        const results = [];
+        for (let attempt = 0; attempt < 13; attempt += 1) {
+          let status = 0;
+          let message = "";
+          try {
+            await getOrderForViewer({
+              data: { id },
+              fetch: async (url, init) => {
+                const response = await fetch(url, init);
+                status = response.status;
+                return response;
+              },
+            });
+          } catch (error) {
+            message = error instanceof Error ? error.message : String(error);
+          }
+          results.push({ status, message });
+        }
+        return results;
+      },
+      { id: `probe-${randomUUID()}` },
+    ),
+  );
+
+  assert.equal(attempts.length, 13);
+  assert.equal(attempts[0].status, 404);
+  assert.equal(attempts[11].status, 404);
+  assert.equal(attempts[12].status, 429);
+  assert.match(attempts[12].message, /^Te veel pogingen\./);
+});
+
 test("public server errors hide validation and unexpected internal details", async () => {
   const outcome = await withPage((page) =>
     page.evaluate(async () => {
@@ -406,4 +442,44 @@ test("admin login combines a constant minimum with progressive failure backoff",
   assert.ok(outcome.second.duration >= 450, JSON.stringify(outcome));
   assert.ok(outcome.third.duration >= 900, JSON.stringify(outcome));
   assert.ok(outcome.success.duration >= 220, JSON.stringify(outcome));
+});
+
+test("admin logout clears password, Better Auth, and preview credentials", async () => {
+  const outcome = await withPage(async (page) => {
+    await page.goto(`${baseUrl}/admin`, { waitUntil: "domcontentloaded" });
+    const password = page.getByLabel("Beheerwachtwoord");
+    await password.waitFor();
+    await password.fill(TEST_ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Inloggen", exact: true }).click();
+    await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+
+    await page.evaluate(() => {
+      sessionStorage.setItem("grok-auth.bearer-token", "invalid-test-bearer");
+    });
+
+    const logoutResponsePromise = page.waitForResponse(async (response) =>
+      (await response.headerValue("set-cookie"))?.includes(
+        "__Host-volt-admin-session",
+      ),
+    );
+    await page.getByRole("button", { name: "Uitloggen" }).click();
+    const logoutResponse = await logoutResponsePromise;
+    await page.getByLabel("Beheerwachtwoord").waitFor();
+    const cookies = await page.context().cookies(baseUrl);
+    return {
+      bearer: await page.evaluate(() =>
+        sessionStorage.getItem("grok-auth.bearer-token"),
+      ),
+      cookieNames: cookies.map((cookie) => cookie.name),
+      setCookie: (await logoutResponse.headerValue("set-cookie")) ?? "",
+    };
+  });
+
+  assert.equal(outcome.bearer, null);
+  assert.ok(!outcome.cookieNames.includes("__Host-volt-admin-session"));
+  assert.match(outcome.setCookie, /__Host-volt-admin-session=.*Max-Age=0/i);
+  assert.match(
+    outcome.setCookie,
+    /__Host-grok-auth\.session_token=.*Max-Age=0/i,
+  );
 });

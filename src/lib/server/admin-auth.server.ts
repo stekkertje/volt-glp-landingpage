@@ -176,7 +176,7 @@ export async function loginAdminWithPassword(password: string): Promise<void> {
   );
 }
 
-export function logoutAdminSession(): void {
+export async function logoutAdminSession(bearerToken?: string): Promise<void> {
   assertSameOriginMutation();
   deleteCookie(ADMIN_COOKIE_NAME, {
     httpOnly: true,
@@ -184,6 +184,15 @@ export function logoutAdminSession(): void {
     secure: true,
     path: "/",
   });
+
+  const request = getRequest();
+  const { auth, authConfigured } = await import("@/lib/auth/server");
+  if (!authConfigured || !request) return;
+  const headers = new Headers(request.headers);
+  if (bearerToken) {
+    headers.set("authorization", `Bearer ${bearerToken}`);
+  }
+  await auth.api.signOut({ headers });
 }
 
 export async function isAdminViewer(bearerToken?: string): Promise<boolean> {

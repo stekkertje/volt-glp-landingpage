@@ -117,7 +117,7 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
       parseGuestOrderCookie,
     } = await import("./orders.server");
     const { isAdminViewer } = await import("./admin-auth.server");
-    if (data.accessCode) {
+    if (data.accessCode || !context.userId) {
       const { enforceOrderAccessLimit } =
         await import("./abuse-protection.server");
       const { getRequestClientIdentifier } =

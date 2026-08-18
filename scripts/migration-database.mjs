@@ -105,11 +105,11 @@ const FORBIDDEN_MIGRATION_TIMEOUT_SETTINGS = new Set([
   "query_timeout",
   "statement_timeout",
 ]);
-const FORBIDDEN_MIGRATION_OPTION_TIMEOUT =
-  /(?:lock_timeout|query_timeout|statement_timeout)/i;
 
-function normalizedPostgresOptionsForPolicy(options, variableName) {
-  let normalized = "";
+function postgresOptionTokens(options, variableName) {
+  const tokens = [];
+  let token = "";
+  let tokenStarted = false;
   let quote = null;
   for (let index = 0; index < options.length; index += 1) {
     const character = options[index];
@@ -118,21 +118,62 @@ function normalizedPostgresOptionsForPolicy(options, variableName) {
       if (escaped === undefined) {
         throw new Error(`${variableName} bevat ongeldige PostgreSQL-opties.`);
       }
-      normalized += escaped;
+      token += escaped;
+      tokenStarted = true;
       index += 1;
     } else if (quote) {
       if (character === quote) quote = null;
-      else normalized += character;
+      else token += character;
     } else if (character === '"' || character === "'") {
       quote = character;
+      tokenStarted = true;
+    } else if (/\s/.test(character)) {
+      if (tokenStarted) tokens.push(token);
+      token = "";
+      tokenStarted = false;
     } else {
-      normalized += character;
+      token += character;
+      tokenStarted = true;
     }
   }
   if (quote) {
     throw new Error(`${variableName} bevat ongeldige PostgreSQL-opties.`);
   }
-  return normalized;
+  if (tokenStarted) tokens.push(token);
+  return tokens;
+}
+
+function optionSettingName(assignment) {
+  const separator = assignment.indexOf("=");
+  return (separator < 0 ? assignment : assignment.slice(0, separator))
+    .trim()
+    .toLowerCase();
+}
+
+function hasForbiddenMigrationOptionTimeout(options, variableName) {
+  const tokens = postgresOptionTokens(options, variableName);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    let assignment = null;
+    if (token === "-c") {
+      assignment = tokens[(index += 1)] ?? "";
+    } else if (token.startsWith("-c")) {
+      assignment = token.slice(2);
+    } else if (token.startsWith("--")) {
+      assignment = token.slice(2);
+    } else if (token.includes("=") || /^[a-z_][a-z0-9_]*$/i.test(token)) {
+      // Bare key=value is accepted by some connection proxies. Also inspect a
+      // bare key so malformed `-c key = value` cannot hide a timeout setting.
+      assignment = token;
+    }
+    if (
+      assignment !== null &&
+      FORBIDDEN_MIGRATION_TIMEOUT_SETTINGS.has(optionSettingName(assignment))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function assertNoExternalMigrationTimeouts(parsed, variableName) {
@@ -141,9 +182,7 @@ function assertNoExternalMigrationTimeouts(parsed, variableName) {
     if (
       FORBIDDEN_MIGRATION_TIMEOUT_SETTINGS.has(name) ||
       (name === "options" &&
-        FORBIDDEN_MIGRATION_OPTION_TIMEOUT.test(
-          normalizedPostgresOptionsForPolicy(rawValue, variableName),
-        ))
+        hasForbiddenMigrationOptionTimeout(rawValue, variableName))
     ) {
       throw new Error(
         `${variableName} mag geen externe statement-, query- of lock-time-out instellen; de migrator begrenst uitsluitend het wachten op locks zelf.`,

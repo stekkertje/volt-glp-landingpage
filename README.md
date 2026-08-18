@@ -58,15 +58,20 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
   blijven deze tests alleen overgeslagen wanneer
   `TEST_MIGRATION_DATABASE_URL` niet is ingesteld.
 - PGLite wordt uitsluitend gebruikt tijdens lokale development en tests.
-- `ORDER_ACCESS_TOKEN_SECRET` is verplicht naast een persistente database en
-  moet een afzonderlijk, stabiel geheim van minimaal 32 tekens zijn. Genereer
-  bijvoorbeeld 32 willekeurige bytes; hergebruik `DATABASE_URL` of een
-  authenticatiegeheim niet.
+- Gebruik bij voorkeur een afzonderlijk, stabiel
+  `ORDER_ACCESS_TOKEN_SECRET` van minimaal 32 tekens naast een persistente
+  database. Wanneer dit niet is ingesteld, gebruikt de app het eveneens
+  stabiele `BETTER_AUTH_SECRET` via een domeingescheiden sleutelafleiding.
+  Minstens één van beide moet aanwezig zijn; `DATABASE_URL` wordt nooit als
+  actuele versleutelingssleutel gebruikt.
 - Draai dit geheim veilig door eerst de nieuwe waarde in
   `ORDER_ACCESS_TOKEN_SECRET` te zetten en de vorige waarde tijdelijk op te
   nemen in `ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS` (kommagescheiden). Laat oude
   waarden minimaal 72 uur staan. Een replay versleutelt een geldige code
   automatisch opnieuw met de actuele sleutel zonder die code in te trekken.
+  Roteer je `BETTER_AUTH_SECRET` terwijl dit ook de fallback voor besteltoegang
+  is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
+  op of stel vooraf een aparte ordersleutel in.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
 - Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.

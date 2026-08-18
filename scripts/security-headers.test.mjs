@@ -45,6 +45,23 @@ test("admin and order documents are never cacheable", () => {
   }
 });
 
+test("sensitive documents reject untrusted deployed sibling frames", () => {
+  assert.match(
+    securityHeadersForPath("/")["content-security-policy"],
+    /frame-ancestors[^;]*https:\/\/\*\.grok\.me/,
+  );
+  for (const path of [
+    "/admin",
+    "/account",
+    "/checkout",
+    "/bestelling/order-id",
+  ]) {
+    const policy = securityHeadersForPath(path)["content-security-policy"];
+    assert.match(policy, /frame-ancestors 'self' https:\/\/grok\.com/, path);
+    assert.doesNotMatch(policy, /https:\/\/\*\.grok\.me/, path);
+  }
+});
+
 test("development policy allows Vite evaluation without weakening production", () => {
   const headers = securityHeadersForPath("/", { development: true });
   assert.match(headers["content-security-policy"], /unsafe-eval/);

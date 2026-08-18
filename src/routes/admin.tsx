@@ -32,6 +32,7 @@ import {
   loginAdmin,
   logoutAdmin,
 } from "@/lib/server/admin";
+import { clearBearerToken } from "@/lib/auth/client";
 import { listContactMessages, setContactHandled } from "@/lib/server/contact";
 import {
   getOrderForAdmin,
@@ -356,7 +357,10 @@ function AdminDashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             onClick={() => {
               void logoutAdmin()
                 .catch(() => undefined)
-                .finally(onUnauthorized);
+                .finally(() => {
+                  clearBearerToken();
+                  onUnauthorized();
+                });
             }}
           >
             <LogOut className="size-4" />

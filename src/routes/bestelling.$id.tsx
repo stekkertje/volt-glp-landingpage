@@ -4,8 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { consumeOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { getOrderForViewer } from "@/lib/server/orders";
+
+type ViewerOrder = Awaited<ReturnType<typeof getOrderForViewer>>;
+type ClientOrderLookup = {
+  orderId: string;
+  viewerKey: string;
+  order: ViewerOrder | null;
+  pending: boolean;
+};
 
 export const Route = createFileRoute("/bestelling/$id")({
   loader: async ({ params }) => {
@@ -25,7 +34,19 @@ export const Route = createFileRoute("/bestelling/$id")({
 });
 
 function OrderConfirmationPage() {
-  const order = Route.useLoaderData();
+  const loaderOrder = Route.useLoaderData();
+  const { id: requestedOrderId } = Route.useParams();
+  const { user, isPending: authPending } = useCurrentUserState();
+  const viewerKey = authPending ? null : (user?.id ?? "guest");
+  const [clientLookup, setClientLookup] = useState<ClientOrderLookup | null>(
+    null,
+  );
+  const matchingClientLookup =
+    clientLookup?.orderId === requestedOrderId &&
+    clientLookup.viewerKey === viewerKey
+      ? clientLookup
+      : null;
+  const order = loaderOrder ?? matchingClientLookup?.order ?? null;
   const orderId = order?.id;
   const [stagedRecovery, setStagedRecovery] = useState<{
     orderId: string;
@@ -42,6 +63,41 @@ function OrderConfirmationPage() {
       : null;
 
   useEffect(() => {
+    if (loaderOrder || !viewerKey) return;
+    let active = true;
+    setClientLookup({
+      orderId: requestedOrderId,
+      viewerKey,
+      order: null,
+      pending: true,
+    });
+    void getOrderForViewer({ data: { id: requestedOrderId } })
+      .then((nextOrder) => {
+        if (active) {
+          setClientLookup({
+            orderId: requestedOrderId,
+            viewerKey,
+            order: nextOrder,
+            pending: false,
+          });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setClientLookup({
+            orderId: requestedOrderId,
+            viewerKey,
+            order: null,
+            pending: false,
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [loaderOrder, requestedOrderId, viewerKey]);
+
+  useEffect(() => {
     copyRequestSequence.current += 1;
     setCopyState("idle");
     if (!orderId) {
@@ -54,6 +110,18 @@ function OrderConfirmationPage() {
     const code = consumeOrderRecoveryCode(orderId);
     setStagedRecovery(code ? { orderId, code } : null);
   }, [orderId]);
+
+  if (!order && (!matchingClientLookup || matchingClientLookup.pending)) {
+    return (
+      <SiteShell>
+        <main className="container-max section-pad py-16 text-center md:py-24">
+          <p className="text-sm text-muted" role="status" aria-live="polite">
+            Bestelling laden…
+          </p>
+        </main>
+      </SiteShell>
+    );
+  }
 
   if (!order) {
     return (

@@ -44,8 +44,8 @@ export const loginAdmin = createServerFn({ method: "POST" })
 
 export const logoutAdmin = createServerFn({ method: "POST" })
   .middleware([adminServerErrorMiddleware, adminMiddleware])
-  .handler(async () => {
+  .handler(async ({ context }) => {
     const { logoutAdminSession } = await import("./admin-auth.server");
-    logoutAdminSession();
+    await logoutAdminSession(context.bearerToken);
     return { success: true as const };
   });

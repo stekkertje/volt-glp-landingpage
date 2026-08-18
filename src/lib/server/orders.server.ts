@@ -258,9 +258,18 @@ function configuredCurrentAccessTokenSecret(): string | null {
     }
   }
   if (!secret && stableAccessTokenSecretRequired()) {
-    throw new Error(
-      "ORDER_ACCESS_TOKEN_SECRET is verplicht bij een persistente of production database.",
-    );
+    const authSecret = process.env.BETTER_AUTH_SECRET?.trim() || null;
+    if (!authSecret) {
+      throw new Error(
+        "ORDER_ACCESS_TOKEN_SECRET of BETTER_AUTH_SECRET is verplicht bij een persistente of production database.",
+      );
+    }
+    if (authSecret.length < ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH) {
+      throw new Error(
+        `BETTER_AUTH_SECRET moet minimaal ${ORDER_ACCESS_TOKEN_SECRET_MIN_LENGTH} tekens bevatten wanneer het als fallback voor besteltoegang wordt gebruikt.`,
+      );
+    }
+    return authSecret;
   }
   return secret;
 }

@@ -358,6 +358,37 @@ test("all encoded, duplicate and malformed statement_timeout options fail closed
   }
 });
 
+test("timeout words in option values and schema names are not mistaken for setting keys", async () => {
+  const configuredOptions =
+    "-c search_path=migration_lock_timeout_123 -c application_name=statement_timeout_probe";
+  const url = `${DIRECT_URL}?options=${encodeURIComponent(configuredOptions)}`;
+  const installedClient = new pg.Client({ connectionString: url });
+  assert.equal(installedClient.connectionParameters.options, configuredOptions);
+  assert.equal(
+    resolveMigrationDatabaseUrl({ MIGRATION_DATABASE_URL: url }),
+    url,
+  );
+
+  let clientOptions;
+  await withDedicatedMigrationClient(
+    {
+      Client: class {
+        constructor(options) {
+          clientOptions = options;
+        }
+        async connect() {}
+        async end() {}
+      },
+    },
+    url,
+    async () => undefined,
+  );
+  assert.equal(
+    clientOptions.options,
+    `${configuredOptions} -c lock_timeout=${MIGRATION_STATEMENT_LOCK_TIMEOUT_MS}`,
+  );
+});
+
 test("ambient USER and HOME pgpass cannot supply missing migration credentials", async () => {
   const ambientHome = await mkdtemp(join(tmpdir(), "volt-migration-home-"));
   const pgpassPath = join(ambientHome, ".pgpass");
