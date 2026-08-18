@@ -6,6 +6,8 @@ import { createServer } from "vite";
 let vite;
 let getSql;
 let withSqlTransaction;
+let signAdminSession;
+let verifyAdminSession;
 
 before(async () => {
   vite = await createServer({
@@ -14,6 +16,9 @@ before(async () => {
     server: { middlewareMode: true },
   });
   ({ getSql, withSqlTransaction } = await vite.ssrLoadModule("/src/lib/db.ts"));
+  ({ signAdminSession, verifyAdminSession } = await vite.ssrLoadModule(
+    "/src/lib/server/admin-session.server.ts",
+  ));
 });
 
 after(async () => {
@@ -79,4 +84,16 @@ test("withSqlTransaction rolls an order back when its line insert fails", async 
   const sql = await getSql();
   const rows = await sql`select id from orders where id = ${orderId}`;
   assert.equal(rows.length, 0);
+});
+
+test("an admin cookie signed with ADMIN_PASSWORD is invalid for the session secret", () => {
+  const password = "alleen-voor-wachtwoordcontrole";
+  const sessionSecret = "aparte-lange-sessie-signing-secret";
+  const expiresAt = Date.now() + 60_000;
+
+  const wrongCookie = signAdminSession(password, expiresAt);
+  const validCookie = signAdminSession(sessionSecret, expiresAt);
+
+  assert.equal(verifyAdminSession(wrongCookie, sessionSecret), false);
+  assert.equal(verifyAdminSession(validCookie, sessionSecret), true);
 });
