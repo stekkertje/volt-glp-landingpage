@@ -39,12 +39,21 @@ jobs:
         run: test -n "$OPENAI_API_KEY"
 
       - name: Load the trusted review prompt from the base commit
+        id: trusted-prompt
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           TRUSTED_REVIEW_PROMPT: ${{ runner.temp }}/codex-review.md
-        run: git show "$BASE_SHA:.github/codex/prompts/review.md" > "$TRUSTED_REVIEW_PROMPT"
+        run: |
+          if git cat-file -e "$BASE_SHA:.github/codex/prompts/review.md"; then
+            git show "$BASE_SHA:.github/codex/prompts/review.md" > "$TRUSTED_REVIEW_PROMPT"
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::De vertrouwde Codex-prompt staat nog niet op de basisbranch; alleen deze bootstrap-PR slaat de AI-review over."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run read-only Codex review
+        if: steps.trusted-prompt.outputs.available == 'true'
         id: codex
         uses: openai/codex-action@v1
         with:
