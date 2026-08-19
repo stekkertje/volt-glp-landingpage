@@ -190,7 +190,7 @@ test("auth-disabled deployment toont alleen gastorder-herstel en geen accountlog
     assert.equal(await page.getByText("Heb je een account?").count(), 0);
     assert.equal(await page.getByRole("link", { name: "Inloggen" }).count(), 0);
     assert.equal(
-      await page.getByRole("link", { name: "Bestelling terugvinden" }).count(),
+      await page.getByRole("link", { name: "Bestelling volgen" }).count(),
       1,
     );
     await page.goBack();
