@@ -47,11 +47,12 @@ export type Product = {
 export const SYRINGE_PACK_COUNT = 10;
 
 export const SITE = {
-  brand: "VOLT",
-  category: "GLP-1 Afvallen",
-  tagline: "Semaglutide, Tirzepatide en Retatrutide",
+  brand: "Afslank-injecties.nl",
+  category: "Afvallen met medicatie",
+  tagline: "Semaglutide · Tirzepatide · Retatrutide",
+  headline: "Afslanken met injecties.",
   shortPitch:
-    "Drie labgeteste GLP-1 producten. Vial of kant-en-klare pen. Discrete verzending naar NL en BE.",
+    "Keuze uit de drie sterkste en meest populaire producten. Veilige en discrete verzending naar NL en BE.",
   rating: 4.8,
   reviewCount: 1024,
   shippingCents: 495,
@@ -85,12 +86,10 @@ const PRODUCT_LIST: Product[] = [
     subcat: "Retatrutide",
     form: "vial",
     unit: "10 mg",
-    priceCents: 7760,
-    compareAtCents: 9700,
+    priceCents: 9700,
     rating: 4.9,
     reviewCount: 211,
-    badges: ["Weekdeal −20%"],
-    weekdeal: true,
+    badges: [],
     images: imgs(
       "retatrutide-10mg",
       ["retatrutide-10mg__01__800.webp", "retatrutide-10mg__02__800.webp"],
@@ -117,14 +116,12 @@ const PRODUCT_LIST: Product[] = [
       {
         id: "none",
         label: "Geen extra's",
-        priceCents: 7760,
-        compareAtCents: 9700,
+        priceCents: 9700,
       },
       {
         id: "syringes",
         label: "10 insulinespuiten",
-        priceCents: 7960,
-        compareAtCents: 9950,
+        priceCents: 9900,
       },
     ],
   },
@@ -137,12 +134,12 @@ const PRODUCT_LIST: Product[] = [
     subcat: "Retatrutide",
     form: "pen",
     unit: "20 mg",
-    priceCents: 19900,
+    priceCents: 17600,
     compareAtCents: 22000,
     rating: 4.8,
     reviewCount: 59,
-    badges: ["Korting −10%", "Nieuw", "Bestseller"],
-    bestseller: true,
+    badges: ["Weekdeal −20%", "Nieuw"],
+    weekdeal: true,
     isNew: true,
     images: imgs(
       "retatrutide-20mg-pen",
@@ -447,48 +444,48 @@ export const COMPOUNDS = [
     name: "Semaglutide",
     role: "GLP-1",
     detail:
-      "Eetlustremming en een vast wekelijks ritme. Instap via 2 mg vial of 4 mg pen.",
+      "De bekendste GLP-1. Minder honger, één keer per week — als vial of als pen.",
     count: 2,
   },
   {
     name: "Tirzepatide",
     role: "GLP-1 + GIP",
     detail:
-      "Dubbele agonist. Meer controle over cravings, als vial of als 20 mg pen.",
+      "Twee paden tegelijk. Extra grip op cravings, in vial of in de 20 mg pen.",
     count: 2,
   },
   {
     name: "Retatrutide",
     role: "GLP-1 + GIP + glucagon",
     detail:
-      "Triple agonist. Voor wie plateaus wil doorbreken, als weekdeal-vial of als pen.",
+      "De sterkste in deze lijn. Voor wie verder wil dan Semaglutide of Tirzepatide.",
     count: 2,
   },
 ] as const;
 
 export const BENEFITS = [
   {
+    title: "Keuze in sterkte",
+    description: "Drie verschillende stoffen met elk hun eigen kracht.",
+    icon: "gauge",
+  },
+  {
     title: "Wekelijks ritme",
-    description: "Eén toediening per week. Geen dagelijkse capsules of poeder.",
+    description:
+      "Eén toediening per week. Geen dagelijkse capsules of poeder.",
     icon: "clock",
   },
   {
-    title: "Minder eetlust",
+    title: "Kant-en-klare pen",
     description:
-      "GLP-1 ondersteunt verzadiging zodat porties kleiner en rustiger worden.",
-    icon: "focus",
-  },
-  {
-    title: "Vial of pen",
-    description:
-      "Zelf mengen met bac water, of een kant-en-klare pen met naalden.",
+      "Vooraf gevuld, eenvoudig in gebruik en geen voorbereiding of mengwerk nodig.",
     icon: "capsule",
   },
   {
-    title: "Labgetest en discreet",
+    title: "Flexibel met een vial",
     description:
-      "Batchcontrole, verzending NL en BE, track en trace, neutrale verpakking.",
-    icon: "shield",
+      "Een veelzijdige variant voor wie meer controle en flexibiliteit wil.",
+    icon: "flask",
   },
 ] as const;
 
