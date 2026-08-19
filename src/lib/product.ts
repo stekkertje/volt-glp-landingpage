@@ -444,7 +444,7 @@ export const COMPOUNDS = [
     name: "Semaglutide",
     role: "GLP-1",
     detail:
-      "De bekendste GLP-1. Minder honger, één keer per week — als vial of als pen.",
+      "De bekendste GLP-1. Minder honger, één keer per week, als vial of als pen.",
     count: 2,
   },
   {

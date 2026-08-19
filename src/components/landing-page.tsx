@@ -338,10 +338,12 @@ export function LandingPage() {
             Waarom deze lijn
           </p>
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Drie stoffen. Zes mogelijkheden.
+            Drie stoffen.
+            <br />
+            Zes mogelijkheden.
           </h2>
           <p className="mt-3 text-muted">
-            Semaglutide, Tirzepatide en Retatrutide — elk verkrijgbaar als pen
+            Semaglutide, Tirzepatide en Retatrutide, elk verkrijgbaar als pen
             én vial.
           </p>
         </div>
@@ -433,14 +435,18 @@ export function LandingPage() {
               Verschillende stoffen
             </p>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Semaglutide, Tirzepatide, Retatrutide
+              Semaglutide
+              <br />
+              Tirzepatide
+              <br />
+              Retatrutide
             </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {COMPOUNDS.map((c) => (
               <article
                 key={c.name}
-                className="rounded-xl border border-border bg-surface p-5"
+                className="flex min-h-[17rem] flex-col rounded-xl border border-border bg-surface p-6 sm:p-7"
               >
                 <div className="flex items-center gap-2">
                   <FlaskConical className="size-4 text-primary" />
@@ -449,12 +455,12 @@ export function LandingPage() {
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
                   {c.role}
                 </p>
-                <p className="mt-2 text-sm leading-snug text-muted">
+                <p className="mt-3 flex-1 text-sm leading-relaxed text-muted">
                   {c.detail}
                 </p>
                 <a
                   href={`/#${c.name.toLowerCase()}`}
-                  className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
+                  className="mt-6 inline-flex text-sm font-semibold text-primary hover:underline"
                 >
                   {c.count} producten →
                 </a>
@@ -473,7 +479,7 @@ export function LandingPage() {
             Ervaringen
           </p>
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Wat klanten teruggeven
+            Wat klanten zeggen
           </h2>
         </div>
         <div className="mb-6 grid gap-4 sm:grid-cols-2">
