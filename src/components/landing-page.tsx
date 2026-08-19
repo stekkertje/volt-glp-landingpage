@@ -15,7 +15,6 @@ import {
   PRODUCTS,
   BENEFITS,
   COMPOUNDS,
-  USAGE_STEPS,
   FORM_COMPARE,
   REVIEWS,
   FAQS,
@@ -98,8 +97,8 @@ export function LandingPage() {
 
   const visible = useMemo(() => productsBySubcat(filter), [filter]);
   const weekdeal = PRODUCTS.find((p) => p.weekdeal);
-  const featured =
-    PRODUCTS.find((p) => p.slug === "semaglutide-4mg-pen") ?? PRODUCTS[0]!;
+  const featured = weekdeal ?? PRODUCTS[0]!;
+  const catalogFilters = SUBCATS.filter((s) => s.id !== "all");
 
   return (
     <SiteShell>
@@ -108,11 +107,10 @@ export function LandingPage() {
           <div className="order-1 space-y-6 min-w-0">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                {SITE.category}
+                {SITE.brand}
               </p>
               <h1 className="text-4xl font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
-                GLP-1 afvallen.
-                <span className="text-primary"> Vial of pen.</span>
+                {SITE.headline}
               </h1>
               <p className="max-w-lg text-base text-muted sm:text-lg sm:leading-relaxed">
                 {SITE.shortPitch}
@@ -136,53 +134,69 @@ export function LandingPage() {
 
             <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 space-y-4">
               {weekdeal && (
-                <Link
-                  to="/product/$slug"
-                  params={{ slug: weekdeal.slug }}
-                  className="flex w-full flex-col gap-1 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-left transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                      Weekdeal · −20%
-                    </p>
-                    <p className="text-sm font-bold tracking-tight text-fg">
-                      {weekdeal.name}
-                    </p>
-                    <p className="text-xs text-success font-semibold">
-                      {formatEuro(weekdeal.priceCents)}
-                      {weekdeal.compareAtCents ? (
-                        <span className="ml-1.5 text-dim line-through">
-                          {formatEuro(weekdeal.compareAtCents)}
-                        </span>
-                      ) : null}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-semibold text-primary">
-                    Bekijk deal →
-                  </span>
-                </Link>
+                <>
+                  <Link
+                    to="/product/$slug"
+                    params={{ slug: weekdeal.slug }}
+                    className="flex w-full flex-col gap-1 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-left transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                        Weekdeal · −20%
+                      </p>
+                      <p className="text-sm font-bold tracking-tight text-fg">
+                        {weekdeal.name}
+                      </p>
+                      <p className="text-xs text-success font-semibold">
+                        {formatEuro(weekdeal.priceCents)}
+                        {weekdeal.compareAtCents ? (
+                          <span className="ml-1.5 text-dim line-through">
+                            {formatEuro(weekdeal.compareAtCents)}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-primary">
+                      Bekijk deal →
+                    </span>
+                  </Link>
+
+                  <Link
+                    to="/product/$slug"
+                    params={{ slug: weekdeal.slug }}
+                    className="block overflow-hidden rounded-lg ring-1 ring-border"
+                  >
+                    <img
+                      src={weekdeal.images[0]?.src}
+                      alt={weekdeal.images[0]?.alt ?? weekdeal.name}
+                      width={800}
+                      height={800}
+                      className="aspect-[4/3] w-full object-cover sm:aspect-[16/10]"
+                    />
+                  </Link>
+                </>
               )}
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  size="lg"
-                  className="glow-primary w-full sm:w-auto"
-                  asChild
-                >
-                  <a href="#producten">
-                    Bekijk 6 producten
-                    <ArrowRight className="size-4" />
-                  </a>
-                </Button>
+                {weekdeal && (
+                  <Button
+                    size="lg"
+                    className="glow-primary w-full sm:flex-1"
+                    asChild
+                  >
+                    <Link to="/product/$slug" params={{ slug: weekdeal.slug }}>
+                      Koop {weekdeal.name}
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="secondary"
-                  className="w-full sm:w-auto"
+                  className="w-full sm:flex-1"
                   asChild
                 >
-                  <Link to="/product/$slug" params={{ slug: featured.slug }}>
-                    Bestseller · {featured.name}
-                  </Link>
+                  <a href="#producten">Bekijk 6 producten</a>
                 </Button>
               </div>
             </div>
@@ -209,7 +223,7 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="order-2 relative min-w-0">
+          <div className="order-2 relative min-w-0 hidden md:block">
             <div
               className="absolute inset-8 rounded-full bg-primary/8 blur-3xl pointer-events-none"
               aria-hidden
@@ -229,7 +243,7 @@ export function LandingPage() {
               />
               <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-md backdrop-blur-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                  Bestseller
+                  Weekdeal
                 </p>
                 <p className="text-sm font-bold tracking-tight">
                   {featured.name}
@@ -257,29 +271,44 @@ export function LandingPage() {
           Retatrutide
         </span>
         <div className="container-max section-pad py-16 md:py-24">
-          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
-                Assortiment
-              </p>
-              <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-                {SITE.category}
-              </h2>
-              <p className="mt-2 text-muted">{visible.length} producten</p>
+          <div className="mb-8 flex flex-col gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
+                  Assortiment
+                </p>
+                <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+                  {SITE.category}
+                </h2>
+                <p className="mt-2 text-muted">
+                  {visible.length} producten
+                  {filter !== "all" ? (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={() => setFilterAndHash("all")}
+                        className="font-semibold text-primary underline-offset-2 hover:underline"
+                      >
+                        Alle producten
+                      </button>
+                    </>
+                  ) : null}
+                </p>
+              </div>
             </div>
             <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Filter op stof"
+              className="flex flex-nowrap gap-2 overflow-x-auto pb-0.5"
+              role="group"n              aria-label="Filter op stof"
             >
-              {SUBCATS.map((s) => (
+              {catalogFilters.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   aria-pressed={filter === s.id}
                   onClick={() => setFilterAndHash(s.id)}
                   className={cn(
-                    "rounded-full border px-3.5 py-2 text-sm font-semibold transition",
+                    "shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition sm:px-3.5 sm:text-sm",
                     filter === s.id
                       ? "border-primary bg-primary text-primary-fg"
                       : "border-border bg-surface text-muted hover:border-primary/40 hover:text-fg",
@@ -308,10 +337,11 @@ export function LandingPage() {
             Waarom deze lijn
           </p>
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Drie stoffen. Twee vormen.
+            Drie stoffen. Zes mogelijkheden.
           </h2>
           <p className="mt-3 text-muted">
-            Semaglutide, Tirzepatide of Retatrutide. Als vial of als pen.
+            Semaglutide, Tirzepatide en Retatrutide — elk verkrijgbaar als pen
+            én vial.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -395,62 +425,30 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="container-max section-pad py-16 md:py-20">
-        <div className="mx-auto max-w-2xl text-center mb-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
-            Zo werkt het
-          </p>
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Drie stappen. Eén ritme.
-          </h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {USAGE_STEPS.map((step) => (
-            <article
-              key={step.n}
-              className="relative rounded-xl border border-border bg-surface p-6 shadow-sm"
-            >
-              <span className="text-3xl font-extrabold tracking-tight text-primary tabular-nums">
-                {step.n}
-              </span>
-              <h3 className="mt-3 text-lg font-bold tracking-tight">
-                {step.title}
-              </h3>
-              <p className="mt-2 text-sm text-muted leading-relaxed">
-                {step.detail}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section id="formule" className="border-y border-border bg-bg-elevated">
         <div className="container-max section-pad py-16 md:py-24">
           <div className="mb-10">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary mb-3">
-              Stoffen
+              Verschillende stoffen
             </p>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
               Semaglutide, Tirzepatide, Retatrutide
             </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {COMPOUNDS.map((c, i) => (
+            {COMPOUNDS.map((c) => (
               <article
                 key={c.name}
                 className="rounded-xl border border-border bg-surface p-5"
               >
-                <span className="text-[10px] font-bold tabular-nums text-primary">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <FlaskConical className="size-4 text-primary" />
                   <h3 className="font-bold tracking-tight">{c.name}</h3>
                 </div>
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
                   {c.role}
                 </p>
-                <p className="mt-2 text-sm text-muted leading-relaxed">
+                <p className="mt-2 text-sm leading-snug text-muted">
                   {c.detail}
                 </p>
                 <a
