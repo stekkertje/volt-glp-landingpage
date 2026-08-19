@@ -77,13 +77,13 @@ export function SiteFooter() {
                 </li>
                 <li>
                   <a href="/#beoordelingen" className="hover:text-bg">
-                    Beoordelingen
+                    Reviews
                   </a>
                 </li>
                 <li>
                   <a href="/account" className="hover:text-bg">
                     {authEnabled
-                      ? "Mijn bestellingen"
+                      ? "Mijn bestelling"
                       : "Bestelling volgen"}
                   </a>
                 </li>
@@ -100,14 +100,10 @@ export function SiteFooter() {
             </div>
           </div>
         </div>
-        <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40 space-y-1">
+        <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40">
           <p>
             © {new Date().getFullYear()} Afslank-injecties.nl. Alle rechten
             voorbehouden.
-          </p>
-          <p>
-            Bestellingen zijn echt opgeslagen · betaling en e-mail blijven
-            handmatig.
           </p>
         </div>
       </div>

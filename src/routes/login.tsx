@@ -1,5 +1,6 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
+import { SITE } from "@/lib/product";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -27,10 +28,10 @@ function LoginPage() {
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-fg text-sm font-extrabold">
-              V
+              A
             </span>
             <span className="text-xl font-extrabold tracking-tight">
-              VOLT<span className="text-primary">.</span>
+              {SITE.brand}
             </span>
           </Link>
           <h1 className="mt-6 text-2xl font-extrabold tracking-tight">
@@ -47,7 +48,7 @@ function LoginPage() {
               key={p.providerId}
               type="button"
               onClick={() => signIn(p.providerId, { callbackURL: redirect })}
-              className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
+              className="flex h-12 w-full items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
             >
               Doorgaan met {p.label}
             </button>
