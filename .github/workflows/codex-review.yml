@@ -52,6 +52,37 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Prepare a trusted review worktree
+        if: steps.trusted-prompt.outputs.available == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_WORKTREE: ${{ runner.temp }}/codex-review-worktree
+          TRUSTED_REVIEW_PROMPT: ${{ runner.temp }}/codex-review.md
+        run: |
+          git worktree add --detach "$REVIEW_WORKTREE" HEAD
+
+          find "$REVIEW_WORKTREE" \
+            \( -name AGENTS.md -o -name AGENTS.override.md \) -delete
+
+          for path in AGENTS.md AGENTS.override.md; do
+            if git cat-file -e "$BASE_SHA:$path"; then
+              git show "$BASE_SHA:$path" > "$REVIEW_WORKTREE/$path"
+            fi
+          done
+
+          test -d "$REVIEW_WORKTREE/docs"
+          test ! -L "$REVIEW_WORKTREE/docs"
+          for path in docs/WEBSITE-OPERATIONS.md docs/REVIEW-CHECKLIST.md; do
+            rm -f "$REVIEW_WORKTREE/$path"
+            if git cat-file -e "$BASE_SHA:$path"; then
+              git show "$BASE_SHA:$path" > "$REVIEW_WORKTREE/$path"
+            fi
+          done
+
+          printf '\nReview het bereik met: git diff %s...%s --\n' \
+            "$BASE_SHA" "$HEAD_SHA" >> "$TRUSTED_REVIEW_PROMPT"
+
       - name: Run read-only Codex review
         if: steps.trusted-prompt.outputs.available == 'true'
         id: codex
@@ -61,7 +92,7 @@ jobs:
           prompt-file: ${{ runner.temp }}/codex-review.md
           sandbox: read-only
           safety-strategy: drop-sudo
-          codex-args: '["--ephemeral"]'
+          codex-args: '["--ephemeral", "--ignore-user-config", "--ignore-rules", "--cd", "${{ runner.temp }}/codex-review-worktree"]'
           allow-users: stekkertje
 
   post-feedback:

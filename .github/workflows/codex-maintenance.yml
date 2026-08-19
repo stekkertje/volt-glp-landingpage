@@ -127,14 +127,14 @@ jobs:
         run: |
           git add --all
           git diff --cached --check
-          git diff --cached --binary --full-index > .codex-maintenance.patch
+          git diff --cached --binary --full-index > codex-maintenance.patch
 
       - name: Upload the verified patch
         if: steps.changes.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: codex-maintenance-patch
-          path: .codex-maintenance.patch
+          path: codex-maintenance.patch
           if-no-files-found: error
           retention-days: 1
 
@@ -161,7 +161,7 @@ jobs:
 
       - name: Apply and recheck the verified patch
         run: |
-          git apply --index .codex-maintenance.patch
+          git apply --index codex-maintenance.patch
           git diff --cached --check
           while IFS= read -r path; do
             case "$path" in
