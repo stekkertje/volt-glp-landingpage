@@ -97,6 +97,56 @@ async function stopDevServer() {
   }
 }
 
+async function startDevServer() {
+  serverOutput = "";
+  devServer = spawn(
+    "npm",
+    [
+      "run",
+      "dev",
+      "--",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      new URL(BASE_URL).port,
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATABASE_URL: "",
+        MIGRATION_DATABASE_URL: "",
+        DATABASE_URL_UNPOOLED: "",
+        VERCEL: "",
+        NETLIFY: "",
+        REQUIRE_DATABASE: "",
+        PGLITE_PREVIEW: "",
+        NODE_ENV: "test",
+        npm_lifecycle_event: "test",
+        VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
+        VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
+        ADMIN_EMAILS: "allowlisted-admin@example.test",
+        ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
+        ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    },
+  );
+  for (const stream of [devServer.stdout, devServer.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      serverOutput = `${serverOutput}${chunk}`.slice(-20_000);
+    });
+  }
+  await waitForServer();
+}
+
+async function restartDevServerWithFreshDatabase() {
+  await stopDevServer();
+  await startDevServer();
+}
+
 async function within(promise, milliseconds, message) {
   let timer;
   try {
@@ -139,39 +189,7 @@ before(async () => {
   const port = await availablePort();
   BASE_URL = `http://127.0.0.1:${port}`;
   viteCacheDir = await mkdtemp(join(tmpdir(), "volt-storefront-vite-"));
-  devServer = spawn(
-    "npm",
-    ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)],
-    {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        DATABASE_URL: "",
-        MIGRATION_DATABASE_URL: "",
-        DATABASE_URL_UNPOOLED: "",
-        VERCEL: "",
-        NETLIFY: "",
-        REQUIRE_DATABASE: "",
-        PGLITE_PREVIEW: "",
-        NODE_ENV: "test",
-        npm_lifecycle_event: "test",
-        VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
-        VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
-        ADMIN_EMAILS: "allowlisted-admin@example.test",
-        ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
-        ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
-    },
-  );
-  for (const stream of [devServer.stdout, devServer.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => {
-      serverOutput = `${serverOutput}${chunk}`.slice(-20_000);
-    });
-  }
-  await waitForServer();
+  await startDevServer();
   browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
@@ -1639,7 +1657,7 @@ test("an older checkout tab cannot overwrite a seed rotated after success", asyn
       );
     await olderTab
       .getByRole("alert")
-      .getByText(/verlopen of in een ander tabblad gewijzigd of afgerond/)
+      .getByText(/al geplaatst.*niet opnieuw worden verstuurd/)
       .waitFor({ timeout: 10_000 });
     assert.equal(observedKeys.length, 1);
     assert.equal(
@@ -1805,20 +1823,6 @@ test("a contended success finalizer never withholds order recovery", async () =>
     committedKey = requestBody.match(/checkout-v2-[a-f0-9]{64}/)?.[0];
     const response = await route.fetch();
     assert.equal(response.status(), 200);
-    await page.evaluate(async () => {
-      const { CHECKOUT_STORAGE_LOCK_NAME } =
-        await import("/src/lib/checkout-idempotency.ts");
-      await new Promise((resolve) => {
-        void navigator.locks.request(CHECKOUT_STORAGE_LOCK_NAME, async () => {
-          globalThis.__voltCheckoutLockHeld = true;
-          resolve(undefined);
-          await new Promise((release) => {
-            globalThis.__releaseVoltCheckoutLock = release;
-          });
-        });
-      });
-    });
-    heldDuringFinalization = true;
     await route.fulfill({ response });
     markCommittedResponseReleased(undefined);
   };
@@ -1828,6 +1832,32 @@ test("a contended success finalizer never withholds order recovery", async () =>
     await addPenAndOpenCheckout(page);
     await fillCheckout(page, `lock-success-${randomUUID()}@example.test`);
     const placeOrder = await waitForCheckoutSubmit(page);
+    await page.evaluate(async () => {
+      const { COMPLETED_CART_EPOCH_STORAGE_KEY } =
+        await import("/src/lib/cart-lifecycle.ts");
+      const { CHECKOUT_STORAGE_LOCK_NAME } =
+        await import("/src/lib/checkout-idempotency.ts");
+      const storagePrototype = Storage.prototype;
+      const nativeSetItem = storagePrototype.setItem;
+      globalThis.__voltNativeStorageSetItem = nativeSetItem;
+      storagePrototype.setItem = function (key, value) {
+        const result = nativeSetItem.call(this, key, value);
+        if (
+          this === localStorage &&
+          key === COMPLETED_CART_EPOCH_STORAGE_KEY &&
+          !globalThis.__voltCheckoutFinalizerLockQueued
+        ) {
+          globalThis.__voltCheckoutFinalizerLockQueued = true;
+          void navigator.locks.request(CHECKOUT_STORAGE_LOCK_NAME, async () => {
+            globalThis.__voltCheckoutLockHeld = true;
+            await new Promise((release) => {
+              globalThis.__releaseVoltCheckoutLock = release;
+            });
+          });
+        }
+        return result;
+      };
+    });
     await page.route("**/*", holdLockAfterCommit);
     await placeOrder.click();
     await within(
@@ -1839,6 +1869,12 @@ test("a contended success finalizer never withholds order recovery", async () =>
       const cart = JSON.parse(localStorage.getItem("volt-cart") || "{}");
       return Array.isArray(cart.state?.lines) && cart.state.lines.length === 0;
     });
+    await page.waitForFunction(
+      () => globalThis.__voltCheckoutLockHeld === true,
+    );
+    heldDuringFinalization = await page.evaluate(
+      () => globalThis.__voltCheckoutLockHeld === true,
+    );
     assert.equal(heldDuringFinalization, true);
     assert.match(new URL(page.url()).pathname, /^\/bestelling\/[^/]+$/);
     await page
@@ -1888,7 +1924,12 @@ test("a contended success finalizer never withholds order recovery", async () =>
   } finally {
     await page.unroute("**/*", holdLockAfterCommit).catch(() => {});
     await page
-      .evaluate(() => globalThis.__releaseVoltCheckoutLock?.())
+      .evaluate(() => {
+        globalThis.__releaseVoltCheckoutLock?.();
+        if (globalThis.__voltNativeStorageSetItem) {
+          Storage.prototype.setItem = globalThis.__voltNativeStorageSetItem;
+        }
+      })
       .catch(() => {});
     await context.close();
   }
@@ -2725,6 +2766,10 @@ test("checkout shows server-shared postcode feedback without clearing the cart",
 });
 
 test("checkout shows actionable idempotency conflict feedback without a guest account link", async () => {
+  // This file intentionally exercises the real public rate limit. Earlier
+  // checkout cases share one dev-server IP, so give this conflict regression a
+  // fresh in-memory test database instead of weakening or bypassing production.
+  await restartDevServerWithFreshDatabase();
   const { context, page } = await newPage();
   const checkoutEmail = `conflict-tweede-${Date.now()}@example.test`;
   try {

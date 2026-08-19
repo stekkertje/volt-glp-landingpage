@@ -54,7 +54,12 @@ function securityHeadersPlugin(): Plugin {
         const pathname = (req.url ?? "/").split("?", 1)[0] || "/";
         const applyHeaders = () => {
           for (const [name, value] of Object.entries(
-            securityHeadersForPath(pathname, { development: true }),
+            securityHeadersForPath(pathname, {
+              development: true,
+              noIndex:
+                process.env.NO_INDEX === "1" ||
+                process.env.VITE_NO_INDEX === "1",
+            }),
           )) {
             res.setHeader(name, value);
           }
@@ -176,8 +181,9 @@ function authPopupPlugin(): Plugin {
 }
 
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
-// Keep `nitro` gated to `build` (the Vercel deploy target): enabled in dev it
-// opens a second dev-server port, which breaks the single-port preview.
+// Keep `nitro` gated to `build`: enabled in dev it opens a second dev-server
+// port, which breaks the single-port preview. Vercel remains the default
+// deploy preset; `npm run build:hostinger` selects Nitro's node-server preset.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command }) => ({
@@ -208,7 +214,7 @@ export default defineConfig(({ command }) => ({
     ...(command === "build"
       ? [
           nitro({
-            preset: "vercel",
+            preset: process.env.NITRO_PRESET?.trim() || "vercel",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

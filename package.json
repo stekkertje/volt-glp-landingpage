@@ -9,13 +9,18 @@
   "scripts": {
     "dev": "vite dev --host 0.0.0.0 --port 8080",
     "build": "vite build && npm run db:migrate",
+    "build:hostinger": "REQUIRE_DATABASE=1 NITRO_PRESET=node-server vite build && REQUIRE_DATABASE=1 npm run db:migrate",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
+    "start": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'scripts/**/*.test.mjs'",
+    "test": "node scripts/run-tests.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

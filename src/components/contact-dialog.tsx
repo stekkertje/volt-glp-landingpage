@@ -229,10 +229,10 @@ export function ContactDialog() {
           <p className="text-[11px] text-dim leading-relaxed">
             Of mail direct:{" "}
             <a
-              href="mailto:support@voltperformance.nl"
+              href="mailto:info@afslank-injecties.nl"
               className="font-medium text-primary hover:underline"
             >
-              support@voltperformance.nl
+              info@afslank-injecties.nl
             </a>
           </p>
 

@@ -76,3 +76,14 @@ test("HSTS is opt-in for a production HTTPS response only", () => {
     /includeSubDomains/i,
   );
 });
+
+test("deployment-wide noindex is opt-in and covers every path", () => {
+  assert.equal(securityHeadersForPath("/")["x-robots-tag"], undefined);
+  for (const path of ["/", "/product/semaglutide-2mg", "/admin"]) {
+    assert.equal(
+      securityHeadersForPath(path, { noIndex: true })["x-robots-tag"],
+      "noindex, nofollow, noarchive",
+      path,
+    );
+  }
+});

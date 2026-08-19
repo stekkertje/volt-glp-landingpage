@@ -32,7 +32,7 @@ import {
   loginAdmin,
   logoutAdmin,
 } from "@/lib/server/admin";
-import { clearBearerToken } from "@/lib/auth/client";
+import { authEnabled, clearBearerToken } from "@/lib/auth/client";
 import { listContactMessages, setContactHandled } from "@/lib/server/contact";
 import {
   getOrderForAdmin,
@@ -50,7 +50,7 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Beheer | VOLT" },
-      { name: "robots", content: "noindex, nofollow" },
+      { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),
 });
@@ -107,7 +107,7 @@ function AdminPage() {
       <AdminFrame>
         <AdminLogin
           passwordLoginAvailable={session.passwordLoginAvailable}
-          allowlistConfigured={session.allowlistConfigured}
+          allowlistConfigured={authEnabled && session.allowlistConfigured}
           onSuccess={loadSession}
         />
       </AdminFrame>

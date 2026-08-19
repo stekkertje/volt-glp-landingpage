@@ -660,7 +660,7 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       },
       {
         type: "p",
-        text: "Hulp nodig? Mail support@voltperformance.nl.",
+        text: "Hulp nodig? Mail info@afslank-injecties.nl.",
       },
     ],
   },

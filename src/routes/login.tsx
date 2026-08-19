@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 
 export const Route = createFileRoute("/login")({
@@ -8,6 +8,14 @@ export const Route = createFileRoute("/login")({
         ? search.redirect
         : "/account",
   }),
+  beforeLoad: ({ search }) => {
+    if (!authEnabled) {
+      throw redirect({
+        to: search.redirect === "/admin" ? "/admin" : "/account",
+        replace: true,
+      });
+    }
+  },
   component: LoginPage,
 });
 
@@ -25,28 +33,26 @@ function LoginPage() {
               VOLT<span className="text-primary">.</span>
             </span>
           </Link>
-          <h1 className="mt-6 text-2xl font-extrabold tracking-tight">Inloggen</h1>
+          <h1 className="mt-6 text-2xl font-extrabold tracking-tight">
+            Inloggen
+          </h1>
           <p className="mt-2 text-sm text-muted">
             Log in om je bestellingen en account te beheren.
           </p>
         </div>
 
-        {authEnabled ? (
-          <div className="space-y-3">
-            {GROK_PROVIDERS.map((p) => (
-              <button
-                key={p.providerId}
-                type="button"
-                onClick={() => signIn(p.providerId, { callbackURL: redirect })}
-                className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
-              >
-                Doorgaan met {p.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-center text-sm text-muted">Inloggen is uitgeschakeld.</p>
-        )}
+        <div className="space-y-3">
+          {GROK_PROVIDERS.map((p) => (
+            <button
+              key={p.providerId}
+              type="button"
+              onClick={() => signIn(p.providerId, { callbackURL: redirect })}
+              className="flex h-12 w-full items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-fg transition-colors hover:border-primary/40 hover:bg-bg-elevated"
+            >
+              Doorgaan met {p.label}
+            </button>
+          ))}
+        </div>
 
         <p className="text-center text-sm text-dim">
           <Link to="/" className="font-medium text-primary hover:underline">

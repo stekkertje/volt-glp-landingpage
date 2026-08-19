@@ -1,4 +1,5 @@
 import { useContactStore } from "@/lib/contact-store";
+import { authEnabled } from "@/lib/auth/client";
 import { SITE } from "@/lib/product";
 
 export function SiteFooter() {
@@ -24,7 +25,9 @@ export function SiteFooter() {
           </div>
           <div className="flex flex-col gap-8 text-sm sm:min-w-[18rem]">
             <div>
-              <p className="font-semibold tracking-tight text-bg mb-3">Product</p>
+              <p className="font-semibold tracking-tight text-bg mb-3">
+                Product
+              </p>
               <ul className="space-y-2 text-bg/60">
                 <li>
                   <a href="/#producten" className="hover:text-bg">
@@ -49,15 +52,21 @@ export function SiteFooter() {
               </ul>
             </div>
             <div>
-              <p className="font-semibold tracking-tight text-bg mb-3">Levering</p>
+              <p className="font-semibold tracking-tight text-bg mb-3">
+                Levering
+              </p>
               <ul className="space-y-2 text-bg/60">
                 <li>Nederland & België</li>
                 <li>1–2 werkdagen</li>
-                <li className="whitespace-nowrap">Gratis levering vanaf €100</li>
+                <li className="whitespace-nowrap">
+                  Gratis levering vanaf €100
+                </li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold tracking-tight text-bg mb-3">Service</p>
+              <p className="font-semibold tracking-tight text-bg mb-3">
+                Service
+              </p>
               <ul className="space-y-2 text-bg/60">
                 <li>
                   <a href="/#faq" className="hover:text-bg">
@@ -71,20 +80,26 @@ export function SiteFooter() {
                 </li>
                 <li>
                   <a href="/account" className="hover:text-bg">
-                    Mijn bestellingen
+                    {authEnabled
+                      ? "Mijn bestellingen"
+                      : "Bestelling terugvinden"}
                   </a>
                 </li>
                 <li>
-                  <button type="button" onClick={openContact} className="hover:text-bg text-left">
+                  <button
+                    type="button"
+                    onClick={openContact}
+                    className="hover:text-bg text-left"
+                  >
                     Contact
                   </button>
                 </li>
                 <li>
                   <a
-                    href="mailto:support@voltperformance.nl"
+                    href="mailto:info@afslank-injecties.nl"
                     className="text-bg/60 hover:text-bg"
                   >
-                    support@voltperformance.nl
+                    info@afslank-injecties.nl
                   </a>
                 </li>
               </ul>
@@ -92,8 +107,14 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40 space-y-1">
-          <p>© {new Date().getFullYear()} VOLT Performance. Alle rechten voorbehouden.</p>
-          <p>Bestellingen zijn echt opgeslagen · betaling en e-mail blijven handmatig.</p>
+          <p>
+            © {new Date().getFullYear()} VOLT Performance. Alle rechten
+            voorbehouden.
+          </p>
+          <p>
+            Bestellingen zijn echt opgeslagen · betaling en e-mail blijven
+            handmatig.
+          </p>
         </div>
       </div>
     </footer>

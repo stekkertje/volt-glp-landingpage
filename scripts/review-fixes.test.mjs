@@ -196,11 +196,17 @@ test("review documentation and recovery flow contain no stale demo or recovery s
       readFile("src/lib/server/admin-auth.server.ts", "utf8"),
     ]);
   assert.doesNotMatch(briefing, /checkout zijn DEMO|demo-submit|nep-success/i);
-  assert.match(account, /<GuestOrderAccess showLogin=\{!user\} \/>/);
+  assert.match(
+    account,
+    /<GuestOrderAccess showLogin=\{authEnabled && !user\} \/>/,
+  );
   assert.match(account, /user && !user\.isDevFallback && <SignedInOrders \/>/);
   assert.doesNotMatch(confirmation, /sessionStorage/);
   assert.match(checkout, /Deze bestelling is al geplaatst/);
-  assert.match(checkout, /name: "robots", content: "noindex, nofollow"/);
+  assert.match(
+    checkout,
+    /name: "robots", content: "noindex, nofollow, noarchive"/,
+  );
   assert.doesNotMatch(orderFunctions, /secure:\s*process\.env\.NODE_ENV/);
   assert.doesNotMatch(adminAuth, /secure:\s*productionCookie/);
   assert.equal((orderFunctions.match(/secure:\s*true/g) ?? []).length, 2);

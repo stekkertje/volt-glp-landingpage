@@ -19,7 +19,8 @@ npm run lint
 npm test
 ```
 
-Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
+Deploy-targets: Vercel SSR als standaard en Hostinger Cloud Node.js via de
+aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
 
 ## Productie en beheer
 
@@ -77,6 +78,22 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
 - Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
 
+### Hostinger Cloud
+
+- Gebruik Node.js 22 en `npm ci --include=dev`. Zet
+  `NPM_CONFIG_INCLUDE=dev`, omdat de buildtoolchain ook onder
+  `NODE_ENV=production` nodig is.
+- Build met `npm run build:hostinger`; dit selecteert Nitro `node-server` en
+  voert daarna de databasemigraties uit.
+- Start met `npm start` (`.output/server/index.mjs`).
+- Hostinger gebruikt een externe PostgreSQL-database. Voor deze deployment is
+  dat Neon; Hostinger MySQL is niet compatibel met deze PostgreSQL-code.
+- Houd de testsite uit zoekmachines met zowel `VITE_NO_INDEX=1` als
+  `NO_INDEX=1`. De eerste levert de robots-meta tijdens de build, de tweede de
+  globale `X-Robots-Tag` tijdens runtime.
+- De volledige configuratie en live checklist staan in
+  [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
+
 ### Database-upgradecontrole
 
 Migratie `0007_review_hardening.sql` stopt bewust wanneer historische
@@ -96,14 +113,14 @@ historische orderregels.
 
 ## Catalogus
 
-| Product | Vorm | Prijs |
-| --- | --- | ---: |
-| Semaglutide 2 mg | vial | €85,00 |
-| Semaglutide 4 mg | pen | €169,00 |
-| Tirzepatide 10 mg | vial | €94,00 |
-| Tirzepatide 20 mg | pen | €190,00 |
+| Product           | Vorm |             Prijs |
+| ----------------- | ---- | ----------------: |
+| Semaglutide 2 mg  | vial |            €85,00 |
+| Semaglutide 4 mg  | pen  |           €169,00 |
+| Tirzepatide 10 mg | vial |            €94,00 |
+| Tirzepatide 20 mg | pen  |           €190,00 |
 | Retatrutide 10 mg | vial | €77,60 (weekdeal) |
-| Retatrutide 20 mg | pen | €199,00 |
+| Retatrutide 20 mg | pen  |           €199,00 |
 
 - Gratis verzending vanaf €100, anders €4,95
 - NL en BE, 1-2 werkdagen, discreet, track & trace
@@ -113,17 +130,17 @@ historische orderregels.
 
 ## Belangrijkste bestanden
 
-| Bestand | Rol |
-| --- | --- |
-| `src/components/landing-page.tsx` | Homepage + catalogus |
-| `src/components/product-page.tsx` | Productdetail |
-| `src/lib/product.ts` | Productdata, FAQ, reviews |
-| `src/lib/cart-store.ts` | Winkelwagen (client, demo) |
-| `src/components/pack-selector.tsx` | Extra's, aantal, CTA |
-| `src/components/mobile-sticky-bar.tsx` | Mobiele koopbalk |
-| `src/components/cart-drawer.tsx` | Winkelwagen-drawer |
-| `public/images/producten/` | Productfoto's |
-| `scripts/storefront.test.mjs` | Browserregressies |
+| Bestand                                | Rol                        |
+| -------------------------------------- | -------------------------- |
+| `src/components/landing-page.tsx`      | Homepage + catalogus       |
+| `src/components/product-page.tsx`      | Productdetail              |
+| `src/lib/product.ts`                   | Productdata, FAQ, reviews  |
+| `src/lib/cart-store.ts`                | Winkelwagen (client, demo) |
+| `src/components/pack-selector.tsx`     | Extra's, aantal, CTA       |
+| `src/components/mobile-sticky-bar.tsx` | Mobiele koopbalk           |
+| `src/components/cart-drawer.tsx`       | Winkelwagen-drawer         |
+| `public/images/producten/`             | Productfoto's              |
+| `scripts/storefront.test.mjs`          | Browserregressies          |
 
 ## Backendroutes
 

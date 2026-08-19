@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
+import { authEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { consumeOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { getOrderForViewer } from "@/lib/server/orders";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/bestelling/$id")({
   head: () => ({
     meta: [
       { title: "Bestelling | VOLT" },
-      { name: "robots", content: "noindex, nofollow" },
+      { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),
 });
@@ -135,10 +136,13 @@ function OrderConfirmationPage() {
           </h1>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
             Deze bestelling bestaat niet of je hebt geen toegang. Gebruik je
-            herstelcode via je accountpagina.
+            herstelcode via{" "}
+            {authEnabled ? "je accountpagina" : "Bestelling terugvinden"}.
           </p>
           <Button className="mt-6" asChild>
-            <Link to="/account">Naar account</Link>
+            <Link to="/account">
+              {authEnabled ? "Naar account" : "Bestelling terugvinden"}
+            </Link>
           </Button>
         </main>
       </SiteShell>
@@ -236,9 +240,10 @@ function OrderConfirmationPage() {
             {!recoveryCode && (
               <p className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm text-muted">
                 Als gast kun je deze bestelling op dit apparaat tot 72 uur na
-                plaatsing openen. Was je ingelogd, dan kun je gekoppelde
-                bestellingen ook via je account openen. De eenmalige herstelcode
-                wordt na herladen niet opnieuw getoond.
+                plaatsing openen.{" "}
+                {authEnabled &&
+                  "Was je ingelogd, dan kun je gekoppelde bestellingen ook via je account openen. "}
+                De eenmalige herstelcode wordt na herladen niet opnieuw getoond.
               </p>
             )}
 
@@ -261,7 +266,11 @@ function OrderConfirmationPage() {
                 <Link to="/">Verder winkelen</Link>
               </Button>
               <Button variant="secondary" asChild>
-                <Link to="/account">Bestellingen bekijken</Link>
+                <Link to="/account">
+                  {authEnabled
+                    ? "Bestellingen bekijken"
+                    : "Bestelling terugvinden"}
+                </Link>
               </Button>
             </div>
           </div>

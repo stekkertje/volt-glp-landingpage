@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
+import { authEnabled } from "@/lib/auth/client";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getOrderForViewer, listOwnOrders } from "@/lib/server/orders";
@@ -14,8 +15,12 @@ export const Route = createFileRoute("/account")({
   component: AccountPage,
   head: () => ({
     meta: [
-      { title: "Mijn bestellingen | VOLT" },
-      { name: "robots", content: "noindex, nofollow" },
+      {
+        title: authEnabled
+          ? "Mijn bestellingen | VOLT"
+          : "Bestelling terugvinden | VOLT",
+      },
+      { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),
 });
@@ -34,13 +39,15 @@ function AccountPage() {
         <div className="container-max section-pad py-10 md:py-16">
           <div className="mx-auto max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-              Account
+              {authEnabled ? "Account" : "Gastbestelling"}
             </p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
-              Mijn bestellingen
+              {authEnabled ? "Mijn bestellingen" : "Bestelling terugvinden"}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Bekijk je eigen bestellingen of zoek als gast met je herstelcode.
+              {authEnabled
+                ? "Bekijk je eigen bestellingen of zoek als gast met je herstelcode."
+                : "Zoek je bestelling met het bestelnummer en de eenmalige herstelcode."}
             </p>
 
             {isPending ? (
@@ -51,7 +58,7 @@ function AccountPage() {
             ) : (
               <>
                 {user && !user.isDevFallback && <SignedInOrders />}
-                <GuestOrderAccess showLogin={!user} />
+                <GuestOrderAccess showLogin={authEnabled && !user} />
               </>
             )}
           </div>

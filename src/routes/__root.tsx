@@ -11,6 +11,7 @@ import appCss from "../styles.css?url";
 const APP_NAME = "GLP-1 Afvallen | VOLT";
 const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
 const ogImage = host ? `https://${host}/og.jpg` : undefined;
+const noIndex = import.meta.env.VITE_NO_INDEX === "1";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -28,10 +29,14 @@ export const Route = createRootRoute({
       },
       { name: "apple-mobile-web-app-title", content: APP_NAME },
       { name: "theme-color", content: "#ffffff" },
+      ...(noIndex
+        ? [{ name: "robots", content: "noindex, nofollow, noarchive" }]
+        : []),
       { property: "og:title", content: APP_NAME },
       {
         property: "og:description",
-        content: "Semaglutide, Tirzepatide en Retatrutide. Vial of kant-en-klare pen.",
+        content:
+          "Semaglutide, Tirzepatide en Retatrutide. Vial of kant-en-klare pen.",
       },
       { property: "og:type", content: "website" },
       { property: "og:locale", content: "nl_NL" },

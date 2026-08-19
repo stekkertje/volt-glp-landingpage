@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Loader2, LockKeyhole } from "lucide-react";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
+import { authEnabled } from "@/lib/auth/client";
 import { useCartStore } from "@/lib/cart-store";
 import {
   checkoutIdempotencyKeyFromSeed,
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/checkout")({
         content:
           "Plaats je VOLT-bestelling voor levering in Nederland of België.",
       },
-      { name: "robots", content: "noindex, nofollow" },
+      { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),
 });
@@ -489,9 +490,10 @@ function CheckoutPage() {
             <p className="mt-2 text-sm text-muted">
               Open de bevestiging vóór je deze pagina herlaadt en bewaar de
               eenmalige herstelcode. Als gast kun je de bestelling op dit
-              apparaat tot 72 uur na plaatsing openen. Was je ingelogd, dan kun
-              je gekoppelde bestellingen ook via je account openen. De code
-              wordt voor je veiligheid niet bewaard of opnieuw getoond.
+              apparaat tot 72 uur na plaatsing openen.{" "}
+              {authEnabled &&
+                "Was je ingelogd, dan kun je gekoppelde bestellingen ook via je account openen. "}
+              De code wordt voor je veiligheid niet bewaard of opnieuw getoond.
             </p>
             <Button asChild size="lg" className="mt-6">
               <Link to="/bestelling/$id" params={{ id: confirmedOrder.id }}>

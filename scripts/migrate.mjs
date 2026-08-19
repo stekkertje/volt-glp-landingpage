@@ -2,7 +2,7 @@
 /**
  * Deploy-time database migrator (node-postgres, `pg`).
  *
- * Runs during `npm run build` — on every Vercel deploy — applying pending files
+ * Runs during the Vercel and Hostinger build scripts, applying pending files
  * in ../migrations via the direct MIGRATION_DATABASE_URL. Runtime requests may
  * keep using a pooled DATABASE_URL. Normal files apply transactionally;
  * `-- migrate:no-transaction` files contain individually idempotent statements

@@ -17,6 +17,8 @@ export default async function securityHeadersMiddleware(
       hsts:
         process.env.NODE_ENV === "production" &&
         event.url.protocol === "https:",
+      noIndex:
+        process.env.NO_INDEX === "1" || process.env.VITE_NO_INDEX === "1",
     }),
   )) {
     headers.set(name, value);

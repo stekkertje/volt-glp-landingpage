@@ -67,10 +67,13 @@ Primair doel: bezoekers helder laten vergelijken en zonder twijfel laten kopen.
 React 19, TypeScript, Vite 8, TanStack Start/Router, Tailwind v4, Zustand, Lucide, Radix accordion.
 
 - Dev: `npm run dev` → `0.0.0.0:8080`
-- Build: `npm run build` (Nitro preset **vercel**, alleen bij `command === "build"`)
+- Vercel-build: `npm run build` (Nitro preset **vercel**, alleen bij `command === "build"`)
+- Hostinger Cloud-build: `npm run build:hostinger` (Nitro preset **node-server**)
 - Typecheck: `npm run typecheck`
 
-**Niet** drop-in Hostinger shared hosting. Output is Vercel SSR (`.vercel/output`).
+Vercel blijft de standaard. Hostinger Cloud Startup gebruikt de aparte
+Node.js-build met `.output/server/index.mjs`; dit is niet geschikt voor gewone
+Hostinger shared hosting. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
 
 ---
 
@@ -161,7 +164,8 @@ Productpagina:
 - Auth/login: gekoppeld aan accountbestellingen en optionele admin-allowlist
 - PGLite: alleen lokale preview/testfallback; productie vereist Postgres via `DATABASE_URL`
 - `/__grok` PWA: platforminfrastructuur voor installatie
-- Hostinger shared: niet compatible zonder static export
+- Hostinger Cloud Node.js: ondersteund via `npm run build:hostinger`
+- Hostinger shared hosting: niet compatibel
 
 ---
 
@@ -171,6 +175,8 @@ Productpagina:
 npm install
 npm run dev          # 0.0.0.0:8080
 npm run build
+npm run build:hostinger
+npm start            # start de gebouwde Hostinger Node-server
 npm run typecheck
 ```
 
