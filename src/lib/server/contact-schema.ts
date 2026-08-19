@@ -1,20 +1,23 @@
 import { z } from "zod";
 
-const requiredText = (label: string, max: number) =>
+const requiredText = (label: string, max: number, min = 1) =>
   z.preprocess(
     (value) =>
-      typeof value === "string"
-        ? value.trim().replace(/\s+/g, " ")
-        : value,
+      typeof value === "string" ? value.trim().replace(/\s+/g, " ") : value,
     z
       .string({ message: `${label} is verplicht.` })
-      .min(1, { message: `${label} is verplicht.` })
+      .min(min, {
+        message:
+          min === 1
+            ? `${label} is verplicht.`
+            : `${label} moet minimaal ${min} tekens bevatten.`,
+      })
       .max(max, { message: `${label} is te lang.` }),
   );
 
 export const contactMessageSchema = z
   .object({
-    name: requiredText("Naam", 120),
+    name: requiredText("Naam", 120, 3),
     email: z.preprocess(
       (value) =>
         typeof value === "string" ? value.trim().toLowerCase() : value,
@@ -22,7 +25,10 @@ export const contactMessageSchema = z
         .string({ message: "E-mailadres is verplicht." })
         .min(1, { message: "E-mailadres is verplicht." })
         .max(254, { message: "E-mailadres is te lang." })
-        .email({ message: "Vul een geldig e-mailadres in." }),
+        .email({ message: "Vul een geldig e-mailadres in." })
+        .regex(/^[^\s@]{2,}@[^\s@]+\.[A-Za-z]{2,}$/, {
+          message: "Vul een geldig e-mailadres in.",
+        }),
     ),
     message: z.preprocess(
       (value) => (typeof value === "string" ? value.trim() : value),

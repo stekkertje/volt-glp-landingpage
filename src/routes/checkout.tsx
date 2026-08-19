@@ -20,6 +20,7 @@ import { stageOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { createOrderSchema } from "@/lib/server/order-schema";
 import { createOrder, getPricingPreview } from "@/lib/server/orders";
 import { isConflictServerError, rateLimitFeedback } from "@/lib/server-error";
+import { orderLineSummary } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 
 export const Route = createFileRoute("/checkout")({
@@ -278,7 +279,7 @@ function CheckoutPage() {
     const validation = createOrderSchema.safeParse({
       name: String(fields.get("name") ?? ""),
       email: String(fields.get("email") ?? ""),
-      phone: String(fields.get("phone") ?? ""),
+      phone: "",
       street: String(fields.get("street") ?? ""),
       houseNumber: String(fields.get("houseNumber") ?? ""),
       postcode: String(fields.get("postcode") ?? ""),
@@ -538,12 +539,9 @@ function CheckoutPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 Afrekenen
               </p>
-              <h1 className="mt-2 text-3xl font-extrabold tracking-tight">
+              <h1 className="mt-2 whitespace-nowrap text-[clamp(1.55rem,7vw,1.875rem)] font-extrabold tracking-tight">
                 Waar mogen we bezorgen?
               </h1>
-              <p className="mt-2 max-w-xl text-sm text-muted">
-                Je plaatst de bestelling als gast. Een account is niet nodig.
-              </p>
 
               <form
                 className="mt-8 space-y-6 rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-7"
@@ -578,14 +576,6 @@ function CheckoutPage() {
                     autoComplete="email"
                     required
                     error={fieldErrors.email}
-                  />
-                  <Field
-                    label="Telefoon"
-                    name="phone"
-                    type="tel"
-                    autoComplete="tel"
-                    className="sm:col-span-2"
-                    error={fieldErrors.phone}
                   />
                 </fieldset>
 
@@ -684,7 +674,8 @@ function CheckoutPage() {
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <p className="flex items-start gap-2 text-sm font-semibold text-fg">
                     <LockKeyhole className="mt-0.5 size-4 shrink-0 text-primary" />
-                    Je ontvangt een betaalverzoek. Nog geen online betaling.
+                    Betaalinformatie staat op de volgende pagina en in je
+                    e-mail.
                   </p>
                 </div>
 
@@ -742,7 +733,11 @@ function CheckoutPage() {
                         <div>
                           <p className="font-semibold">{line.name}</p>
                           <p className="text-xs text-muted">
-                            {line.optionLabel} · {line.qty} stuks
+                            {orderLineSummary(
+                              line.slug,
+                              line.optionLabel,
+                              line.qty,
+                            )}
                           </p>
                         </div>
                         <p className="font-semibold tabular-nums">
@@ -782,9 +777,6 @@ function CheckoutPage() {
                       </dd>
                     </div>
                   </dl>
-                  <p className="mt-4 text-[11px] leading-relaxed text-dim">
-                    Deze bedragen zijn opnieuw berekend op de server.
-                  </p>
                 </>
               ) : currentPricingError && discountApplied ? (
                 <div

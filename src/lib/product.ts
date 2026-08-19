@@ -396,6 +396,17 @@ export function getProduct(
   return PRODUCTS.find((p) => p.slug === slug);
 }
 
+export function orderLineSummary(
+  slug: string,
+  optionLabel: string,
+  qty: number,
+): string {
+  const quantity = `${qty} ${qty === 1 ? "stuk" : "stuks"}`;
+  return getProduct(slug)?.form === "pen"
+    ? quantity
+    : `${optionLabel} · ${quantity}`;
+}
+
 export function getDefaultOptionId(product: Product): string {
   return product.options[0]?.id ?? "default";
 }
@@ -476,8 +487,7 @@ export const BENEFITS = [
   },
   {
     title: "Wekelijks ritme",
-    description:
-      "Eén toediening per week. Geen dagelijkse capsules of poeder.",
+    description: "Eén toediening per week. Geen dagelijkse capsules of poeder.",
     icon: "clock",
   },
   {

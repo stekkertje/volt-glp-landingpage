@@ -710,7 +710,17 @@ async function createNewOrder(
   if (!customer) throw new Error("Klant kon niet worden opgeslagen.");
 
   const orderId = randomUUID();
-  const orderNumber = `VOLT-${randomCharacters(8)}`;
+  const orderNumberValues = await sql<{ value: number }>`
+    update order_number_counters
+    set next_value = next_value + 2
+    where key = 'med'
+    returning next_value - 2 as value
+  `;
+  const orderNumberValue = orderNumberValues[0]?.value;
+  if (!Number.isInteger(orderNumberValue)) {
+    throw new Error("Bestelnummer kon niet worden aangemaakt.");
+  }
+  const orderNumber = `MED-${orderNumberValue}`;
   await sql`
     insert into orders (
       id, order_number, idempotency_key, idempotency_payload_hash,

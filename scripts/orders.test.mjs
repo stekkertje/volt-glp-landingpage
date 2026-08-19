@@ -126,7 +126,7 @@ test("createOrder writes customer, order and lines using server prices", async (
       line_total_cents: 8500,
     },
   ]);
-  assert.match(result.order.orderNumber, /^VOLT-[A-Z0-9]{8}$/);
+  assert.equal(result.order.orderNumber, "MED-3100");
   assert.equal("guestAccessTokenHash" in result.order, false);
   assert.ok(result.guestAccessToken.length >= 20);
   assert.match(security[0].idempotency_payload_hash, /^[a-f0-9]{64}$/);
@@ -152,6 +152,7 @@ test("an idempotent retry returns the same guest proof without minting another",
   const first = await createOrderRecord(input, { userId: null });
   const second = await createOrderRecord(input, { userId: null });
 
+  assert.equal(first.order.orderNumber, "MED-3102");
   assert.equal(second.order.id, first.order.id);
   assert.equal(second.order.orderNumber, first.order.orderNumber);
   assert.equal(second.guestAccessToken, first.guestAccessToken);

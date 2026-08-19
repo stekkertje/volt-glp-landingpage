@@ -237,24 +237,17 @@ function OrderConfirmationPage() {
                 )}
               </section>
             )}
-            {!recoveryCode && (
-              <p className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-                Als gast kun je deze bestelling op dit apparaat tot 72 uur na
-                plaatsing openen.{" "}
-                {authEnabled &&
-                  "Was je ingelogd, dan kun je gekoppelde bestellingen ook via je account openen. "}
-                De eenmalige herstelcode wordt na herladen niet opnieuw getoond.
-              </p>
-            )}
-
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-8 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2">
               <div>
+                <p className="text-xs text-muted">Besteld op</p>
                 <p className="text-sm font-semibold">{createdAt}</p>
-                <p className="mt-1 text-xs text-muted">
-                  Status van je bestelling
-                </p>
               </div>
-              <OrderStatusBadge status={order.status} />
+              <div>
+                <p className="text-xs text-muted">Status van je bestelling</p>
+                <div className="mt-1">
+                  <OrderStatusBadge status={order.status} />
+                </div>
+              </div>
             </div>
 
             <div className="mt-5">

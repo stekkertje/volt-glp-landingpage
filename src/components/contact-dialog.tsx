@@ -43,8 +43,11 @@ export function ContactDialog() {
 
   const validate = () => {
     const next: typeof errors = {};
-    if (!name.trim()) next.name = "Vul je naam in";
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (name.trim().length < 3) next.name = "Vul minimaal 3 tekens in";
+    if (
+      !email.trim() ||
+      !/^[^\s@]{2,}@[^\s@]+\.[A-Za-z]{2,}$/.test(email.trim())
+    ) {
       next.email = "Vul een geldig e-mailadres in";
     }
     if (!message.trim() || message.trim().length < 10) {
@@ -142,6 +145,7 @@ export function ContactDialog() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              minLength={3}
               maxLength={120}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "contact-name-error" : undefined}

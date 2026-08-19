@@ -7,7 +7,7 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-border bg-fg text-bg">
-      <div className="container-max section-pad py-12">
+      <div className="container-max section-pad pt-10 pb-6 md:py-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div>
             <div className="flex items-center gap-2.5">
@@ -21,9 +21,7 @@ export function SiteFooter() {
             <p className="mt-3 max-w-xs text-sm text-bg/60">
               Afslanken met medicatie
             </p>
-            <p className="mt-1 max-w-xs text-sm text-bg/60">
-              {SITE.tagline}
-            </p>
+            <p className="mt-1 max-w-xs text-sm text-bg/60">{SITE.tagline}</p>
           </div>
           <div className="flex flex-col gap-8 text-sm sm:min-w-[18rem]">
             <div>
@@ -75,13 +73,13 @@ export function SiteFooter() {
                     Reviews
                   </a>
                 </li>
-                <li>
-                  <a href="/account" className="hover:text-bg">
-                    {authEnabled
-                      ? "Mijn bestelling"
-                      : "Bestelling volgen"}
-                  </a>
-                </li>
+                {authEnabled && (
+                  <li>
+                    <a href="/account" className="hover:text-bg">
+                      Mijn bestelling
+                    </a>
+                  </li>
+                )}
                 <li>
                   <button
                     type="button"
@@ -95,7 +93,7 @@ export function SiteFooter() {
             </div>
           </div>
         </div>
-        <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40">
+        <div className="mt-8 border-t border-white/10 pt-5 text-xs text-bg/40">
           <p>
             © {new Date().getFullYear()} Afslank-injecties.nl. Alle rechten
             voorbehouden.

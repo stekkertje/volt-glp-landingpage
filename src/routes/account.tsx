@@ -197,8 +197,8 @@ function GuestOrderAccess({ showLogin }: { showLogin: boolean }) {
               Bestelling als gast
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Gebruik het VOLT-nummer en de herstelcode die na bestellen één
-              keer is getoond.
+              Gebruik het MED-nummer en de herstelcode die na bestellen één keer
+              is getoond.
             </p>
           </div>
         </div>
@@ -219,7 +219,7 @@ function GuestOrderAccess({ showLogin }: { showLogin: boolean }) {
               name="orderNumber"
               required
               autoCapitalize="characters"
-              placeholder="VOLT-XXXXXXXX"
+              placeholder="MED-3100"
               className={inputClass}
             />
           </label>

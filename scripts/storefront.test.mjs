@@ -450,6 +450,15 @@ test("the cart drawer moves focus inside and restores its opener", async () => {
       await page.evaluate(() => document.body.style.overflow),
       "hidden",
     );
+    assert.equal(
+      await page.evaluate(() => document.body.style.position),
+      "fixed",
+    );
+    await page.mouse.wheel(0, 1_000);
+    const closeButtonBox = await page
+      .getByRole("button", { name: "Winkelwagen sluiten" })
+      .boundingBox();
+    assert.ok(closeButtonBox && closeButtonBox.y >= 0);
     await page.keyboard.press("Escape");
     assert.equal(
       await opener.evaluate((element) => element === document.activeElement),
@@ -662,7 +671,9 @@ test("the delivery promise uses the next workday around weekends", async () => {
       await page
         .locator("#prijzen")
         .locator("div")
-        .filter({ hasText: "Bestel binnen:" })
+        .filter({
+          hasText: "Bestel binnen:",
+        })
         .first()
         .innerText(),
       /Verzending:\s*maandag 24 aug/i,
@@ -804,6 +815,64 @@ test("the announcement marquee is decorative for screen readers", async () => {
         .count(),
       1,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("homepage keeps only the menu sticky and has no footer overscroll gap", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const marquee = page.locator(".announce-marquee").locator("../..");
+    const header = page.locator("header").first();
+    assert.equal(Math.round((await marquee.boundingBox()).y), 0);
+    assert.equal(Math.round((await header.boundingBox()).y), 36);
+
+    const heroReviews = page.locator('a[href="#beoordelingen"]').first();
+    assert.doesNotMatch(await heroReviews.innerText(), /·/);
+    assert.equal(
+      await page
+        .locator("section")
+        .first()
+        .getByText("Weekdeal −20%", { exact: true })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await page
+        .getByRole("navigation", { name: "Hoofdmenu" })
+        .getByText("Reviews")
+        .count(),
+      1,
+    );
+
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.waitForFunction(() => window.scrollY >= 400);
+    assert.ok((await marquee.boundingBox()).y < 0);
+    assert.equal(Math.round((await header.boundingBox()).y), 0);
+
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await page.waitForFunction(
+      () =>
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 1,
+    );
+    const footerGap = await page
+      .locator("footer")
+      .evaluate((footer) =>
+        Math.round(
+          document.documentElement.scrollHeight -
+            (footer.getBoundingClientRect().bottom + window.scrollY),
+        ),
+      );
+    assert.equal(Math.abs(footerGap), 0);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForFunction(() => window.scrollY === 0);
+    assert.equal(Math.round((await marquee.boundingBox()).y), 0);
   } finally {
     await context.close();
   }
@@ -987,7 +1056,6 @@ test("the mobile menu closes with Escape and navigates to a compound", async () 
 async function fillCheckout(page, email) {
   await page.getByLabel("Naam").fill("Noor de Vries");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Telefoon").fill("0612345678");
   await page.getByLabel("Straat").fill("Teststraat");
   await page.getByLabel("Huisnummer").fill("12 A");
   await page.getByLabel("Postcode").fill("1234 AB");
@@ -1115,11 +1183,11 @@ test("a product can be ordered and only its authorized guest sees confirmation",
 
     const orderNumberHeading = page.getByRole("heading", {
       level: 1,
-      name: /^VOLT-[A-Z0-9]{8}$/,
+      name: /^MED-\d+$/,
     });
     await orderNumberHeading.waitFor();
     const orderNumber = (await orderNumberHeading.innerText()).trim();
-    assert.match(orderNumber, /^VOLT-[A-Z0-9]{8}$/);
+    assert.match(orderNumber, /^MED-\d+$/);
     await page
       .getByRole("heading", { name: "Bewaar je herstelcode" })
       .waitFor();
@@ -1526,7 +1594,7 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
     );
     const replayedOrderNumberHeading = page.getByRole("heading", {
       level: 1,
-      name: /^VOLT-[A-Z0-9]{8}$/,
+      name: /^MED-\d+$/,
     });
     await replayedOrderNumberHeading.waitFor();
     const replayedOrderNumber = (
@@ -2398,7 +2466,7 @@ test("a navigation failure keeps the same order accessible after reload", async 
       committedPath.split("/").at(-1),
     );
     const committedOrderNumber = (
-      await page.getByText(/^VOLT-[A-Z0-9]{8}$/).innerText()
+      await page.getByText(/^MED-\d+$/).innerText()
     ).trim();
     assert.equal(orderRequests, 1);
     assert.equal(
@@ -2443,7 +2511,10 @@ test("a navigation failure keeps the same order accessible after reload", async 
         .count(),
       0,
     );
-    await page.getByText(/Als gast kun je deze bestelling.*72 uur/i).waitFor();
+    assert.equal(
+      await page.getByText(/Als gast kun je deze bestelling.*72 uur/i).count(),
+      0,
+    );
     const guestCookie = (await context.cookies()).find(
       (cookie) => cookie.name === "__Host-volt-order-access",
     );
@@ -2789,7 +2860,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
     await addPenAndOpenCheckout(page);
     await fillCheckout(page, `pricing-race-${randomUUID()}@example.test`);
     const placeOrder = await waitForCheckoutSubmit(page);
-    await page.getByText("4 mg · 1 stuks", { exact: true }).waitFor();
+    await page.getByText("1 stuk", { exact: true }).waitFor();
     await page.route("**/*", holdFirstPricing);
 
     await page
@@ -2805,10 +2876,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
       .getByText("Actuele totalen berekenen…", { exact: true })
       .waitFor();
     assert.equal(await placeOrder.isDisabled(), true);
-    assert.equal(
-      await page.getByText("4 mg · 1 stuks", { exact: true }).count(),
-      0,
-    );
+    assert.equal(await page.getByText("1 stuk", { exact: true }).count(), 0);
     await page
       .locator("form")
       .first()
@@ -2827,7 +2895,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
       .getByRole("button", { name: "Aantal verhogen in winkelwagen" })
       .click();
     await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
-    await page.getByText("4 mg · 3 stuks", { exact: true }).waitFor();
+    await page.getByText("3 stuks", { exact: true }).waitFor();
     await waitForCheckoutSubmit(page);
     assert.equal(pricingRequests, 2);
 
@@ -2839,14 +2907,8 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
         ),
     );
-    assert.equal(
-      await page.getByText("4 mg · 3 stuks", { exact: true }).count(),
-      1,
-    );
-    assert.equal(
-      await page.getByText("4 mg · 2 stuks", { exact: true }).count(),
-      0,
-    );
+    assert.equal(await page.getByText("3 stuks", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("2 stuks", { exact: true }).count(), 0);
     assert.equal(await placeOrder.isDisabled(), false);
   } finally {
     clearTimeout(firstPricingTimeout);

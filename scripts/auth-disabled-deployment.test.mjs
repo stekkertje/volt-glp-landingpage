@@ -106,7 +106,6 @@ async function fillCheckout(page) {
   await page
     .getByLabel("E-mail")
     .fill(`auth-disabled-${randomUUID()}@example.test`);
-  await page.getByLabel("Telefoon").fill("0612345678");
   await page.getByLabel("Straat").fill("Teststraat");
   await page.getByLabel("Huisnummer").fill("12 A");
   await page.getByLabel("Postcode").fill("1234 AB");
@@ -189,9 +188,16 @@ test("auth-disabled deployment toont alleen gastorder-herstel en geen accountlog
       .waitFor();
     assert.equal(await page.getByText("Heb je een account?").count(), 0);
     assert.equal(await page.getByRole("link", { name: "Inloggen" }).count(), 0);
+    await page.getByLabel("Bestelnummer").waitFor();
+    await page.getByLabel("Herstelcode").waitFor();
+    await page.getByRole("button", { name: "Bestelling bekijken" }).waitFor();
     assert.equal(
       await page.getByRole("link", { name: "Bestelling volgen" }).count(),
-      1,
+      0,
+    );
+    assert.equal(
+      await page.getByRole("link", { name: "Bestelling terugvinden" }).count(),
+      0,
     );
     await page.goBack();
     await page.waitForURL(`${baseUrl}/`);
@@ -237,18 +243,15 @@ test("auth-disabled deployment plaatst en heropent een gastbestelling", async ()
       .click();
     await page.getByRole("link", { name: "Veilig afrekenen" }).click();
     await page.waitForURL(`${baseUrl}/checkout`);
-    await page
-      .getByText(
-        "Je plaatst de bestelling als gast. Een account is niet nodig.",
-      )
-      .waitFor();
+    assert.equal(
+      await page.getByText("Je plaatst de bestelling als gast.").count(),
+      0,
+    );
     await fillCheckout(page);
     await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
     await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
 
-    const orderNumber = (
-      await page.getByText(/^VOLT-[A-Z0-9]{8}$/).innerText()
-    ).trim();
+    const orderNumber = (await page.getByText(/^MED-\d+$/).innerText()).trim();
     const recoveryHeading = page.getByRole("heading", {
       name: "Bewaar je herstelcode",
     });
@@ -263,7 +266,7 @@ test("auth-disabled deployment plaatst en heropent een gastbestelling", async ()
     }
     await recoveryHeading.waitFor();
     const recoveryCode = (await page.locator("code").innerText()).trim();
-    assert.match(orderNumber, /^VOLT-[A-Z0-9]{8}$/);
+    assert.match(orderNumber, /^MED-\d+$/);
     assert.ok(recoveryCode.length >= 8);
     assert.equal(await page.getByText(/via je account openen/i).count(), 0);
 

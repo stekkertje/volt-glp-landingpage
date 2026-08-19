@@ -60,6 +60,30 @@ test("contact validation rejects a whitespace-only name", () => {
   assert.ok(result.error.issues.some((issue) => issue.path[0] === "name"));
 });
 
+test("contact validation requires a useful name and e-mail address", () => {
+  for (const input of [
+    { name: "A", email: "noor@example.nl" },
+    { name: "Noor", email: "n@example.nl" },
+    { name: "Noor", email: "noor@example" },
+    { name: "Noor", email: "noor@example.x" },
+  ]) {
+    const result = contactMessageSchema.safeParse({
+      ...input,
+      message: "Dit bericht is lang genoeg.",
+    });
+    assert.equal(result.success, false, JSON.stringify(input));
+  }
+
+  assert.equal(
+    contactMessageSchema.safeParse({
+      name: "Noa",
+      email: "noor@example.nl",
+      message: "Dit bericht is lang genoeg.",
+    }).success,
+    true,
+  );
+});
+
 test("order validation normalizes and validates Dutch postcodes", () => {
   const valid = createOrderSchema.safeParse(validOrder({ postcode: "1234ab" }));
   assert.equal(valid.success, true);
@@ -68,7 +92,9 @@ test("order validation normalizes and validates Dutch postcodes", () => {
   for (const postcode of ["abc", "0123 AB", "1234", "12345 AB"]) {
     const invalid = createOrderSchema.safeParse(validOrder({ postcode }));
     assert.equal(invalid.success, false, postcode);
-    assert.ok(invalid.error.issues.some((issue) => issue.path[0] === "postcode"));
+    assert.ok(
+      invalid.error.issues.some((issue) => issue.path[0] === "postcode"),
+    );
   }
 });
 
@@ -85,7 +111,9 @@ test("order validation validates Belgian postcodes against the selected country"
       validOrder({ country: "BE", postcode }),
     );
     assert.equal(invalid.success, false, postcode);
-    assert.ok(invalid.error.issues.some((issue) => issue.path[0] === "postcode"));
+    assert.ok(
+      invalid.error.issues.some((issue) => issue.path[0] === "postcode"),
+    );
   }
 });
 
