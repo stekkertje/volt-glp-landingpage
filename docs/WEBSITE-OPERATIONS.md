@@ -75,6 +75,17 @@ De repository kan open branches en pull requests bevatten. Beschouw branch- en C
 
 Gebruik bij vervolgwerk aan een bestaande PR dezelfde branch wanneer dat logisch en expliciet gewenst is. Gebruik voor losstaand werk een aparte branch. Merge naar `main` blijft een afzonderlijke beslissing van de eigenaar.
 
+## GitHub-automatisering
+
+De deterministische CI-, CodeQL-, dependency-review- en Dependabotcontroles
+draaien volledig op GitHub Actions en vragen geen lokale Codex-goedkeuringen.
+De Codex-review en geplande Codex-onderhoudsrun worden uitsluitend uitgevoerd
+wanneer repositoryvariabele `CODEX_AUTOMATION_ENABLED` exact `true` is en het
+repositorysecret `OPENAI_API_KEY` bestaat. Houd de variabele op `false` zolang
+die sleutel ontbreekt; zo worden AI-jobs netjes overgeslagen in plaats van rood
+te falen. De geheime waarde hoort uitsluitend in GitHub Actions secrets en
+nooit in Git, documentatie of logs.
+
 ## Onderhoud van dit document
 
 Werk dit bestand bij wanneer hosting, database, domein, mailbox, repositorypad, functionele status of autorisatiegrenzen duurzaam veranderen. Zet hier nooit tijdelijke runstatus, wachtwoorden of tokenwaarden in.
