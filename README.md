@@ -4,7 +4,13 @@ Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als 
 
 Checkout en contact schrijven naar de database. Betaling en e-mailafhandeling blijven handmatig.
 
-Agent-briefing (eerst lezen als je hieraan werkt): [`GROK.md`](./GROK.md)
+AI-beheer:
+
+- Codex: [`AGENTS.override.md`](./AGENTS.override.md) en
+  [`docs/WEBSITE-OPERATIONS.md`](./docs/WEBSITE-OPERATIONS.md)
+- Grok: [`GROK.md`](./GROK.md)
+- Review: [`docs/REVIEW-CHECKLIST.md`](./docs/REVIEW-CHECKLIST.md)
+- Duurzame beslissingen: [`docs/DECISIONS.md`](./docs/DECISIONS.md)
 
 ## Stack
 
