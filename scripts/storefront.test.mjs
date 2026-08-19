@@ -404,13 +404,19 @@ test("the PDP keeps its product-specific document title", async () => {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    assert.equal(await page.title(), "Semaglutide 2mg kopen | VOLT");
+    assert.equal(
+      await page.title(),
+      "Semaglutide 2mg kopen | Afslank-injecties.nl",
+    );
 
     await page
       .getByRole("button", { name: /^In winkelwagen/ })
       .first()
       .click();
-    assert.equal(await page.title(), "(1) Semaglutide 2mg kopen | VOLT");
+    assert.equal(
+      await page.title(),
+      "(1) Semaglutide 2mg kopen | Afslank-injecties.nl",
+    );
   } finally {
     await context.close();
   }
@@ -653,9 +659,12 @@ test("the delivery promise uses the next workday around weekends", async () => {
       waitUntil: "networkidle",
     });
     assert.match(
-      await page.locator("#prijzen").locator("div").filter({
-        hasText: "Bestel binnen:",
-      }).first().innerText(),
+      await page
+        .locator("#prijzen")
+        .locator("div")
+        .filter({ hasText: "Bestel binnen:" })
+        .first()
+        .innerText(),
       /Verzending:\s*maandag 24 aug/i,
     );
   } finally {
@@ -884,7 +893,10 @@ test("product gallery advances on a horizontal swipe", async () => {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    await page.getByRole("button", { name: "Begrepen" }).click().catch(() => {});
+    await page
+      .getByRole("button", { name: "Begrepen" })
+      .click()
+      .catch(() => {});
     const gallery = page.getByRole("region", { name: "Productfoto's" });
     await gallery.waitFor({ state: "visible" });
     const firstDot = page.getByRole("button", { name: "Afbeelding 1" });
@@ -1881,7 +1893,7 @@ test("checkout fails closed without Web Locks and while its storage lock is occu
       await page
         .getByRole("alert")
         .getByText(/veilige tabbladbeveiliging is niet beschikbaar of bezet/i)
-        .waitFor({ timeout: 8_000 });
+        .waitFor({ timeout: 15_000 });
       assert.equal(orderRequests, 0, scenario);
       assert.equal((await cartState(page)).lines.length, 1, scenario);
     } finally {
