@@ -8,7 +8,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { CreatedWithGrokBanner } from "@/components/created-with-grok-banner";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "GLP-1 Afvallen | VOLT";
+const APP_NAME = "Afslank-injecties.nl";
 const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
 const ogImage = host ? `https://${host}/og.jpg` : undefined;
 const noIndex = import.meta.env.VITE_NO_INDEX === "1";
@@ -25,7 +25,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "GLP-1 Afvallen bij VOLT. Semaglutide, Tirzepatide en Retatrutide. Labgetest, discrete verzending NL en BE, stapelkorting.",
+          "Afslanken met injecties. Semaglutide, Tirzepatide en Retatrutide. Discrete verzending naar NL en BE.",
       },
       { name: "apple-mobile-web-app-title", content: APP_NAME },
       { name: "theme-color", content: "#ffffff" },

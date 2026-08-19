@@ -12,15 +12,17 @@ export function SiteFooter() {
           <div>
             <div className="flex items-center gap-2.5">
               <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-fg text-xs font-extrabold">
-                V
+                A
               </span>
               <span className="text-lg font-extrabold tracking-tight">
                 {SITE.brand}
-                <span className="text-primary">.</span>
               </span>
             </div>
             <p className="mt-3 max-w-xs text-sm text-bg/60">
-              {SITE.category}. {SITE.tagline}.
+              Afslanken met medicatie
+            </p>
+            <p className="mt-1 max-w-xs text-sm text-bg/60">
+              {SITE.tagline}
             </p>
           </div>
           <div className="flex flex-col gap-8 text-sm sm:min-w-[18rem]">
@@ -82,7 +84,7 @@ export function SiteFooter() {
                   <a href="/account" className="hover:text-bg">
                     {authEnabled
                       ? "Mijn bestellingen"
-                      : "Bestelling terugvinden"}
+                      : "Bestelling volgen"}
                   </a>
                 </li>
                 <li>
@@ -94,21 +96,13 @@ export function SiteFooter() {
                     Contact
                   </button>
                 </li>
-                <li>
-                  <a
-                    href="mailto:info@afslank-injecties.nl"
-                    className="text-bg/60 hover:text-bg"
-                  >
-                    info@afslank-injecties.nl
-                  </a>
-                </li>
               </ul>
             </div>
           </div>
         </div>
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-bg/40 space-y-1">
           <p>
-            © {new Date().getFullYear()} VOLT Performance. Alle rechten
+            © {new Date().getFullYear()} Afslank-injecties.nl. Alle rechten
             voorbehouden.
           </p>
           <p>

@@ -5,6 +5,7 @@ import { useCartStore, cartCount } from "@/lib/cart-store";
 import { useContactStore } from "@/lib/contact-store";
 import { cn } from "@/lib/utils";
 import { AnnounceBar } from "@/components/announce-bar";
+import { SITE } from "@/lib/product";
 
 const LINKS = [
   { href: "/#producten", label: "Producten" },
@@ -188,11 +189,11 @@ export function SiteHeader() {
                 className="flex items-center gap-2.5 shrink-0"
                 onClick={() => setMenuOpen(false)}
               >
-                <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-fg text-sm font-extrabold tracking-tight">
-                  V
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-fg text-xs font-extrabold tracking-tight sm:size-9 sm:text-sm">
+                  A
                 </span>
-                <span className="text-lg font-extrabold tracking-tight text-fg">
-                  VOLT<span className="text-primary">.</span>
+                <span className="max-w-[11.5rem] truncate text-[13px] font-extrabold tracking-tight text-fg sm:max-w-none sm:text-base lg:text-lg">
+                  {SITE.brand}
                 </span>
               </a>
 
