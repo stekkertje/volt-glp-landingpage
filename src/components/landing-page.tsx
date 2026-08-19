@@ -299,7 +299,8 @@ export function LandingPage() {
             </div>
             <div
               className="flex flex-nowrap gap-2 overflow-x-auto pb-0.5"
-              role="group"n              aria-label="Filter op stof"
+              role="group"
+              aria-label="Filter op stof"
             >
               {catalogFilters.map((s) => (
                 <button
