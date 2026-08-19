@@ -1,7 +1,22 @@
 import { securityHeadersForPath } from "../../src/lib/security-headers";
+import {
+  configuredHostingerPublicOrigin,
+  type ServerEnvironment,
+} from "../../src/lib/server/hostinger-proxy.server";
 
 interface SecurityEvent {
   url: URL;
+}
+
+export function shouldSendHsts(
+  event: SecurityEvent,
+  environment: ServerEnvironment = process.env,
+): boolean {
+  if (environment.NODE_ENV !== "production") return false;
+  return (
+    event.url.protocol === "https:" ||
+    configuredHostingerPublicOrigin(environment) !== null
+  );
 }
 
 export default async function securityHeadersMiddleware(
@@ -14,9 +29,7 @@ export default async function securityHeadersMiddleware(
   const headers = new Headers(result.headers);
   for (const [name, value] of Object.entries(
     securityHeadersForPath(event.url.pathname, {
-      hsts:
-        process.env.NODE_ENV === "production" &&
-        event.url.protocol === "https:",
+      hsts: shouldSendHsts(event),
       noIndex:
         process.env.NO_INDEX === "1" || process.env.VITE_NO_INDEX === "1",
     }),

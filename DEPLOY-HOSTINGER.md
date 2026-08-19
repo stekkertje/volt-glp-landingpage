@@ -40,6 +40,7 @@ VITE_AUTH_ENABLED=false
 VITE_NO_INDEX=1
 NO_INDEX=1
 VITE_PUBLIC_HOSTNAME=afslank-injecties.nl
+TRUST_HOSTINGER_PROXY=1
 ```
 
 `DATABASE_URL` en `MIGRATION_DATABASE_URL` moeten naar dezelfde Neon-branch en
@@ -50,6 +51,16 @@ credentials bevatten. Configureer in deze wachtwoord-adminopzet geen
 `VITE_NO_INDEX` wordt tijdens de build in de HTML verwerkt. `NO_INDEX` wordt
 tijdens runtime gebruikt voor `X-Robots-Tag`. Beide blijven `1` zolang de site
 niet geïndexeerd mag worden.
+
+`TRUST_HOSTINGER_PROXY=1` staat alleen op deze Hostinger-runtime. Daarmee wordt
+`https://afslank-injecties.nl` de vaste publieke origin voor mutaties en HSTS,
+ook wanneer de interne Node-request na TLS-terminatie `http` gebruikt. De app
+leidt deze beveiligingsbeslissing niet af uit publiek aanleverbare forwarded
+host/protocolheaders. Voor bezoekersgebonden rate limits gebruikt de app alleen
+een enkel geldig `X-Real-IP`; `X-Forwarded-For` blijft buiten gebruik. Controleer
+na de live deploy in Hostinger dat de managed proxy `X-Real-IP` werkelijk
+overschrijft. Zet de trustflag niet op een andere of direct publiek bereikbare
+Node-runtime.
 
 ## Build en controle
 

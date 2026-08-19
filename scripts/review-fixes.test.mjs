@@ -155,6 +155,58 @@ test("same-origin mutation checks ignore spoofable forwarded hosts", () => {
     isSameOriginMutationRequest(new Request(sameOriginUrl, { method: "POST" })),
     false,
   );
+
+  const hostingerProxyRequest = new Request("http://127.0.0.1:3000/_server", {
+    method: "POST",
+    headers: {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://afslank-injecties.nl/checkout",
+      "sec-fetch-site": "same-origin",
+    },
+  });
+  assert.equal(
+    isSameOriginMutationRequest(hostingerProxyRequest, {}),
+    false,
+    "forwarded headers blijven zonder expliciete Hostinger-trust buiten gebruik",
+  );
+  assert.equal(
+    isSameOriginMutationRequest(hostingerProxyRequest, {
+      NODE_ENV: "production",
+      TRUST_HOSTINGER_PROXY: "1",
+      VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+    }),
+    true,
+  );
+  for (const headers of [
+    {
+      origin: "https://evil.example.test",
+      referer: "https://afslank-injecties.nl/checkout",
+    },
+    {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://evil.example.test/checkout",
+    },
+    {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://afslank-injecties.nl/checkout",
+      "sec-fetch-site": "cross-site",
+    },
+  ]) {
+    assert.equal(
+      isSameOriginMutationRequest(
+        new Request("http://127.0.0.1:3000/_server", {
+          method: "POST",
+          headers: { "sec-fetch-site": "same-origin", ...headers },
+        }),
+        {
+          NODE_ENV: "production",
+          TRUST_HOSTINGER_PROXY: "1",
+          VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+        },
+      ),
+      false,
+    );
+  }
 });
 
 test("broken admin configuration becomes a not-configured capability state", () => {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { createServer } from "node:net";
+import { chromium } from "playwright";
 
 const entryFile = new URL("../.output/server/index.mjs", import.meta.url);
 await access(entryFile);
@@ -23,6 +24,7 @@ async function availablePort() {
 const port = await availablePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 let output = "";
+let browser;
 const serverEnvironment = { ...process.env };
 for (const name of [
   "MIGRATION_DATABASE_URL",
@@ -46,6 +48,7 @@ Object.assign(serverEnvironment, {
   VITE_NO_INDEX: "1",
   NO_INDEX: "1",
   VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+  TRUST_HOSTINGER_PROXY: "1",
   BETTER_AUTH_SECRET: "ci-better-auth-secret-32-characters-minimum",
   ORDER_ACCESS_TOKEN_SECRET: "ci-order-access-secret-32-characters-minimum",
   ADMIN_PASSWORD: "ci-admin-password-strong",
@@ -131,6 +134,98 @@ try {
     );
   }
 
+  const forwardedHttpsResponse = await fetchPage("/", {
+    headers: {
+      "x-forwarded-host": "afslank-injecties.nl",
+      "x-forwarded-proto": "https",
+    },
+  });
+  assert.equal(forwardedHttpsResponse.status, 200);
+  assert.equal(
+    forwardedHttpsResponse.headers.get("strict-transport-security"),
+    "max-age=31536000",
+    "Hostinger HTTPS-proxy mist HSTS",
+  );
+  await forwardedHttpsResponse.arrayBuffer();
+
+  browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  let proxiedMutationSeen = false;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname.startsWith("/_server")
+    ) {
+      proxiedMutationSeen = true;
+      const headers = { ...request.headers() };
+      delete headers["content-length"];
+      const response = await fetch(request.url(), {
+        method: request.method(),
+        headers: {
+          ...headers,
+          origin: "https://afslank-injecties.nl",
+          referer: "https://afslank-injecties.nl/",
+          "sec-fetch-site": "same-origin",
+          "x-forwarded-host": "afslank-injecties.nl",
+          "x-forwarded-proto": "https",
+        },
+        body: request.postDataBuffer(),
+      });
+      await route.fulfill({
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+        body: Buffer.from(await response.arrayBuffer()),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page
+    .locator("footer")
+    .getByRole("button", { name: "Contact", exact: true })
+    .click();
+  await page.locator("#contact-name").fill("Hostinger productiecontrole");
+  await page.locator("#contact-email").fill("hostinger-smoke@example.test");
+  await page
+    .locator("#contact-message")
+    .fill("Gerichte controle van de Hostinger HTTPS-proxy.");
+  const mutationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.startsWith("/_server"),
+  );
+  await page.getByRole("button", { name: "Verstuur bericht" }).click();
+  const mutationResponse = await mutationResponsePromise;
+  const mutationBody = await mutationResponse.text();
+  assert.equal(
+    mutationResponse.status(),
+    200,
+    `Hostinger proxy-POST gaf ${mutationResponse.status()}: ${mutationBody.slice(0, 500)}`,
+  );
+  try {
+    await page
+      .getByText("Bericht verstuurd", { exact: true })
+      .waitFor({ timeout: 10_000 });
+  } catch (error) {
+    const feedback = await page.locator('[role="alert"]').allTextContents();
+    throw new Error(
+      `Contact-UI bevestigde de proxy-POST niet: ${feedback.join(" | ") || "geen foutmelding"}`,
+      { cause: error },
+    );
+  }
+  assert.equal(
+    proxiedMutationSeen,
+    true,
+    "De production smoke heeft geen server-function POST gezien",
+  );
+  await context.close();
+
   const loginResponse = await fetchPage("/login");
   assert.equal(loginResponse.status, 200);
   assert.equal(new URL(loginResponse.url).pathname, "/account");
@@ -140,5 +235,9 @@ try {
   );
   process.stdout.write("Hostinger node-server production smoke is groen.\n");
 } finally {
-  await stopServer();
+  try {
+    await browser?.close();
+  } finally {
+    await stopServer();
+  }
 }

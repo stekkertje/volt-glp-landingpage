@@ -25,6 +25,7 @@ test("npm test cannot inherit production databases or deployment secrets", () =>
     "VITE_NO_INDEX",
     "VITE_PUBLIC_HOSTNAME",
     "VITE_AUTH_ENABLED",
+    "TRUST_HOSTINGER_PROXY",
   ]) {
     assert.equal(process.env[name], undefined, `${name} moet afgeschermd zijn`);
   }

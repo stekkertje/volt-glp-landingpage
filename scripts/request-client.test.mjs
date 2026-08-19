@@ -35,6 +35,42 @@ test("local and unknown hosts ignore spoofable forwarded IP headers", () => {
   );
 });
 
+test("Hostinger trusts only its overwritten single-value client-IP header", () => {
+  const headers = new Headers({
+    "x-forwarded-for": "198.51.100.99, 198.51.100.100",
+    "x-real-ip": "203.0.113.42",
+  });
+  assert.equal(
+    resolveClientIdentifier({
+      headers,
+      directIp: "127.0.0.1",
+      environment: {
+        NODE_ENV: "production",
+        TRUST_HOSTINGER_PROXY: "1",
+      },
+    }),
+    "203.0.113.42",
+  );
+});
+
+test("Hostinger rejects malformed client-IP headers instead of trusting a chain", () => {
+  const headers = new Headers({
+    "x-forwarded-for": "203.0.113.42",
+    "x-real-ip": "203.0.113.42, 198.51.100.99",
+  });
+  assert.equal(
+    resolveClientIdentifier({
+      headers,
+      directIp: "127.0.0.1",
+      environment: {
+        NODE_ENV: "production",
+        TRUST_HOSTINGER_PROXY: "1",
+      },
+    }),
+    "127.0.0.1",
+  );
+});
+
 test("Vercel deployments trust only the platform client-IP header", () => {
   const headers = new Headers({
     "x-forwarded-for": "198.51.100.99",

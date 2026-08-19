@@ -25,6 +25,7 @@ const protectedNames = [
   "VITE_NO_INDEX",
   "VITE_PUBLIC_HOSTNAME",
   "VITE_AUTH_ENABLED",
+  "TRUST_HOSTINGER_PROXY",
 ];
 
 for (const name of protectedNames) delete environment[name];

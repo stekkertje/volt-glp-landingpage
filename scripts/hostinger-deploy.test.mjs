@@ -46,6 +46,7 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
     "VITE_NO_INDEX",
     "NO_INDEX",
     "VITE_PUBLIC_HOSTNAME",
+    "TRUST_HOSTINGER_PROXY",
   ]) {
     assert.match(example, new RegExp(`^${name}=`, "m"), name);
   }
@@ -53,6 +54,7 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
   assert.match(example, /^NPM_CONFIG_INCLUDE=dev$/m);
   assert.match(example, /^REQUIRE_DATABASE=1$/m);
   assert.match(example, /^VITE_AUTH_ENABLED=false$/m);
+  assert.match(example, /^TRUST_HOSTINGER_PROXY=1$/m);
   assert.match(rootRoute, /name:\s*["']robots["']/);
   assert.match(rootRoute, /noindex, nofollow, noarchive/);
   assert.match(middleware, /process\.env\.NO_INDEX\s*===\s*["']1["']/);

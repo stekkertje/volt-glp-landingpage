@@ -4,6 +4,7 @@ import { createServer } from "vite";
 
 let vite;
 let securityHeadersForPath;
+let shouldSendHsts;
 
 before(async () => {
   vite = await createServer({
@@ -13,6 +14,9 @@ before(async () => {
   });
   ({ securityHeadersForPath } = await vite.ssrLoadModule(
     "/src/lib/security-headers.ts",
+  ));
+  ({ shouldSendHsts } = await vite.ssrLoadModule(
+    "/server/middleware/00-security-headers.ts",
   ));
 });
 
@@ -74,6 +78,31 @@ test("HSTS is opt-in for a production HTTPS response only", () => {
   assert.doesNotMatch(
     headers["strict-transport-security"],
     /includeSubDomains/i,
+  );
+});
+
+test("HSTS recognizes only the configured Hostinger HTTPS proxy", () => {
+  const event = (headers = {}) => ({
+    url: new URL("http://127.0.0.1:3000/checkout"),
+    req: { headers: new Headers(headers) },
+  });
+  const environment = {
+    NODE_ENV: "production",
+    TRUST_HOSTINGER_PROXY: "1",
+    VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+  };
+
+  assert.equal(shouldSendHsts(event(), environment), true);
+  assert.equal(
+    shouldSendHsts(event(), {
+      ...environment,
+      VITE_PUBLIC_HOSTNAME: "evil.example.test/path",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendHsts(event(), { ...environment, TRUST_HOSTINGER_PROXY: "0" }),
+    false,
   );
 });
 

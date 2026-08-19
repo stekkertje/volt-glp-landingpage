@@ -2349,6 +2349,10 @@ test("a navigation failure keeps the same order accessible after reload", async 
 });
 
 test("successful checkout never reuses a seed when storage cleanup fails", async () => {
+  // This regression sends several order requests across four isolated browser
+  // contexts. Start it with a fresh in-memory rate-limit bucket so preceding
+  // checkout cases cannot turn its final scenario into an unrelated 429.
+  await restartDevServerWithFreshDatabase();
   const scenarios = [
     {
       name: "remove throws",
@@ -2446,8 +2450,13 @@ test("successful checkout never reuses a seed when storage cleanup fails", async
       }, scenario);
       await page.route("**/*", handleOrders);
 
-      await placeOrder.click();
-      await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 30_000 });
+      await Promise.all([
+        page.waitForURL(/\/bestelling\/[^/]+$/, {
+          timeout: 30_000,
+          waitUntil: "commit",
+        }),
+        placeOrder.click(),
+      ]);
       await page
         .getByRole("heading", { name: "Bewaar je herstelcode" })
         .waitFor();

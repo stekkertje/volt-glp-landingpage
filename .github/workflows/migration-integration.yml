@@ -84,6 +84,7 @@ jobs:
           VITE_NO_INDEX: "1"
           NO_INDEX: "1"
           VITE_PUBLIC_HOSTNAME: afslank-injecties.nl
+          TRUST_HOSTINGER_PROXY: "1"
           REQUIRE_DATABASE: "1"
         run: |
           npm run build:hostinger
