@@ -235,7 +235,7 @@ export function LandingPage() {
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-dim sm:gap-x-5 sm:text-xs">
             <span className="inline-flex items-center gap-1">
-              <Truck className="size-3.5 text-muted" aria-hidden /> 1–2
+              <Truck className="size-3.5 text-muted" aria-hidden /> 1 – 2
               werkdagen
             </span>
             <span className="text-border" aria-hidden>

@@ -40,9 +40,7 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </Link>
       <div className="flex flex-1 flex-col p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-          {product.subcat} · {product.form === "pen" ? "Pen" : "Vial"}
-        </p>
+        <p className="text-xs text-muted">{product.brand}</p>
         <Link
           to="/product/$slug"
           params={{ slug: product.slug }}
@@ -50,11 +48,13 @@ export function ProductCard({ product }: { product: Product }) {
         >
           {product.name}
         </Link>
-        <p className="mt-0.5 text-xs text-muted">{product.brand}</p>
+        <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+          {product.subcat} - {product.form === "pen" ? "Pen" : "Vial"}
+        </p>
         <div className="mt-2 flex items-center gap-1.5">
           <Stars rating={product.rating} size="sm" />
           <span className="text-xs tabular-nums text-muted">
-            {product.rating} · {product.reviewCount}
+            {product.rating} {product.reviewCount} beoordelingen
           </span>
         </div>
         <div className="mt-3 flex items-baseline gap-2">

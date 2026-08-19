@@ -142,7 +142,7 @@ export function ProductPage({ product }: { product: Product }) {
 
               <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 {[
-                  { icon: Truck, t: "1–2 werkdagen" },
+                  { icon: Truck, t: "1 – 2 werkdagen" },
                   { icon: MapPinned, t: "Track & trace code" },
                   { icon: Package, t: "Discreet verpakt" },
                   { icon: Headphones, t: "Persoonlijke support" },
@@ -188,7 +188,9 @@ export function ProductPage({ product }: { product: Product }) {
           <div className="rounded-xl border border-border bg-surface overflow-hidden">
             <div className="border-b border-border bg-bg-elevated px-5 py-4">
               <h3 className="font-bold tracking-tight">Gebruik</h3>
-              <p className="mt-1 text-xs text-muted">Hoe vaak en hoeveel</p>
+              <p className="mt-1 text-xs text-muted">
+                Dosering en gebruiksfrequentie
+              </p>
             </div>
             <div className="divide-y divide-border px-5">
               {[
