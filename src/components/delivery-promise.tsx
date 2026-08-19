@@ -1,6 +1,31 @@
 import { useEffect, useState } from "react";
 import { Truck } from "lucide-react";
 
+const WEEKDAYS = [
+  "zondag",
+  "maandag",
+  "dinsdag",
+  "woensdag",
+  "donderdag",
+  "vrijdag",
+  "zaterdag",
+] as const;
+
+const MONTHS = [
+  "jan",
+  "feb",
+  "mrt",
+  "apr",
+  "mei",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "okt",
+  "nov",
+  "dec",
+] as const;
+
 function pastCutoff(now = new Date()) {
   return now.getHours() >= 23;
 }
@@ -12,19 +37,27 @@ function msUntilCutoff(now = new Date()) {
   return cutoff.getTime() - now.getTime();
 }
 
-function nextWorkdayLabel(now = new Date()) {
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function nextWorkday(now = new Date()) {
   const next = new Date(now);
   next.setDate(next.getDate() + 1);
-  const tomorrow = new Date(next);
   while (next.getDay() === 0 || next.getDay() === 6) {
     next.setDate(next.getDate() + 1);
   }
-  if (next.toDateString() === tomorrow.toDateString()) return "morgen";
-  return next.toLocaleDateString("nl-NL", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-  });
+  return startOfDay(next);
+}
+
+function shippingLabel(now = new Date()) {
+  const ship = nextWorkday(now);
+  const tomorrow = startOfDay(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (ship.getTime() === tomorrow.getTime()) return "morgen";
+  return `${WEEKDAYS[ship.getDay()]} ${ship.getDate()} ${MONTHS[ship.getMonth()]}`;
 }
 
 function formatCountdown(ms: number) {
@@ -45,7 +78,7 @@ export function DeliveryPromise() {
       const now = new Date();
       setClosed(pastCutoff(now));
       setMs(msUntilCutoff(now));
-      setShippingDay(nextWorkdayLabel(now));
+      setShippingDay(shippingLabel(now));
     };
     tick();
     const id = window.setInterval(tick, 1000);
@@ -68,14 +101,13 @@ export function DeliveryPromise() {
         ) : (
           <>
             <p className="font-semibold text-fg tracking-tight">
-              Bestel binnen{" "}
+              Bestel binnen:{" "}
               <span className="tabular-nums text-primary">
                 {ms === null ? "--:--:--" : formatCountdown(ms)}
               </span>
             </p>
-            <p className="text-xs text-muted">Voor 23:00 besteld</p>
             <p className="text-xs text-muted">
-              Verzending: {shippingDay || "volgende werkdag"}
+              Verzending: {shippingDay || "morgen"}
             </p>
           </>
         )}

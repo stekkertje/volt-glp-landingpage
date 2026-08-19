@@ -279,21 +279,18 @@ export function LandingPage() {
                 <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
                   {SITE.category}
                 </h2>
-                <p className="mt-2 text-muted">
-                  {visible.length} producten
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="text-muted">{visible.length} producten</p>
                   {filter !== "all" ? (
-                    <>
-                      {" · "}
-                      <button
-                        type="button"
-                        onClick={() => setFilterAndHash("all")}
-                        className="font-semibold text-primary underline-offset-2 hover:underline"
-                      >
-                        Alle producten
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => setFilterAndHash("all")}
+                      className="inline-flex items-center rounded-full border border-primary/30 bg-primary/8 px-2.5 py-1 text-xs font-semibold text-primary transition hover:bg-primary/14"
+                    >
+                      Toon alle producten
+                    </button>
                   ) : null}
-                </p>
+                </div>
               </div>
             </div>
             <div

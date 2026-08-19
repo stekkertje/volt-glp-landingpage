@@ -262,7 +262,7 @@ test("a related product card always adds one item", async () => {
 
     const related = page
       .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
+      .filter({ hasText: "Andere variant" });
     await related
       .getByRole("button", { name: "In winkelwagen" })
       .first()
@@ -285,7 +285,7 @@ test("related products stay within the current compound", async () => {
     });
     const related = page
       .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
+      .filter({ hasText: "Andere variant" });
     const text = await related.innerText();
 
     assert.doesNotMatch(text, /Tirzepatide/);
@@ -517,26 +517,31 @@ test("contact validation exposes field errors to assistive technology", async ()
   }
 });
 
-test("vial cards ask the shopper to choose required injection extras", async () => {
+test("vial cards add the default option from the catalog", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     const vialCard = page
       .locator("#producten article")
       .filter({ hasText: "Semaglutide 2mg" });
-    await vialCard.getByRole("link", { name: "Kies extra's" }).waitFor({
+    await vialCard.getByRole("link", { name: "Bekijk" }).waitFor({
       state: "visible",
     });
+    await vialCard.getByRole("button", { name: "In winkelwagen" }).click();
+    const state = await cartState(page);
     assert.equal(
-      await vialCard.getByRole("button", { name: "In winkelwagen" }).count(),
+      await vialCard.getByRole("link", { name: "Kies extra's" }).count(),
       0,
     );
+    assert.deepEqual(state.lines, [
+      { slug: "semaglutide-2mg", optionId: "none", qty: 1 },
+    ]);
   } finally {
     await context.close();
   }
 });
 
-test("vial options state the extra cost before purchase", async () => {
+test("vial options state syringes are not included by default", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
@@ -545,7 +550,7 @@ test("vial options state the extra cost before purchase", async () => {
     const syringeOption = page.getByRole("radio", {
       name: /10 insulinespuiten/,
     });
-    assert.match(await syringeOption.innerText(), /\+ €\s?2,50/);
+    assert.match(await syringeOption.innerText(), /Niet standaard inbegrepen/);
   } finally {
     await context.close();
   }
@@ -816,6 +821,38 @@ test("every catalog product route loads its gallery image", async () => {
   }
 });
 
+test("product gallery advances on a horizontal swipe", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByRole("button", { name: "Begrepen" }).click().catch(() => {});
+    const gallery = page.getByRole("region", { name: "Productfoto's" });
+    await gallery.waitFor({ state: "visible" });
+    const firstDot = page.getByRole("button", { name: "Afbeelding 1" });
+    const secondDot = page.getByRole("button", { name: "Afbeelding 2" });
+    assert.equal(await firstDot.getAttribute("aria-current"), "true");
+    const box = await gallery.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x + box.width * 0.82, box.y + box.height * 0.45);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.18, box.y + box.height * 0.45, {
+      steps: 14,
+    });
+    await page.mouse.up();
+    await page.waitForFunction(
+      (selector) =>
+        document.querySelector(selector)?.getAttribute("aria-current") ===
+        "true",
+      'button[aria-label="Afbeelding 2"]',
+    );
+    assert.equal(await secondDot.getAttribute("aria-current"), "true");
+  } finally {
+    await context.close();
+  }
+});
+
 test("unknown product routes return an HTTP 404", async () => {
   const { context, page } = await newPage();
   try {
@@ -972,7 +1009,7 @@ test("direct checkout navigation and hard reload hydrate a persisted cart", asyn
     await page
       .getByRole("heading", { name: "Waar mogen we bezorgen?" })
       .waitFor();
-    await page.getByText("Semaglutide 4mg · Pen", { exact: true }).waitFor();
+    await page.getByText("Semaglutide 4mg - Pen", { exact: true }).waitFor();
     assert.equal(
       await page.getByText(/Switched to client rendering/).count(),
       0,

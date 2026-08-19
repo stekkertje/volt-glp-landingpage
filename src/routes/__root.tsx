@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { CreatedWithGrokBanner } from "@/components/created-with-grok-banner";
+import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Afslank-injecties.nl";
@@ -77,6 +78,7 @@ function RootDocument() {
       <body className="min-h-dvh bg-bg text-fg">
         <CreatedWithGrokBanner />
         <AuthProvider>
+          <PreviewHostBridge />
           <Outlet />
         </AuthProvider>
         <Scripts />

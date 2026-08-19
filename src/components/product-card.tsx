@@ -68,28 +68,25 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
         <div className="mt-4 flex gap-2">
-          <Button asChild variant="secondary" size="sm" className="flex-1">
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            className="flex-1 text-sm"
+          >
             <Link to="/product/$slug" params={{ slug: product.slug }}>
               Bekijk
             </Link>
           </Button>
-          {product.options.length > 0 ? (
-            <Button asChild size="sm" className="flex-1">
-              <Link to="/product/$slug" params={{ slug: product.slug }}>
-                Kies extra&apos;s
-              </Link>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={() =>
-                addToCart(product.slug, getDefaultOptionId(product), 1)
-              }
-            >
-              In winkelwagen
-            </Button>
-          )}
+          <Button
+            size="sm"
+            className="flex-1 text-sm"
+            onClick={() =>
+              addToCart(product.slug, getDefaultOptionId(product), 1)
+            }
+          >
+            In winkelwagen
+          </Button>
         </div>
       </div>
     </article>

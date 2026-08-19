@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Link } from "@tanstack/react-router";
 import { Truck, MapPinned, Package, Headphones, Check } from "lucide-react";
 import {
   relatedProducts,
@@ -7,7 +6,6 @@ import {
   getDefaultOptionId,
   unitPriceCents,
   compareAtCents,
-  SITE,
 } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 import { SiteShell } from "@/components/site-shell";
@@ -15,11 +13,10 @@ import { ProductGallery } from "@/components/product-gallery";
 import { PackSelector } from "@/components/pack-selector";
 import { ProductCard } from "@/components/product-card";
 import { Stars } from "@/components/stars";
-import { cartSubtotalCents, useCartStore } from "@/lib/cart-store";
+import { useCartStore } from "@/lib/cart-store";
 
 export function ProductPage({ product }: { product: Product }) {
   const setSelected = useCartStore((s) => s.setSelected);
-  const cartLines = useCartStore((s) => s.lines);
   const defaultOptionId = getDefaultOptionId(product);
   const selectedOptionId = useCartStore((s) =>
     s.selectedSlug === product.slug ? s.selectedOptionId : defaultOptionId,
@@ -32,14 +29,7 @@ export function ProductPage({ product }: { product: Product }) {
   const price = unitPriceCents(product, selectedOptionId);
   const compare = compareAtCents(product, selectedOptionId);
   const related = relatedProducts(product.slug, 3);
-  const sibling = related.find((p) => p.subcat === product.subcat);
-  const cartSubtotal = cartSubtotalCents(cartLines);
-  const hasCartItems = cartLines.length > 0;
-  const freeShipLeft = Math.max(0, SITE.freeShippingCents - cartSubtotal);
-  const freeShipPct = Math.min(
-    100,
-    Math.round((cartSubtotal / SITE.freeShippingCents) * 100),
-  );
+  const pitchParagraphs = product.shortPitch.split("\n\n").filter(Boolean);
 
   return (
     <SiteShell>
@@ -72,7 +62,7 @@ export function ProductPage({ product }: { product: Product }) {
 
             <div id="prijzen" className="min-w-0 scroll-mt-28">
               <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                {product.brand} · {product.subcat}
+                {product.brand} - {product.subcat}
               </p>
               <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">
                 {product.name}
@@ -87,7 +77,7 @@ export function ProductPage({ product }: { product: Product }) {
                   {product.rating}
                 </span>
                 <span className="text-sm text-muted underline-offset-2 hover:underline">
-                  · {product.reviewCount} beoordelingen
+                  {product.reviewCount} beoordelingen
                 </span>
               </a>
 
@@ -135,55 +125,20 @@ export function ProductPage({ product }: { product: Product }) {
                 </ul>
               </div>
 
-              <div className="mt-5 rounded-xl border border-border bg-surface p-3">
-                <p className="text-xs text-muted">
-                  Verzendkosten {formatEuro(SITE.shippingCents)} - Gratis vanaf{" "}
-                  {formatEuro(SITE.freeShippingCents)}
-                </p>
-                {hasCartItems && freeShipLeft > 0 ? (
-                  <p className="text-xs text-muted">
-                    Nog{" "}
-                    <strong className="text-fg">
-                      {formatEuro(freeShipLeft)}
-                    </strong>{" "}
-                    tot gratis verzending
+              <div className="mt-4 space-y-3">
+                {pitchParagraphs.map((para) => (
+                  <p
+                    key={para}
+                    className="text-sm leading-relaxed text-muted"
+                  >
+                    {para}
                   </p>
-                ) : hasCartItems ? (
-                  <p className="text-xs font-semibold text-success">
-                    Gratis verzending
-                  </p>
-                ) : null}
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
-                    style={{ width: `${freeShipPct}%` }}
-                  />
-                </div>
+                ))}
               </div>
-
-              <p className="mt-4 text-sm leading-relaxed text-muted">
-                {product.shortPitch}
-              </p>
 
               <div className="mt-6 rounded-xl border border-border bg-surface p-5 sm:p-7 shadow-sm">
                 <PackSelector key={`${product.slug}-buy`} product={product} />
               </div>
-              {sibling && (
-                <p className="mt-3 text-sm text-muted">
-                  Liever{" "}
-                  {sibling.form === "pen"
-                    ? "een kant-en-klare pen"
-                    : "een vial"}
-                  ?
-                  <Link
-                    to="/product/$slug"
-                    params={{ slug: sibling.slug }}
-                    className="mt-1 block font-semibold text-primary hover:underline"
-                  >
-                    {sibling.name}
-                  </Link>
-                </p>
-              )}
 
               <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 {[
@@ -263,7 +218,7 @@ export function ProductPage({ product }: { product: Product }) {
         <section className="border-t border-border bg-bg-elevated">
           <div className="container-max section-pad py-16">
             <h2 className="text-2xl font-extrabold tracking-tight mb-6">
-              Andere sterkte / vorm
+              Andere variant
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {related.map((p) => (

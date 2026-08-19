@@ -96,7 +96,7 @@ const PRODUCT_LIST: Product[] = [
       ["Retatrutide 10mg vial voorkant", "Retatrutide 10mg vial detail"],
     ),
     shortPitch:
-      "Nieuwste GLP-1 in vialvorm. Triple agonist voor wie een sterkere opvolger van Semaglutide of Tirzepatide zoekt.",
+      "Nieuwste GLP-1 in vialvorm. Triple agonist voor wie een sterkere opvolger van Semaglutide of Tirzepatide zoekt.\n\nJe mengt zelf met het bijgeleverde bac water en zet één keer per week. Extra grip op eetlust, stofwisseling en vetverbranding, zonder kant-en-klare pen.",
     highlights: [
       "Sneller metabolisme en minder eetlust",
       "Voor gebruikers die sterk willen afvallen",
@@ -104,8 +104,10 @@ const PRODUCT_LIST: Product[] = [
       "Tot 40% krachtiger dan Semaglutide en Tirzepatide",
     ],
     composition: [
-      { label: "Retatrutide", value: "10 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "10mg vial - 2ml water" },
+      { label: "Sterkte", value: "Retatrutide 10 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
     doseBeginner: "2,5 mg per week",
@@ -128,7 +130,7 @@ const PRODUCT_LIST: Product[] = [
   {
     id: 47,
     slug: "retatrutide-20mg-pen",
-    name: "Retatrutide 20mg · Pen",
+    name: "Retatrutide 20mg - Pen",
     listing: "Retatrutide 20mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Retatrutide",
@@ -159,7 +161,7 @@ const PRODUCT_LIST: Product[] = [
       ],
     ),
     shortPitch:
-      "Kant-en-klare pen. Triple agonist (GLP-1, GIP en glucagon) zonder vials mengen.",
+      "Kant-en-klare pen. Triple agonist (GLP-1, GIP en glucagon) zonder vials mengen.\n\nDe pen is vooraf gevuld: geen afmeten, geen mengfout. Eén wekelijkse injectie, met naalden en handleiding in de doos.",
     highlights: [
       "Doorbreekt plateaus als andere middelen minder doen",
       "Drie hormoonpaden: GLP-1, GIP en glucagon",
@@ -169,7 +171,7 @@ const PRODUCT_LIST: Product[] = [
     composition: [
       { label: "Merk", value: "Bio Amino Labs" },
       { label: "Inhoud", value: "1 kant-en-klare pen" },
-      { label: "Dosering", value: "Retatrutide 20 mg" },
+      { label: "Sterkte", value: "Retatrutide 20 mg" },
       { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
@@ -210,7 +212,7 @@ const PRODUCT_LIST: Product[] = [
       ],
     ),
     shortPitch:
-      "Instap-vial voor langdurig vetverlies, minder honger en een rustiger eetpatroon.",
+      "Instap-vial voor langdurig vetverlies, minder honger en een rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Ondersteunt gewichtsverlies",
       "Minder hongergevoel",
@@ -218,8 +220,10 @@ const PRODUCT_LIST: Product[] = [
       "Eén wekelijkse injectie",
     ],
     composition: [
-      { label: "Semaglutide", value: "2 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "2mg vial - 2ml water" },
+      { label: "Sterkte", value: "Semaglutide 2 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Aanbevolen dosering: 0,25 tot 0,75 mg per week.",
     doseBeginner: "0,25 mg per week",
@@ -234,7 +238,7 @@ const PRODUCT_LIST: Product[] = [
   {
     id: 49,
     slug: "semaglutide-4mg-pen",
-    name: "Semaglutide 4mg · Pen",
+    name: "Semaglutide 4mg - Pen",
     listing: "Semaglutide 4 mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Semaglutide",
@@ -259,7 +263,7 @@ const PRODUCT_LIST: Product[] = [
       ],
     ),
     shortPitch:
-      "Meest gekozen pen. Vooraf gevuld, geen vials, één wekelijkse klik.",
+      "Meest gekozen pen. Vooraf gevuld, geen vials, één wekelijkse klik.\n\nHandig als je net begint: vaste dosering, 4 pennaalden en een handleiding in de doos. Geen mengen of zelf afmeten.",
     highlights: [
       "Gewicht en eetlust in één ritme",
       "Geen mengen of afmeten uit een vial",
@@ -298,7 +302,7 @@ const PRODUCT_LIST: Product[] = [
       ["Tirzepatide 10mg vial voorkant", "Tirzepatide 10mg vial detail"],
     ),
     shortPitch:
-      "Dubbele werking (GLP-1 en GIP). Minder cravings, meer controle, vial van 10 mg.",
+      "Dubbele werking (GLP-1 en GIP). Minder cravings, meer controle, vial van 10 mg.\n\nJe doseert zelf uit de vial. Extra grip op eetlust en bloedsuiker, met bac water in de verpakking.",
     highlights: [
       "Effectief en duurzaam gewichtsverlies",
       "Minder eetlust en cravings",
@@ -306,8 +310,10 @@ const PRODUCT_LIST: Product[] = [
       "Vial plus 2 ml bac water",
     ],
     composition: [
-      { label: "Tirzepatide vial", value: "10 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "10mg vial - 2ml water" },
+      { label: "Sterkte", value: "Tirzepatide 10 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
     doseBeginner: "2,5 mg per week",
@@ -327,7 +333,7 @@ const PRODUCT_LIST: Product[] = [
   {
     id: 77,
     slug: "tirzepatide-20mg-pen",
-    name: "Tirzepatide 20mg · Pen",
+    name: "Tirzepatide 20mg - Pen",
     listing: "Tirzepatide 20mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Tirzepatide",
@@ -348,7 +354,7 @@ const PRODUCT_LIST: Product[] = [
       ["Tirzepatide 20mg pen voorkant", "Tirzepatide 20mg pen inhoud"],
     ),
     shortPitch:
-      "Hoogste dosering in penvorm. Dubbele agonist, vooraf gevuld, klaar voor gebruik.",
+      "Hoogste dosering in penvorm. Dubbele agonist, vooraf gevuld, klaar voor gebruik.\n\nVoor wie verder wil dan Semaglutide: één wekelijkse injectie, 4 naalden en handleiding bij de pen. Geen vials of mengwerk.",
     highlights: [
       "Hoogste dosering in deze lijn",
       "Krachtig gewichtsverlies in een vast ritme",
