@@ -60,7 +60,7 @@ export function DeliveryPromise() {
               Bestelvenster voor vandaag is gesloten
             </p>
             <p className="text-xs text-muted">
-              Volgende verzending: {shippingDay || "eerstvolgende werkdag"}
+              Verzending: {shippingDay || "eerstvolgende werkdag"}
             </p>
           </>
         ) : (
@@ -71,9 +71,9 @@ export function DeliveryPromise() {
                 {ms === null ? "--:--:--" : formatCountdown(ms)}
               </span>
             </p>
+            <p className="text-xs text-muted">Voor 23:00 besteld</p>
             <p className="text-xs text-muted">
-              Voor 23:00 besteld · verzending{" "}
-              {shippingDay || "volgende werkdag"}
+              Verzending: {shippingDay || "volgende werkdag"}
             </p>
           </>
         )}

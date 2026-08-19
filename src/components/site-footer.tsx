@@ -32,11 +32,6 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-bg/60">
                 <li>
-                  <a href="/#producten" className="hover:text-bg">
-                    Alle producten
-                  </a>
-                </li>
-                <li>
                   <a href="/#semaglutide" className="hover:text-bg">
                     Semaglutide
                   </a>

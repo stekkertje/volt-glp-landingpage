@@ -1,17 +1,10 @@
 import { Check, Minus, Plus } from "lucide-react";
 import {
-  SYRINGE_PACK_COUNT,
   getDefaultOptionId,
-  getOption,
   unitPriceCents,
   type Product,
 } from "@/lib/product";
-import {
-  MAX_LINE_QTY,
-  useCartStore,
-  cartCount,
-  stackDiscountPct,
-} from "@/lib/cart-store";
+import { MAX_LINE_QTY, useCartStore } from "@/lib/cart-store";
 import { formatEuro, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeliveryPromise } from "@/components/delivery-promise";
@@ -34,17 +27,10 @@ export function PackSelector({
   );
   const setSelected = useCartStore((s) => s.setSelected);
   const setSelectedQty = useCartStore((s) => s.setSelectedQty);
-  const lines = useCartStore((s) => s.lines);
 
   const optionId = product.options.length ? selectedOptionId : "default";
   const price = unitPriceCents(product, optionId);
-  const option = getOption(product, optionId);
-  const futureQty = cartCount(lines) + qty;
-  const stackPct = stackDiscountPct(futureQty);
-  const rawTotal = price * qty;
-  const shownTotal = stackPct
-    ? rawTotal - Math.round(rawTotal * (stackPct / 100))
-    : rawTotal;
+  const shownTotal = price * qty;
   const baseOptionPrice = product.options[0]?.priceCents ?? product.priceCents;
 
   const onAdd = () => {
@@ -56,8 +42,10 @@ export function PackSelector({
       {product.options.length > 0 && (
         <>
           <p className="text-xs text-muted leading-relaxed">
-            Bac water zit bij de vial. Insulinespuiten heb je nodig om te
-            injecteren. Kies of je die extra wilt meenemen.
+            Bac water: standaard inbegrepen
+            <br />
+            Insuline spuiten: niet inbegrepen. Kies of je deze als extra wilt
+            nemen.
           </p>
           <div
             className="grid gap-2.5"
@@ -97,7 +85,7 @@ export function PackSelector({
                     </span>
                     <span className="block text-xs text-muted">
                       {extraCost > 0
-                        ? `+ ${formatEuro(extraCost)} · set van ${SYRINGE_PACK_COUNT} stuks`
+                        ? `+ ${formatEuro(extraCost)}`
                         : "Bac water inbegrepen"}
                     </span>
                   </div>
@@ -149,18 +137,7 @@ export function PackSelector({
       </div>
 
       <Button size="lg" className="w-full glow-primary" onClick={onAdd}>
-        {stackPct ? (
-          <>
-            {ctaLabel} · {formatEuro(shownTotal)}
-            <span className="text-xs font-semibold opacity-90">
-              −{stackPct}% stapel
-            </span>
-          </>
-        ) : (
-          <>
-            {ctaLabel} · {formatEuro(shownTotal)}
-          </>
-        )}
+        {ctaLabel} · {formatEuro(shownTotal)}
       </Button>
 
       <div className="flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-sm">
@@ -173,22 +150,6 @@ export function PackSelector({
       </div>
 
       <DeliveryPromise />
-
-      <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
-        <p className="font-semibold text-fg tracking-tight leading-snug">
-          Stapelkorting
-        </p>
-        <p className="mt-1 text-xs text-muted leading-relaxed">
-          5+ stuks: 10% extra · 10+ stuks: 20% extra. Korting zie je in de
-          winkelwagen.
-        </p>
-      </div>
-
-      {option && (
-        <p className="text-center text-xs text-dim">
-          Gekozen extra: {option.label}
-        </p>
-      )}
     </div>
   );
 }

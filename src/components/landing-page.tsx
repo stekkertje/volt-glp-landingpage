@@ -35,7 +35,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useContactStore } from "@/lib/contact-store";
 import { useCartStore } from "@/lib/cart-store";
 
 const PRODUCT_HASHES = new Set([
@@ -55,7 +54,6 @@ function hashToFilter(hash: string): Subcat | "all" | null {
 }
 
 export function LandingPage() {
-  const openContact = useContactStore((s) => s.openContact);
   const setSelected = useCartStore((s) => s.setSelected);
   const [filter, setFilter] = useState<Subcat | "all">("all");
 
@@ -103,7 +101,8 @@ export function LandingPage() {
   return (
     <SiteShell>
       <section className="hero-grid relative overflow-hidden">
-        <div className="container-max section-pad grid items-center gap-10 py-10 md:grid-cols-2 md:gap-12 md:py-16 lg:py-20">
+        <div className="container-max section-pad py-10 md:py-16 lg:py-20">
+          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-12">
           <div className="order-1 space-y-6 min-w-0">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
@@ -200,27 +199,6 @@ export function LandingPage() {
                 </Button>
               </div>
             </div>
-
-            <div className="flex flex-nowrap items-center gap-x-2.5 overflow-x-auto text-[11px] text-dim sm:gap-x-5 sm:text-xs whitespace-nowrap">
-              <span className="inline-flex shrink-0 items-center gap-1">
-                <Truck className="size-3.5 text-muted" aria-hidden /> 1–2
-                werkdagen
-              </span>
-              <span className="text-border shrink-0" aria-hidden>
-                ·
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1">
-                <Package className="size-3.5 text-muted" aria-hidden /> Discreet
-                verzonden
-              </span>
-              <span className="text-border shrink-0" aria-hidden>
-                ·
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1">
-                <ShieldCheck className="size-3.5 text-muted" aria-hidden />{" "}
-                Labgetest
-              </span>
-            </div>
           </div>
 
           <div className="order-2 relative min-w-0 hidden md:block">
@@ -253,6 +231,27 @@ export function LandingPage() {
                 </p>
               </div>
             </Link>
+          </div>
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-dim sm:gap-x-5 sm:text-xs">
+            <span className="inline-flex items-center gap-1">
+              <Truck className="size-3.5 text-muted" aria-hidden /> 1–2
+              werkdagen
+            </span>
+            <span className="text-border" aria-hidden>
+              ·
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Package className="size-3.5 text-muted" aria-hidden /> Discreet
+              verzonden
+            </span>
+            <span className="text-border" aria-hidden>
+              ·
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="size-3.5 text-muted" aria-hidden />{" "}
+              Labgetest
+            </span>
           </div>
         </div>
       </section>
@@ -446,7 +445,7 @@ export function LandingPage() {
             {COMPOUNDS.map((c) => (
               <article
                 key={c.name}
-                className="flex min-h-[17rem] flex-col rounded-xl border border-border bg-surface p-6 sm:p-7"
+                className="rounded-xl border border-border bg-surface p-5"
               >
                 <div className="flex items-center gap-2">
                   <FlaskConical className="size-4 text-primary" />
@@ -455,12 +454,12 @@ export function LandingPage() {
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-dim">
                   {c.role}
                 </p>
-                <p className="mt-3 flex-1 text-sm leading-relaxed text-muted">
+                <p className="mt-2 text-sm leading-snug text-muted">
                   {c.detail}
                 </p>
                 <a
                   href={`/#${c.name.toLowerCase()}`}
-                  className="mt-6 inline-flex text-sm font-semibold text-primary hover:underline"
+                  className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
                 >
                   {c.count} producten →
                 </a>
@@ -594,16 +593,6 @@ export function LandingPage() {
                 <ArrowRight className="size-4" />
               </a>
             </Button>
-            <p className="mt-4 text-xs text-muted">
-              Vraag over je bestelling?{" "}
-              <button
-                type="button"
-                onClick={openContact}
-                className="font-semibold text-primary hover:underline"
-              >
-                Neem contact op
-              </button>
-            </p>
           </div>
         </div>
       </section>

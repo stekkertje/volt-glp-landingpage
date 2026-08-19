@@ -8,7 +8,6 @@ import { AnnounceBar } from "@/components/announce-bar";
 import { SITE } from "@/lib/product";
 
 const LINKS = [
-  { href: "/#producten", label: "Producten" },
   { href: "/#semaglutide", label: "Semaglutide" },
   { href: "/#tirzepatide", label: "Tirzepatide" },
   { href: "/#retatrutide", label: "Retatrutide" },

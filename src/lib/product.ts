@@ -370,12 +370,12 @@ const PRODUCT_LIST: Product[] = [
 ];
 
 const CATALOG_ORDER: ProductSlug[] = [
-  "semaglutide-2mg",
   "semaglutide-4mg-pen",
-  "tirzepatide-10mg",
+  "semaglutide-2mg",
   "tirzepatide-20mg-pen",
-  "retatrutide-10mg",
+  "tirzepatide-10mg",
   "retatrutide-20mg-pen",
+  "retatrutide-10mg",
 ];
 
 export const PRODUCTS: Product[] = CATALOG_ORDER.map((slug) =>

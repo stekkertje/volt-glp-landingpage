@@ -374,28 +374,25 @@ test("checkout recovers from a persisted server-invalid discount code", async ()
   }
 });
 
-test("the PDP sticky bar stays bound to the current product", async () => {
+test("the mobile sticky bar shows the cart summary", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    const related = page
-      .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
-    await related
-      .getByRole("button", { name: "In winkelwagen" })
-      .first()
+    await page
+      .locator("#prijzen")
+      .getByRole("button", { name: /^In winkelwagen/ })
       .click();
     await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
-    await related.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(350);
 
     const sticky = page.locator("div.fixed").filter({
-      has: page.getByRole("button", { name: "Kopen" }),
+      has: page.getByRole("button", { name: "Mandje" }),
     });
     await sticky.waitFor({ state: "visible" });
-    assert.match(await sticky.innerText(), /Semaglutide 2mg/);
+    const text = await sticky.innerText();
+    assert.match(text, /Winkelwagen/);
+    assert.match(text, /€\s?85,00/);
   } finally {
     await context.close();
   }
@@ -524,7 +521,9 @@ test("vial cards ask the shopper to choose required injection extras", async () 
   const { context, page } = await newPage();
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    const vialCard = page.locator("#producten article").first();
+    const vialCard = page
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 2mg" });
     await vialCard.getByRole("link", { name: "Kies extra's" }).waitFor({
       state: "visible",
     });
@@ -602,21 +601,24 @@ test("the functional-cookie notice offers one unambiguous action", async () => {
   }
 });
 
-test("the home sticky product follows the active compound filter", async () => {
+test("the home sticky bar appears once the cart has items", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     await page
-      .getByRole("button", { name: "Retatrutide", pressed: false })
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 4mg" })
+      .getByRole("button", { name: "In winkelwagen" })
       .click();
-    await page.locator("#faq").scrollIntoViewIfNeeded();
-    await page.waitForTimeout(350);
+    await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
 
     const sticky = page.locator("div.fixed").filter({
-      has: page.getByRole("link", { name: "Bekijk" }),
+      has: page.getByRole("button", { name: "Mandje" }),
     });
     await sticky.waitFor({ state: "visible" });
-    assert.match(await sticky.innerText(), /Retatrutide 10mg/);
+    const text = await sticky.innerText();
+    assert.match(text, /Winkelwagen/);
+    assert.match(text, /€\s?169,00/);
   } finally {
     await context.close();
   }
@@ -646,11 +648,10 @@ test("the delivery promise uses the next workday around weekends", async () => {
       waitUntil: "networkidle",
     });
     assert.match(
-      await page
-        .locator("#prijzen")
-        .getByText(/Voor 23:00 besteld/)
-        .innerText(),
-      /maandag 24 augustus/i,
+      await page.locator("#prijzen").locator("div").filter({
+        hasText: "Voor 23:00 besteld",
+      }).first().innerText(),
+      /Verzending:\s*maandag 24 augustus/i,
     );
   } finally {
     await context.close();

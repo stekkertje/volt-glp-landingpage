@@ -226,16 +226,6 @@ export function ContactDialog() {
             )}
           </div>
 
-          <p className="text-[11px] text-dim leading-relaxed">
-            Of mail direct:{" "}
-            <a
-              href="mailto:info@afslank-injecties.nl"
-              className="font-medium text-primary hover:underline"
-            >
-              info@afslank-injecties.nl
-            </a>
-          </p>
-
           <div className="mt-auto flex flex-col gap-2 pt-1 sm:flex-row-reverse">
             <Button
               type="submit"

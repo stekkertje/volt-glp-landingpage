@@ -1,21 +1,12 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  Truck,
-  MapPinned,
-  Package,
-  Headphones,
-  Check,
-  ShieldCheck,
-  RotateCcw,
-} from "lucide-react";
+import { Truck, MapPinned, Package, Headphones, Check } from "lucide-react";
 import {
   relatedProducts,
   type Product,
   getDefaultOptionId,
   unitPriceCents,
   compareAtCents,
-  pricePerWeekCents,
   SITE,
 } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
@@ -41,6 +32,11 @@ export function ProductPage({ product }: { product: Product }) {
   const compare = compareAtCents(product, selectedOptionId);
   const related = relatedProducts(product.slug, 3);
   const sibling = related.find((p) => p.subcat === product.subcat);
+  const freeShipLeft = Math.max(0, SITE.freeShippingCents - price);
+  const freeShipPct = Math.min(
+    100,
+    Math.round((price / SITE.freeShippingCents) * 100),
+  );
 
   return (
     <SiteShell>
@@ -78,7 +74,6 @@ export function ProductPage({ product }: { product: Product }) {
               <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">
                 {product.name}
               </h1>
-              <p className="mt-2 text-sm text-muted">{product.listing}</p>
 
               <a
                 href="/#beoordelingen"
@@ -116,22 +111,52 @@ export function ProductPage({ product }: { product: Product }) {
                   </p>
                 )}
               </div>
-              <p className="text-sm text-muted">
-                {product.unit} per verpakking
-              </p>
-              <p className="mt-1 text-sm text-muted">
-                Ongeveer {product.weeksAtStart} weken bij startdosis
-                <span className="block tabular-nums">
-                  {formatEuro(pricePerWeekCents(product, selectedOptionId))}
-                  /week
-                </span>
-              </p>
-              {price < SITE.freeShippingCents && (
-                <p className="mt-2 text-sm text-muted">
-                  + €4,95 verzending · gratis vanaf{" "}
+
+              <div className="mt-5">
+                <h2 className="text-base font-extrabold tracking-tight">
+                  Waarom dit product
+                </h2>
+                <ul className="mt-3 space-y-2">
+                  {product.highlights.map((h) => (
+                    <li
+                      key={h}
+                      className="flex items-start gap-3 text-sm text-fg"
+                    >
+                      <Check
+                        className="size-4 shrink-0 text-primary mt-0.5"
+                        strokeWidth={2.75}
+                      />
+                      {h}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-border bg-surface p-3">
+                {freeShipLeft > 0 ? (
+                  <p className="text-xs text-muted">
+                    Nog{" "}
+                    <strong className="text-fg">
+                      {formatEuro(freeShipLeft)}
+                    </strong>{" "}
+                    tot gratis verzending
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-success">
+                    Gratis verzending bereikt
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-muted">
+                  Verzending {formatEuro(SITE.shippingCents)} · gratis vanaf{" "}
                   {formatEuro(SITE.freeShippingCents)}
                 </p>
-              )}
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{ width: `${freeShipPct}%` }}
+                  />
+                </div>
+              </div>
 
               <p className="mt-4 text-sm leading-relaxed text-muted">
                 {product.shortPitch}
@@ -146,25 +171,23 @@ export function ProductPage({ product }: { product: Product }) {
                   {sibling.form === "pen"
                     ? "een kant-en-klare pen"
                     : "een vial"}
-                  ?{" "}
+                  ?
                   <Link
                     to="/product/$slug"
                     params={{ slug: sibling.slug }}
-                    className="font-semibold text-primary hover:underline"
+                    className="mt-1 block font-semibold text-primary hover:underline"
                   >
                     {sibling.name}
                   </Link>
                 </p>
               )}
 
-              <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 {[
-                  { icon: Truck, t: "1–2 werkdagen NL/BE" },
+                  { icon: Truck, t: "1–2 werkdagen" },
                   { icon: MapPinned, t: "Track & trace code" },
                   { icon: Package, t: "Discreet verpakt" },
-                  { icon: Headphones, t: "Hulp binnen 24 uur" },
-                  { icon: ShieldCheck, t: "Labgetest per batch" },
-                  { icon: RotateCcw, t: "30 dagen ongeopend retour" },
+                  { icon: Headphones, t: "Persoonlijke support" },
                 ].map((x) => (
                   <li
                     key={x.t}
@@ -184,23 +207,7 @@ export function ProductPage({ product }: { product: Product }) {
       </section>
 
       <section className="container-max section-pad py-16 md:py-20">
-        <div className="grid gap-10 lg:grid-cols-2">
-          <div>
-            <h2 className="text-2xl font-extrabold tracking-tight">
-              Waarom dit product
-            </h2>
-            <ul className="mt-4 space-y-3">
-              {product.highlights.map((h) => (
-                <li key={h} className="flex items-start gap-3 text-sm text-fg">
-                  <Check
-                    className="size-4 shrink-0 text-primary mt-0.5"
-                    strokeWidth={2.75}
-                  />
-                  {h}
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="grid max-w-2xl gap-4">
           <div className="rounded-xl border border-border bg-surface overflow-hidden">
             <div className="border-b border-border bg-bg-elevated px-5 py-4">
               <h3 className="font-bold tracking-tight">Samenstelling</h3>
@@ -219,10 +226,30 @@ export function ProductPage({ product }: { product: Product }) {
                 </div>
               ))}
             </div>
-            <div className="border-t border-border bg-bg-elevated px-5 py-4 space-y-1 text-xs text-dim leading-relaxed">
-              <p>Frequentie: {product.frequency}</p>
-              <p>Start: {product.doseBeginner}</p>
-              <p>Gevorderd: {product.doseAdvanced}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface overflow-hidden">
+            <div className="border-b border-border bg-bg-elevated px-5 py-4">
+              <h3 className="font-bold tracking-tight">Gebruik</h3>
+              <p className="mt-1 text-xs text-muted">Hoe vaak en hoeveel</p>
+            </div>
+            <div className="divide-y divide-border px-5">
+              {[
+                { label: "Frequentie", value: product.frequency },
+                { label: "Startdosis", value: product.doseBeginner },
+                { label: "Gevorderd", value: product.doseAdvanced },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <span className="text-muted">{row.label}</span>
+                  <span className="font-semibold tabular-nums text-fg">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border bg-bg-elevated px-5 py-4 text-xs text-dim leading-relaxed">
               <p>{product.usageNote}</p>
             </div>
           </div>
