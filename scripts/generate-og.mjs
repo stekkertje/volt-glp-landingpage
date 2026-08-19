@@ -140,7 +140,7 @@ try {
             <p class="sub">Semaglutide, Tirzepatide en Retatrutide. Labgetest en discreet verzonden in NL en BE.</p>
             <div class="proof">
               <span>★ 4,8 uit 5</span>
-              <span>1–2 werkdagen</span>
+              <span>1 – 2 werkdagen</span>
               <span>Gratis vanaf €100</span>
             </div>
           </section>

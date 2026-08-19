@@ -172,8 +172,10 @@ export function PackSelector({
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-success/50 opacity-60" />
           <span className="relative inline-flex size-2.5 rounded-full bg-success" />
         </span>
-        <span className="text-fg font-medium">Op voorraad</span>
-        <span className="text-muted">- direct leverbaar</span>
+        <span className="text-muted">
+          <strong className="font-medium text-fg">Op voorraad</strong> - direct
+          leverbaar
+        </span>
       </div>
 
       <DeliveryPromise />
