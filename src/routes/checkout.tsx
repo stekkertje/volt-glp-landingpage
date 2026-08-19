@@ -169,6 +169,10 @@ function CheckoutPage() {
   const pricingRequestSequence = useRef(0);
   const emptyRedirected = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (formError) errorRef.current?.focus();
+  }, [formError]);
   const pricingInput = useMemo<PricingInput>(
     () => ({
       lines: lines.map(({ slug, optionId, qty }) => ({

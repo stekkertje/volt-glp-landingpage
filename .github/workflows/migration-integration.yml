@@ -3,6 +3,9 @@ name: Migration integration
 on:
   pull_request:
   push:
+    branches:
+      - main
+      - cursor/shop-backend
 
 permissions:
   contents: read

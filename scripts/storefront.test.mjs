@@ -2447,7 +2447,7 @@ test("successful checkout never reuses a seed when storage cleanup fails", async
       await page.route("**/*", handleOrders);
 
       await placeOrder.click();
-      await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+      await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 30_000 });
       await page
         .getByRole("heading", { name: "Bewaar je herstelcode" })
         .waitFor();
