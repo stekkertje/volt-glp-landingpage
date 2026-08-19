@@ -659,16 +659,68 @@ test("the delivery promise uses the next workday around weekends", async () => {
       waitUntil: "networkidle",
     });
     assert.match(
-      await page
-        .locator("#prijzen")
-        .locator("div")
-        .filter({
-          hasText: "Verzending:",
-        })
-        .first()
-        .innerText(),
+      await page.locator("#prijzen").locator("div").filter({
+        hasText: "Bestel binnen:",
+      }).first().innerText(),
       /Verzending:\s*maandag 24 aug/i,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("product previews and Retatrutide pen cards use the requested copy", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const preview = page
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 2mg" });
+    const previewText = await preview.innerText();
+    assert.ok(
+      previewText.indexOf("Bio Amino Labs") <
+        previewText.indexOf("Semaglutide 2mg"),
+    );
+    assert.ok(
+      previewText.indexOf("Semaglutide 2mg") <
+        previewText.indexOf("SEMAGLUTIDE - VIAL"),
+    );
+    assert.match(previewText, /4\.5 33 beoordelingen/);
+    assert.doesNotMatch(previewText, /4\.5\s*·\s*33/);
+
+    await page.goto(`${BASE_URL}/product/retatrutide-20mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    const composition = page
+      .getByRole("heading", { name: "Samenstelling" })
+      .locator("../..");
+    await composition.getByText("Retatrutide pen", { exact: true }).waitFor();
+    assert.equal(
+      await composition.getByText("Pennaalden", { exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await composition.getByText("Handleiding", { exact: true }).count(),
+      1,
+    );
+
+    const usage = page
+      .getByRole("heading", { name: "Gebruik" })
+      .locator("../..");
+    await usage
+      .getByText("Dosering en gebruiksfrequentie", { exact: true })
+      .waitFor();
+    await page
+      .getByText("Op voorraad - direct leverbaar", { exact: true })
+      .waitFor();
+    await page
+      .locator("#prijzen")
+      .getByText("1 – 2 werkdagen", { exact: true })
+      .waitFor();
+    const shippingLabel = page.locator("strong").filter({
+      hasText: /^Verzending:$/,
+    });
+    assert.equal(await shippingLabel.count(), 1);
   } finally {
     await context.close();
   }

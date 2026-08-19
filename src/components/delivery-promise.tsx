@@ -94,20 +94,22 @@ export function DeliveryPromise() {
             <p className="font-semibold text-fg tracking-tight">
               Bestelvenster voor vandaag is gesloten
             </p>
-            <p className="text-xs text-muted">
-              Verzending: {shippingDay || "eerstvolgende werkdag"}
+            <p className="text-sm text-fg tracking-tight">
+              <strong className="font-semibold">Verzending:</strong>{" "}
+              {shippingDay || "eerstvolgende werkdag"}
             </p>
           </>
         ) : (
           <>
-            <p className="font-semibold text-fg tracking-tight">
-              Bestel binnen:{" "}
+            <p className="text-sm text-fg tracking-tight">
+              <strong className="font-semibold">Bestel binnen:</strong>{" "}
               <span className="tabular-nums text-primary">
                 {ms === null ? "--:--:--" : formatCountdown(ms)}
               </span>
             </p>
-            <p className="text-xs text-muted">
-              Verzending: {shippingDay || "morgen"}
+            <p className="text-sm text-fg tracking-tight">
+              <strong className="font-semibold">Verzending:</strong>{" "}
+              {shippingDay || "morgen"}
             </p>
           </>
         )}

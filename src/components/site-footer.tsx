@@ -54,7 +54,7 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-bg/60">
                 <li>Nederland & België</li>
-                <li>1–2 werkdagen</li>
+                <li>1 – 2 werkdagen</li>
                 <li className="whitespace-nowrap">
                   Gratis levering vanaf €100
                 </li>
