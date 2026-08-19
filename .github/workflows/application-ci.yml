@@ -37,7 +37,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run isolated tests
         run: npm test

@@ -39,7 +39,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Require the Codex API secret
         env:
