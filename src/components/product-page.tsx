@@ -15,10 +15,11 @@ import { ProductGallery } from "@/components/product-gallery";
 import { PackSelector } from "@/components/pack-selector";
 import { ProductCard } from "@/components/product-card";
 import { Stars } from "@/components/stars";
-import { useCartStore } from "@/lib/cart-store";
+import { cartSubtotalCents, useCartStore } from "@/lib/cart-store";
 
 export function ProductPage({ product }: { product: Product }) {
   const setSelected = useCartStore((s) => s.setSelected);
+  const cartLines = useCartStore((s) => s.lines);
   const defaultOptionId = getDefaultOptionId(product);
   const selectedOptionId = useCartStore((s) =>
     s.selectedSlug === product.slug ? s.selectedOptionId : defaultOptionId,
@@ -32,10 +33,12 @@ export function ProductPage({ product }: { product: Product }) {
   const compare = compareAtCents(product, selectedOptionId);
   const related = relatedProducts(product.slug, 3);
   const sibling = related.find((p) => p.subcat === product.subcat);
-  const freeShipLeft = Math.max(0, SITE.freeShippingCents - price);
+  const cartSubtotal = cartSubtotalCents(cartLines);
+  const hasCartItems = cartLines.length > 0;
+  const freeShipLeft = Math.max(0, SITE.freeShippingCents - cartSubtotal);
   const freeShipPct = Math.min(
     100,
-    Math.round((price / SITE.freeShippingCents) * 100),
+    Math.round((cartSubtotal / SITE.freeShippingCents) * 100),
   );
 
   return (
@@ -133,7 +136,11 @@ export function ProductPage({ product }: { product: Product }) {
               </div>
 
               <div className="mt-5 rounded-xl border border-border bg-surface p-3">
-                {freeShipLeft > 0 ? (
+                <p className="text-xs text-muted">
+                  Verzendkosten {formatEuro(SITE.shippingCents)} - Gratis vanaf{" "}
+                  {formatEuro(SITE.freeShippingCents)}
+                </p>
+                {hasCartItems && freeShipLeft > 0 ? (
                   <p className="text-xs text-muted">
                     Nog{" "}
                     <strong className="text-fg">
@@ -141,15 +148,11 @@ export function ProductPage({ product }: { product: Product }) {
                     </strong>{" "}
                     tot gratis verzending
                   </p>
-                ) : (
+                ) : hasCartItems ? (
                   <p className="text-xs font-semibold text-success">
-                    Gratis verzending bereikt
+                    Gratis verzending
                   </p>
-                )}
-                <p className="mt-1 text-xs text-muted">
-                  Verzending {formatEuro(SITE.shippingCents)} · gratis vanaf{" "}
-                  {formatEuro(SITE.freeShippingCents)}
-                </p>
+                ) : null}
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
                   <div
                     className="h-full rounded-full bg-primary transition-all duration-300"

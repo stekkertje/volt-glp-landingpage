@@ -15,13 +15,15 @@ function msUntilCutoff(now = new Date()) {
 function nextWorkdayLabel(now = new Date()) {
   const next = new Date(now);
   next.setDate(next.getDate() + 1);
+  const tomorrow = new Date(next);
   while (next.getDay() === 0 || next.getDay() === 6) {
     next.setDate(next.getDate() + 1);
   }
+  if (next.toDateString() === tomorrow.toDateString()) return "morgen";
   return next.toLocaleDateString("nl-NL", {
     weekday: "long",
     day: "numeric",
-    month: "long",
+    month: "short",
   });
 }
 
