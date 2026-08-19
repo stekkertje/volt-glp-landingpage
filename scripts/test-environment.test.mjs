@@ -14,6 +14,7 @@ test("npm test cannot inherit production databases or deployment secrets", () =>
     "ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS",
     "ADMIN_EMAILS",
     "ADMIN_PASSWORD",
+    "ADMIN_PASSWORD_BASE64",
     "ADMIN_SESSION_SECRET",
     "MAILBOX_ADDRESS",
     "MAILBOX_PASSWORD",

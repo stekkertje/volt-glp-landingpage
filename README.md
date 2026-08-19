@@ -29,9 +29,11 @@ aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.m
   `DATABASE_URL_UNPOOLED`) is daarnaast verplicht voor deploymigraties en moet
   de directe/unpooled PostgreSQL-URL met een expliciete niet-lege gebruiker en
   wachtwoord zijn. De migrator gebruikt nooit de OS-gebruiker of `~/.pgpass`
-  als credentialfallback. De runtime mag een pooled
-  `DATABASE_URL` gebruiken; de migrator weigert bekende pooler-URL's omdat zijn
-  session advisory lock één vaste databaseverbinding nodig heeft. Bij Neon
+  als credentialfallback. Gebruik voor de Hostinger/Neon-runtime een directe,
+  unpooled `DATABASE_URL`: de app pint `search_path=public` bij het verbinden en
+  Neons transaction-pooler accepteert die startupoptie niet. De migrator
+  weigert bekende pooler-URL's omdat zijn session advisory lock één vaste
+  databaseverbinding nodig heeft. Bij Neon
   moeten runtime- en migratie-URL aantoonbaar dezelfde branch en database
   aanwijzen; een afzonderlijke migratierol/gebruikersnaam is wel toegestaan.
   Zet de database altijd in het URL-pad (`/...`) zoals `pg` dat werkelijk
@@ -74,7 +76,10 @@ aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.m
   is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
   op of stel vooraf een aparte ordersleutel in.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
-- Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
+- Admin via wachtwoord: zet `ADMIN_SESSION_SECRET` en exact één van
+  `ADMIN_PASSWORD` of `ADMIN_PASSWORD_BASE64`. Gebruik op Hostinger bij voorkeur
+  base64/base64url, zodat speciale tekens transportveilig blijven; het
+  ingevoerde wachtwoord zelf verandert niet.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
 - Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
 

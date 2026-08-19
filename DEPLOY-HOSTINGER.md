@@ -30,11 +30,11 @@ de secretomgeving, nooit in Git of buildlogs.
 NODE_ENV=production
 NPM_CONFIG_INCLUDE=dev
 REQUIRE_DATABASE=1
-DATABASE_URL=<Neon pooled URL>
+DATABASE_URL=<Neon direct/unpooled URL>
 MIGRATION_DATABASE_URL=<Neon direct/unpooled URL>
 BETTER_AUTH_SECRET=<minimaal 32 tekens>
 ORDER_ACCESS_TOKEN_SECRET=<minimaal 32 tekens>
-ADMIN_PASSWORD=<minimaal 16 tekens>
+ADMIN_PASSWORD_BASE64=<base64/base64url van het bestaande wachtwoord>
 ADMIN_SESSION_SECRET=<minimaal 32 tekens>
 VITE_AUTH_ENABLED=false
 VITE_NO_INDEX=1
@@ -44,9 +44,19 @@ TRUST_HOSTINGER_PROXY=1
 ```
 
 `DATABASE_URL` en `MIGRATION_DATABASE_URL` moeten naar dezelfde Neon-branch en
-database wijzen. De migratie-URL moet direct/unpooled zijn en expliciete
-credentials bevatten. Configureer in deze wachtwoord-adminopzet geen
-`ADMIN_EMAILS`.
+database wijzen. Gebruik voor deze Hostinger-runtime bij beide variabelen de
+directe/unpooled Neon-URL. De app pint `search_path=public` bij het openen van de
+verbinding; Neons transaction-pooler accepteert die startupoptie niet. De
+langlopende Hostinger Node-server kan de directe verbinding gebruiken. De
+migratie-URL moet daarnaast expliciete credentials bevatten. Configureer in
+deze wachtwoord-adminopzet geen `ADMIN_EMAILS`.
+
+Gebruik op Hostinger `ADMIN_PASSWORD_BASE64` en laat `ADMIN_PASSWORD` leeg of
+weg. De app decodeert de waarde strikt naar UTF-8; het wachtwoord dat je op
+`/admin` invoert blijft exact hetzelfde. Base64 en base64url (met correcte of
+zonder padding) worden ondersteund. Ongeldige codering, controltekens of beide
+wachtwoordvariabelen tegelijk laten de adminconfiguratie fail-closed mislukken.
+Het gedecodeerde wachtwoord blijft in productie minimaal 16 tekens.
 
 `VITE_NO_INDEX` wordt tijdens de build in de HTML verwerkt. `NO_INDEX` wordt
 tijdens runtime gebruikt voor `X-Robots-Tag`. Beide blijven `1` zolang de site

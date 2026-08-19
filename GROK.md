@@ -198,12 +198,15 @@ npm run typecheck
 - `/checkout` plaatst echte gastorders en contactberichten worden opgeslagen.
 - Betaling en e-mailafhandeling blijven handmatig.
 - `/admin` beheert bestellingen, statussen en contactberichten.
-- Admin gebruikt zelfstandig `ADMIN_EMAILS` of het paar `ADMIN_PASSWORD` + `ADMIN_SESSION_SECRET`.
+- Admin gebruikt zelfstandig `ADMIN_EMAILS` of `ADMIN_SESSION_SECRET` met exact
+  één van `ADMIN_PASSWORD` en de transportveilige `ADMIN_PASSWORD_BASE64`.
 - Productie en deployments vereisen `DATABASE_URL` plus een expliciete directe
   migratie-URL in `MIGRATION_DATABASE_URL` of `DATABASE_URL_UNPOOLED`; bij Neon
   moeten beide URL's dezelfde branch en database aanwijzen. De databasenaam
   staat in het URL-pad; gebruik geen afwijkende `?database=`-query. Runtime en
   migrator gebruiken dezelfde veilige `search_path` met `public` als standaard.
+  De Hostinger/Neon-runtime gebruikt daarom eveneens de directe/unpooled URL;
+  Neons transaction-pooler weigert de vereiste startupoptie voor `search_path`.
   De migratoromgeving bevat geen losse connection-affecting `PG*`-variabelen;
   alle verbindingsinstellingen staan in de directe migratie-URL.
   PGLite is alleen voor dev/test.

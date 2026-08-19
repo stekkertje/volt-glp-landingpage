@@ -41,6 +41,7 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
     "BETTER_AUTH_SECRET",
     "ORDER_ACCESS_TOKEN_SECRET",
     "ADMIN_PASSWORD",
+    "ADMIN_PASSWORD_BASE64",
     "ADMIN_SESSION_SECRET",
     "VITE_AUTH_ENABLED",
     "VITE_NO_INDEX",

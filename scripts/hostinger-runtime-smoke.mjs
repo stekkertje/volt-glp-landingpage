@@ -23,6 +23,7 @@ async function availablePort() {
 
 const port = await availablePort();
 const baseUrl = `http://127.0.0.1:${port}`;
+const testAdminPassword = "ci-admin-password-strong";
 let output = "";
 let browser;
 const serverEnvironment = { ...process.env };
@@ -31,6 +32,9 @@ for (const name of [
   "DATABASE_URL_UNPOOLED",
   "NEON_API_KEY",
   "ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS",
+  "ADMIN_PASSWORD",
+  "ADMIN_PASSWORD_BASE64",
+  "ADMIN_SESSION_SECRET",
   "MAILBOX_ADDRESS",
   "MAILBOX_PASSWORD",
   "MAIL_TEST_RECIPIENT",
@@ -51,7 +55,9 @@ Object.assign(serverEnvironment, {
   TRUST_HOSTINGER_PROXY: "1",
   BETTER_AUTH_SECRET: "ci-better-auth-secret-32-characters-minimum",
   ORDER_ACCESS_TOKEN_SECRET: "ci-order-access-secret-32-characters-minimum",
-  ADMIN_PASSWORD: "ci-admin-password-strong",
+  ADMIN_PASSWORD_BASE64: Buffer.from(testAdminPassword, "utf8").toString(
+    "base64url",
+  ),
   ADMIN_SESSION_SECRET: "ci-admin-session-secret-32-characters-minimum",
   ADMIN_EMAILS: "",
 });
@@ -185,6 +191,14 @@ try {
     }
     await route.continue();
   });
+
+  await page.goto(`${baseUrl}/admin`, { waitUntil: "domcontentloaded" });
+  await page.getByLabel("Beheerwachtwoord").fill(testAdminPassword);
+  await page.getByRole("button", { name: "Inloggen" }).click();
+  await page
+    .getByRole("heading", { name: "Shopbeheer" })
+    .waitFor({ timeout: 10_000 });
+
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page
     .locator("footer")
