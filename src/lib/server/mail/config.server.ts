@@ -47,6 +47,48 @@ function value(
   return undefined;
 }
 
+function invalidEncodedPassword(): MailConfigurationError {
+  return new MailConfigurationError(
+    "SMTP_PASSWORD_BASE64 moet geldige base64 of base64url met UTF-8 bevatten.",
+  );
+}
+
+function decodeSmtpPassword(encoded: string): string {
+  const standard = /^[A-Za-z0-9+/]+={0,2}$/.test(encoded);
+  const urlSafe = /^[A-Za-z0-9_-]+={0,2}$/.test(encoded);
+  if (!standard && !urlSafe) throw invalidEncodedPassword();
+
+  const unpadded = encoded.replace(/=+$/, "");
+  const paddingLength = encoded.length - unpadded.length;
+  if (
+    unpadded.length % 4 === 1 ||
+    (paddingLength > 0 && encoded.length % 4 !== 0)
+  ) {
+    throw invalidEncodedPassword();
+  }
+
+  const normalized = unpadded.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    "=",
+  );
+  const bytes = Buffer.from(padded, "base64");
+  if (bytes.toString("base64").replace(/=+$/, "") !== normalized) {
+    throw invalidEncodedPassword();
+  }
+
+  let password: string;
+  try {
+    password = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw invalidEncodedPassword();
+  }
+  if (!password || /\p{Cc}/u.test(password)) {
+    throw invalidEncodedPassword();
+  }
+  return password;
+}
+
 function email(valueToValidate: string | undefined, label: string): string {
   if (
     !valueToValidate ||
@@ -98,7 +140,14 @@ export function resolveMailConfiguration(
     "SMTP_USERNAME",
     "MAILBOX_ADDRESS",
   );
-  const password = value(environment, "SMTP_PASSWORD", "MAILBOX_PASSWORD");
+  const encodedPassword = value(environment, "SMTP_PASSWORD_BASE64");
+  const rawPassword = value(environment, "SMTP_PASSWORD", "MAILBOX_PASSWORD");
+  // Hostinger may alter raw special characters. During migration the explicit
+  // transport-safe value wins even while the old raw variable still exists.
+  // Invalid encoded input always fails closed instead of falling back to raw.
+  const password = encodedPassword
+    ? decodeSmtpPassword(encodedPassword)
+    : rawPassword;
   const configuredValues = [
     user,
     password,

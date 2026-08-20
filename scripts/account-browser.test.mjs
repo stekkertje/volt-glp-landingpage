@@ -17,6 +17,7 @@ const MAIL_ENVIRONMENT = {
   SMTP_PORT: "465",
   SMTP_SECURE: "true",
   SMTP_USERNAME: "info@example.test",
+  SMTP_PASSWORD_BASE64: "",
   SMTP_PASSWORD: "account-browser-smtp-password",
   MAIL_FROM_ADDRESS: "info@example.test",
   MAIL_FROM_NAME: "VOLT Test",

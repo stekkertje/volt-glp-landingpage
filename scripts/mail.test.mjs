@@ -84,6 +84,54 @@ test("Hostinger SMTP configuration is complete or disabled, never partial", () =
   );
 });
 
+test("Hostinger SMTP password supports strict transport-safe base64", () => {
+  const password = " bestaand%mail-wachtwoord:2026!🔐 ";
+  const standard = Buffer.from(password, "utf8").toString("base64");
+  const urlSafe = Buffer.from(password, "utf8").toString("base64url");
+  const paddedUrlSafe = urlSafe.padEnd(
+    urlSafe.length + ((4 - (urlSafe.length % 4)) % 4),
+    "=",
+  );
+  for (const encoded of [
+    standard,
+    standard.replace(/=+$/, ""),
+    urlSafe,
+    paddedUrlSafe,
+  ]) {
+    const configuration = resolveMailConfiguration({
+      SMTP_USER: "info@example.test",
+      SMTP_PASSWORD_BASE64: encoded,
+    });
+    assert.equal(configuration.password, password, encoded);
+  }
+
+  const transition = resolveMailConfiguration({
+    SMTP_USER: "info@example.test",
+    SMTP_PASSWORD: "mogelijk-door-hostinger-gewijzigd",
+    SMTP_PASSWORD_BASE64: Buffer.from(password, "utf8").toString("base64url"),
+  });
+  assert.equal(transition.password, password);
+
+  for (const encoded of [
+    "geen%base64",
+    "YQ=",
+    "_w",
+    "AA==",
+    Buffer.from("regel\nonderbreking", "utf8").toString("base64"),
+  ]) {
+    assert.throws(
+      () =>
+        resolveMailConfiguration({
+          SMTP_USER: "info@example.test",
+          SMTP_PASSWORD: "geldige-raw-fallback-mag-niet-worden-gebruikt",
+          SMTP_PASSWORD_BASE64: encoded,
+        }),
+      /SMTP_PASSWORD_BASE64/,
+      encoded,
+    );
+  }
+});
+
 test("contact templates are Dutch, escaped and promise 48 hours on workdays", () => {
   const owner = contactOwnerMail({
     name: "<Noor>",

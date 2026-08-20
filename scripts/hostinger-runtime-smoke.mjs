@@ -35,8 +35,19 @@ for (const name of [
   "ADMIN_PASSWORD",
   "ADMIN_PASSWORD_BASE64",
   "ADMIN_SESSION_SECRET",
+  "REQUIRE_MAIL",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_SECURE",
+  "SMTP_USER",
+  "SMTP_USERNAME",
+  "SMTP_PASSWORD_BASE64",
+  "SMTP_PASSWORD",
   "MAILBOX_ADDRESS",
   "MAILBOX_PASSWORD",
+  "MAIL_FROM_ADDRESS",
+  "MAIL_FROM_NAME",
+  "MAIL_OWNER_ADDRESS",
   "MAIL_TEST_RECIPIENT",
   "REQUIRE_ADDRESS_VALIDATION",
   "APICHECK_API_KEY",
@@ -67,6 +78,18 @@ Object.assign(serverEnvironment, {
   ),
   ADMIN_SESSION_SECRET: "ci-admin-session-secret-32-characters-minimum",
   ADMIN_EMAILS: "",
+  REQUIRE_MAIL: "1",
+  SMTP_HOST: "127.0.0.1",
+  SMTP_PORT: "2525",
+  SMTP_SECURE: "false",
+  SMTP_USERNAME: "info@example.test",
+  SMTP_PASSWORD_BASE64: Buffer.from(
+    "ci-smtp-password-not-for-production",
+    "utf8",
+  ).toString("base64url"),
+  MAIL_FROM_ADDRESS: "info@example.test",
+  MAIL_FROM_NAME: "VOLT CI",
+  MAIL_OWNER_ADDRESS: "owner@example.test",
 });
 
 async function assertMissingAddressValidationFailsFast() {
@@ -112,6 +135,48 @@ async function assertMissingAddressValidationFailsFast() {
 }
 
 await assertMissingAddressValidationFailsFast();
+
+async function assertInvalidEncodedMailPasswordFailsFast() {
+  const environment = {
+    ...serverEnvironment,
+    SMTP_PASSWORD_BASE64: "ci-invalid%encoded-secret",
+  };
+  let failureOutput = "";
+  const processUnderTest = spawn(process.execPath, [entryFile.pathname], {
+    detached: true,
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  for (const stream of [processUnderTest.stdout, processUnderTest.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      failureOutput = `${failureOutput}${chunk}`.slice(-20_000);
+    });
+  }
+  const exitCode = await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("Runtime met ongeldig SMTP-geheim bleef actief.")),
+      10_000,
+    );
+    processUnderTest.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+  }).finally(() => {
+    if (processUnderTest.exitCode === null && processUnderTest.pid) {
+      try {
+        process.kill(-processUnderTest.pid, "SIGKILL");
+      } catch {
+        // Het proces was ondertussen al gestopt.
+      }
+    }
+  });
+  assert.notEqual(exitCode, 0, failureOutput);
+  assert.match(failureOutput, /SMTP_PASSWORD_BASE64/);
+  assert.doesNotMatch(failureOutput, /ci-invalid%encoded-secret/);
+}
+
+await assertInvalidEncodedMailPasswordFailsFast();
 const server = spawn(process.execPath, [entryFile.pathname], {
   detached: true,
   env: serverEnvironment,
