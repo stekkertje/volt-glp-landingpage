@@ -768,6 +768,121 @@ test("admin address updates are optimistic, audited and never change paid order 
   );
 });
 
+test("admin mutations preserve PostgreSQL microseconds in optimistic versions", async () => {
+  const sql = await getSql();
+  const addressOrder = await createOrderRecord(orderInput(), { userId: null });
+  await sql.query(
+    `update orders
+     set updated_at = '2026-08-20T12:34:56.123456Z'
+     where id = $1`,
+    [addressOrder.order.id],
+  );
+  const addressBefore = await getAdminOrderRecord(addressOrder.order.id);
+  assert.equal(addressBefore.updatedAt, "2026-08-20T12:34:56.123456Z");
+
+  const addressChanged = await updateOrderAddressRecord({
+    id: addressOrder.order.id,
+    expectedUpdatedAt: addressBefore.updatedAt,
+    name: addressBefore.name,
+    phone: addressBefore.phone ?? undefined,
+    street: "Nieuweweg",
+    houseNumber: "8 B",
+    postcode: "3511 AB",
+    city: "Utrecht",
+    country: "NL",
+  });
+  assert.equal(addressChanged.street, "Nieuweweg");
+
+  await sql.query(
+    `update orders
+     set address_validation_provider = null,
+         address_validation_status = 'unvalidated',
+         address_validation_fingerprint = null,
+         address_validated_at = null,
+         updated_at = '2026-08-20T12:35:56.234567Z'
+     where id = $1`,
+    [addressOrder.order.id],
+  );
+  const validationBefore = await getAdminOrderRecord(addressOrder.order.id);
+  const validationToken = issueAddressValidationToken({
+    address: {
+      street: validationBefore.street,
+      houseNumber: validationBefore.houseNumber,
+      postcode: validationBefore.postcode,
+      city: validationBefore.city,
+      country: validationBefore.country,
+    },
+    provider: "apicheck",
+  });
+  const validated = await updateOrderAddressRecord({
+    id: addressOrder.order.id,
+    expectedUpdatedAt: validationBefore.updatedAt,
+    name: validationBefore.name,
+    phone: validationBefore.phone ?? undefined,
+    street: validationBefore.street,
+    houseNumber: validationBefore.houseNumber,
+    postcode: validationBefore.postcode,
+    city: validationBefore.city,
+    country: validationBefore.country,
+    addressValidationToken: validationToken,
+  });
+  assert.equal(validated.addressValidationStatus, "valid");
+
+  const fulfillmentOrder = await createOrderRecord(orderInput(), {
+    userId: null,
+  });
+  await sql.query(
+    `update orders
+     set updated_at = '2026-08-20T12:36:56.345678Z'
+     where id = $1`,
+    [fulfillmentOrder.order.id],
+  );
+  const fulfillmentBefore = await getAdminOrderRecord(
+    fulfillmentOrder.order.id,
+  );
+  const fulfillmentChanged = await updateOrderFulfillmentRecord({
+    id: fulfillmentOrder.order.id,
+    expectedUpdatedAt: fulfillmentBefore.updatedAt,
+    lines: [{ slug: "semaglutide-4mg-pen", optionId: "default", qty: 2 }],
+  });
+  assert.equal(fulfillmentChanged.fulfillmentLines[0]?.qty, 2);
+
+  const staleOrder = await createOrderRecord(orderInput(), { userId: null });
+  await sql.query(
+    `update orders
+     set updated_at = '2026-08-20T12:37:56.456123Z'
+     where id = $1`,
+    [staleOrder.order.id],
+  );
+  const staleVersion = await getAdminOrderRecord(staleOrder.order.id);
+  await sql.query(
+    `update orders
+     set city = 'Eindhoven',
+         updated_at = '2026-08-20T12:37:56.456789Z'
+     where id = $1`,
+    [staleOrder.order.id],
+  );
+  await assert.rejects(
+    updateOrderAddressRecord({
+      id: staleOrder.order.id,
+      expectedUpdatedAt: staleVersion.updatedAt,
+      name: staleVersion.name,
+      phone: staleVersion.phone ?? undefined,
+      street: staleVersion.street,
+      houseNumber: staleVersion.houseNumber,
+      postcode: staleVersion.postcode,
+      city: "Amsterdam",
+      country: staleVersion.country,
+    }),
+    /intussen gewijzigd|vernieuw/i,
+  );
+  const afterStaleAttempt = await sql.query(
+    `select city from orders where id = $1`,
+    [staleOrder.order.id],
+  );
+  assert.equal(afterStaleAttempt[0]?.city, "Eindhoven");
+});
+
 test("admin fulfillment updates use the catalog without rewriting historical prices", async () => {
   const created = await createOrderRecord(orderInput(), { userId: null });
   const before = await getAdminOrderRecord(created.order.id);

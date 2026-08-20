@@ -152,6 +152,7 @@ type OrderRow = {
   idempotency_viewer_hash: string | null;
   created_at: Date | string;
   updated_at: Date | string;
+  updated_at_version: string;
 };
 
 type ShipmentRow = {
@@ -747,7 +748,11 @@ async function loadOrderById(sql: Sql, id: string): Promise<OrderRow | null> {
       idempotency_payload_hash, idempotency_viewer_hash,
       address_validation_provider, address_validation_status,
       address_validation_fingerprint, address_validated_at,
-      created_at, updated_at
+      created_at, updated_at,
+      to_char(
+        updated_at at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+      ) as updated_at_version
     from orders
     where id = ${id}
     limit 1
@@ -766,7 +771,11 @@ async function loadOrderByNumber(
       idempotency_payload_hash, idempotency_viewer_hash,
       address_validation_provider, address_validation_status,
       address_validation_fingerprint, address_validated_at,
-      created_at, updated_at
+      created_at, updated_at,
+      to_char(
+        updated_at at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+      ) as updated_at_version
     from orders
     where order_number = ${orderNumber.trim().toUpperCase()}
     limit 1
@@ -816,6 +825,7 @@ async function loadAdminOrder(sql: Sql, row: OrderRow): Promise<AdminOrder> {
   ]);
   return {
     ...order,
+    updatedAt: row.updated_at_version,
     fulfillmentLines,
     addressValidationStatus: row.address_validation_status,
     shipment: shipment
@@ -1428,8 +1438,8 @@ const PHYSICAL_ADDRESS_FIELDS = [
   "country",
 ] as const;
 
-function sameVersion(actual: Date | string, expected: string): boolean {
-  return asIsoString(actual) === new Date(expected).toISOString();
+function sameVersion(actual: string, expected: string): boolean {
+  return actual === expected;
 }
 
 export async function updateOrderAddressRecord(
@@ -1444,7 +1454,11 @@ export async function updateOrderAddressRecord(
         idempotency_payload_hash, idempotency_viewer_hash,
         address_validation_provider, address_validation_status,
         address_validation_fingerprint, address_validated_at,
-        created_at, updated_at
+        created_at, updated_at,
+        to_char(
+          updated_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        ) as updated_at_version
       from orders
       where id = ${input.id}
       limit 1
@@ -1452,7 +1466,7 @@ export async function updateOrderAddressRecord(
     `;
     const current = rows[0];
     if (!current) throw new OrderAccessError();
-    if (!sameVersion(current.updated_at, input.expectedUpdatedAt)) {
+    if (!sameVersion(current.updated_at_version, input.expectedUpdatedAt)) {
       throw new OrderUpdateConflictError();
     }
 
@@ -1499,7 +1513,8 @@ export async function updateOrderAddressRecord(
             address_validation_fingerprint = ${addressValidation.fingerprint},
             address_validated_at = ${addressValidation.validatedAt.toISOString()},
             updated_at = now()
-        where id = ${input.id} and updated_at = ${input.expectedUpdatedAt}
+        where id = ${input.id}
+          and updated_at = ${input.expectedUpdatedAt}::timestamptz
         returning updated_at
       `;
       if (!validated[0]) throw new OrderUpdateConflictError();
@@ -1547,7 +1562,8 @@ export async function updateOrderAddressRecord(
           address_validation_fingerprint = ${nextValidationFingerprint},
           address_validated_at = ${nextValidatedAt},
           updated_at = now()
-      where id = ${input.id} and updated_at = ${input.expectedUpdatedAt}
+      where id = ${input.id}
+        and updated_at = ${input.expectedUpdatedAt}::timestamptz
       returning updated_at
     `;
     if (!updated[0]) throw new OrderUpdateConflictError();
@@ -1635,7 +1651,11 @@ export async function updateOrderFulfillmentRecord(
         idempotency_payload_hash, idempotency_viewer_hash,
         address_validation_provider, address_validation_status,
         address_validation_fingerprint, address_validated_at,
-        created_at, updated_at
+        created_at, updated_at,
+        to_char(
+          updated_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        ) as updated_at_version
       from orders
       where id = ${input.id}
       limit 1
@@ -1643,7 +1663,7 @@ export async function updateOrderFulfillmentRecord(
     `;
     const current = rows[0];
     if (!current) throw new OrderAccessError();
-    if (!sameVersion(current.updated_at, input.expectedUpdatedAt)) {
+    if (!sameVersion(current.updated_at_version, input.expectedUpdatedAt)) {
       throw new OrderUpdateConflictError();
     }
     const currentLines = await loadFulfillmentLines(sql, input.id);
@@ -1709,7 +1729,8 @@ export async function updateOrderFulfillmentRecord(
     const updated = await sql<{ updated_at: Date | string }>`
       update orders
       set updated_at = now()
-      where id = ${input.id} and updated_at = ${input.expectedUpdatedAt}
+      where id = ${input.id}
+        and updated_at = ${input.expectedUpdatedAt}::timestamptz
       returning updated_at
     `;
     if (!updated[0]) throw new OrderUpdateConflictError();
