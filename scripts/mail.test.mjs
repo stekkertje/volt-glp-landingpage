@@ -89,7 +89,7 @@ test("contact templates are Dutch, escaped and promise 48 hours on workdays", ()
   const customer = contactCustomerReceiptMail({ name: "<Noor>" });
 
   assert.match(owner.textBody, /Nieuw contactbericht/);
-  assert.doesNotMatch(owner.htmlBody, /<script>/);
+  assert.equal(owner.htmlBody.toLowerCase().includes("<script>"), false);
   assert.match(owner.htmlBody, /&lt;script&gt;/);
   assert.match(customer.textBody, /binnen 48 uur op werkdagen/);
   assert.match(customer.htmlBody, /binnen 48 uur op werkdagen/);
@@ -141,7 +141,7 @@ test("order templates escape customer data and preserve the paid amount", () => 
   });
 
   for (const mail of [customer, owner, status, address, products]) {
-    assert.doesNotMatch(mail.htmlBody, /<script>/);
+    assert.equal(mail.htmlBody.toLowerCase().includes("<script>"), false);
     assert.doesNotMatch(mail.htmlBody, /Beste <Noor>/);
   }
   assert.match(customer.textBody, /€\s*169,00/);
