@@ -46,6 +46,10 @@ Dit logboek bevat alleen keuzes die toekomstig beheer sturen. Tijdelijke uitvoer
 ## 2026-08-20 · Klantaccounts en gastorderkoppeling
 
 - Klantaccounts gebruiken Better Auth met e-mailverificatie, wachtwoordherstel en een eigen bestelgeschiedenis.
+- Productie gebruikt standaard e-mail/wachtwoord. Google/X OAuth is alleen
+  actief na een expliciete publieke flag én volledige eigen clientconfiguratie;
+  ontbrekende productiecredentials falen gesloten. De ingebouwde brokerclient
+  blijft beperkt tot niet-productiepreviewhosts.
 - Checkout blijft voor iedere bestelling een volledig actueel bezorgadres vragen, ook wanneer de klant is ingelogd.
 - De handmatige tijdelijke herstelcode is verwijderd. Iedere zojuist geplaatste
   gastorder blijft 72 uur onafhankelijk bereikbaar via een eigen host-only

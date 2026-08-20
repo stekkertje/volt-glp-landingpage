@@ -13,6 +13,7 @@ import {
 } from "./integrations/myparcel.server";
 import { createSqlShipmentCreationRepository } from "./integrations/shipment-repository.server";
 import { getAdminOrderRecord, type AdminOrder } from "./orders.server";
+import { labelClaimIsActive } from "./shipment-claim-policy";
 
 type MyParcelClient = ReturnType<typeof createMyParcelClientFromEnv>;
 
@@ -44,8 +45,6 @@ type ShippingRow = {
   label_status: "not_requested" | "requested" | "ready" | "failed";
   label_requested_at: Date | string | null;
 };
-
-const LABEL_CLAIM_TTL_MS = 2 * 60 * 1_000;
 
 export class ShipmentActionError extends Error {
   readonly status: number;
@@ -275,9 +274,7 @@ export async function requestMyParcelLabelRecord(
     const lockedShipment = await loadShippingRow(sql, orderId, true);
     const activeClaim =
       lockedShipment.label_status === "requested" &&
-      lockedShipment.label_requested_at !== null &&
-      new Date(lockedShipment.label_requested_at).getTime() >
-        claimedAt.getTime() - LABEL_CLAIM_TTL_MS;
+      labelClaimIsActive(lockedShipment.label_requested_at, claimedAt);
     if (activeClaim) {
       throw new ShipmentActionError(
         "Het MyParcel-label wordt al opgevraagd. Probeer het zo opnieuw.",

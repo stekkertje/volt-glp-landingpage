@@ -84,6 +84,11 @@ aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.m
   is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
   op of stel vooraf een aparte ordersleutel in.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
+- Google/X OAuth is in productie expliciet opt-in via
+  `VITE_OAUTH_ENABLED=true` plus beide server-only waarden
+  `GROK_AUTH_CLIENT_ID` en `GROK_AUTH_CLIENT_SECRET`. Zonder die configuratie
+  gebruikt de shop alleen e-mail/wachtwoord; de Grok-previewclient is nooit een
+  fallback voor het publieke domein.
 - Admin via wachtwoord: zet `ADMIN_SESSION_SECRET` en exact één van
   `ADMIN_PASSWORD` of `ADMIN_PASSWORD_BASE64`. Gebruik op Hostinger bij voorkeur
   base64/base64url, zodat speciale tekens transportveilig blijven; het

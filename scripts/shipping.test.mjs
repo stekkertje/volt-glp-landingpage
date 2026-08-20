@@ -15,6 +15,7 @@ let requestMyParcelLabelRecord;
 let refreshMyParcelTrackingRecord;
 let updateOrderAddressRecord;
 let updateOrderFulfillmentRecord;
+let updateOrderStatusRecord;
 let ShipmentActionError;
 let IntegrationError;
 let ORDER_SERVER_ERROR_POLICY;
@@ -64,6 +65,7 @@ before(async () => {
     getOrderRecordForViewer,
     updateOrderAddressRecord,
     updateOrderFulfillmentRecord,
+    updateOrderStatusRecord,
   } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
   ({
     createMyParcelConceptRecord,
@@ -597,6 +599,150 @@ test("labelclaim blokkeert dubbele tabs en fulfillment tijdens providercall", as
     [created.order.id],
   );
   assert.deepEqual(rows, [{ label_status: "ready" }]);
+});
+
+test("actieve labelclaim blokkeert cancelled en shipped zonder netwerk-lock", async () => {
+  for (const scenario of [
+    { current: "paid", next: "cancelled" },
+    { current: "packed", next: "shipped" },
+  ]) {
+    const created = await createOrderRecord(orderInput());
+    const sql = await getSql();
+    await sql.query("update orders set status = $1 where id = $2", [
+      scenario.current,
+      created.order.id,
+    ]);
+    await createMyParcelConceptRecord(created.order.id, {
+      client: {
+        async findByReference() {
+          return [];
+        },
+        async createConceptShipment(draft) {
+          return {
+            id: scenario.next === "shipped" ? "881002" : "881001",
+            referenceIdentifier: draft.referenceIdentifier,
+            statusCode: 1,
+            trackingStatus: "concept",
+            carrierId: 1,
+            barcode: null,
+          };
+        },
+      },
+    });
+
+    let releaseLabel;
+    let signalLabelStarted;
+    const labelStarted = new Promise((resolve) => {
+      signalLabelStarted = resolve;
+    });
+    const waitForLabel = new Promise((resolve) => {
+      releaseLabel = resolve;
+    });
+    const labelRequest = requestMyParcelLabelRecord(created.order.id, {
+      client: {
+        async requestLabelLink(id) {
+          signalLabelStarted();
+          await waitForLabel;
+          return {
+            shipmentId: id,
+            downloadUrl: "https://labels.example.test/status-race-a6.pdf",
+          };
+        },
+      },
+    });
+    await labelStarted;
+
+    const statusOutcome = Promise.race([
+      updateOrderStatusRecord(
+        created.order.id,
+        scenario.current,
+        scenario.next,
+      ).then(
+        () => ({ kind: "resolved" }),
+        (error) => ({ kind: "rejected", error }),
+      ),
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ kind: "timeout" }), 500),
+      ),
+    ]);
+    const outcome = await statusOutcome;
+    assert.equal(outcome.kind, "rejected", scenario.next);
+    assert.match(outcome.error.message, /intussen gewijzigd/i, scenario.next);
+
+    releaseLabel();
+    await labelRequest;
+    const updated = await updateOrderStatusRecord(
+      created.order.id,
+      scenario.current,
+      scenario.next,
+    );
+    assert.equal(updated.status, scenario.next);
+  }
+});
+
+test("statuswijziging invalideert een verlopen labelclaim vóór late providerresponse", async () => {
+  const created = await createOrderRecord(orderInput());
+  const sql = await getSql();
+  await sql.query("update orders set status = 'paid' where id = $1", [
+    created.order.id,
+  ]);
+  await createMyParcelConceptRecord(created.order.id, {
+    client: {
+      async findByReference() {
+        return [];
+      },
+      async createConceptShipment(draft) {
+        return {
+          id: "881003",
+          referenceIdentifier: draft.referenceIdentifier,
+          statusCode: 1,
+          trackingStatus: "concept",
+          carrierId: 1,
+          barcode: null,
+        };
+      },
+    },
+  });
+
+  let releaseLabel;
+  let signalLabelStarted;
+  const labelStarted = new Promise((resolve) => {
+    signalLabelStarted = resolve;
+  });
+  const waitForLabel = new Promise((resolve) => {
+    releaseLabel = resolve;
+  });
+  const staleClaimTime = new Date(Date.now() - 3 * 60 * 1_000);
+  const labelRequest = requestMyParcelLabelRecord(created.order.id, {
+    now: () => staleClaimTime,
+    client: {
+      async requestLabelLink(id) {
+        signalLabelStarted();
+        await waitForLabel;
+        return {
+          shipmentId: id,
+          downloadUrl: "https://labels.example.test/late-stale-a6.pdf",
+        };
+      },
+    },
+  });
+  await labelStarted;
+
+  const cancelled = await updateOrderStatusRecord(
+    created.order.id,
+    "paid",
+    "cancelled",
+  );
+  assert.equal(cancelled.status, "cancelled");
+  releaseLabel();
+  await assert.rejects(labelRequest, /nieuwere actie vervangen/i);
+  const rows = await sql.query(
+    `select label_status, label_requested_at
+     from order_shipments where order_id = $1`,
+    [created.order.id],
+  );
+  assert.equal(rows[0].label_status, "failed");
+  assert.equal(rows[0].label_requested_at, null);
 });
 
 test("late fout van verlopen labelclaim overschrijft nieuw ready-label niet", async () => {

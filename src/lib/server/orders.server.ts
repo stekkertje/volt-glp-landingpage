@@ -7,6 +7,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { getSql, withSqlTransaction, type Sql } from "@/lib/db";
+import { labelClaimIsActive } from "@/lib/server/shipment-claim-policy";
 import { canonicalCheckoutPayload } from "@/lib/checkout-idempotency";
 import { getOption, getProduct } from "@/lib/product";
 import {
@@ -1329,6 +1330,48 @@ export async function updateOrderStatusRecord(
     throw new OrderStatusTransitionError();
   }
   return withSqlTransaction(async (sql) => {
+    const currentRows = await sql<{ status: OrderStatus }>`
+      select status
+      from orders
+      where id = ${id}
+      limit 1
+      for update
+    `;
+    const current = currentRows[0];
+    if (!current) throw new OrderAccessError();
+    if (current.status !== expectedStatus) {
+      throw new OrderStatusConflictError();
+    }
+
+    // Label requests claim order -> shipment in this same order. An active
+    // external request therefore makes the status mutation fail quickly after
+    // the short claim transaction, without holding a DB lock during network
+    // I/O. A stale claim is invalidated so its late response cannot win its CAS.
+    const shipmentRows = await sql<{
+      id: string;
+      label_status: string;
+      label_requested_at: Date | string | null;
+    }>`
+      select id, label_status, label_requested_at
+      from order_shipments
+      where order_id = ${id}
+      order by created_at desc, id desc
+      limit 1
+      for update
+    `;
+    const shipment = shipmentRows[0];
+    if (shipment?.label_status === "requested") {
+      if (labelClaimIsActive(shipment.label_requested_at)) {
+        throw new OrderStatusConflictError();
+      }
+      await sql`
+        update order_shipments
+        set label_status = 'failed', label_requested_at = null,
+            updated_at = now()
+        where id = ${shipment.id} and label_status = 'requested'
+      `;
+    }
+
     const updated = await sql<{ id: string }>`
       update orders
       set status = ${status}, updated_at = now()

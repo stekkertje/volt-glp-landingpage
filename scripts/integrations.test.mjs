@@ -6,6 +6,7 @@ import { createServer } from "vite";
 let vite;
 let createAddressValidationService;
 let addressValidationFingerprint;
+let resolveAddressValidationConfiguration;
 let createIdempotentShipmentService;
 let createMyParcelClient;
 let IntegrationError;
@@ -30,6 +31,9 @@ before(async () => {
     await vite.ssrLoadModule(
       "/src/lib/server/integrations/address-validation.server.ts",
     ));
+  ({ resolveAddressValidationConfiguration } = await vite.ssrLoadModule(
+    "/src/lib/server/integrations/address-validation-config.server.ts",
+  ));
   ({
     createIdempotentShipmentService,
     createMyParcelClient,
@@ -90,6 +94,34 @@ test("Nederlandse adressen gebruiken ApiCheck zonder sleutel in URL of body", as
     "apicheck-test-secret",
   );
   assert.equal(seen.init.body, undefined);
+});
+
+test("verplichte productie-adresvalidatie faalt vroeg en zonder sleutelwaarden", () => {
+  const partialSecret = "apicheck-secret-mag-nooit-in-fouttekst";
+  assert.throws(
+    () =>
+      resolveAddressValidationConfiguration({
+        NODE_ENV: "production",
+        REQUIRE_DATABASE: "1",
+        APICHECK_API_KEY: partialSecret,
+      }),
+    (error) => {
+      assert.match(error.message, /GOOGLE_ADDRESS_VALIDATION_API_KEY/);
+      assert.doesNotMatch(error.message, new RegExp(partialSecret));
+      return true;
+    },
+  );
+  assert.deepEqual(
+    resolveAddressValidationConfiguration({
+      REQUIRE_ADDRESS_VALIDATION: "1",
+      APICHECK_API_KEY: "apicheck-configured",
+      GOOGLE_ADDRESS_VALIDATION_API_KEY: "google-configured",
+    }),
+    {
+      apiCheckApiKey: "apicheck-configured",
+      googleApiKey: "google-configured",
+    },
+  );
 });
 
 test("adresfingerprint is stabiel over onbetekenende schrijfverschillen", () => {

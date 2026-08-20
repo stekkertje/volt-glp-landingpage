@@ -862,6 +862,10 @@ test("homepage keeps only the menu sticky and has no footer overscroll gap", asy
     const header = page.locator("header").first();
     assert.equal(Math.round((await marquee.boundingBox()).y), 0);
     assert.equal(Math.round((await header.boundingBox()).y), 36);
+    assert.equal(
+      await header.evaluate((element) => getComputedStyle(element).position),
+      "sticky",
+    );
 
     const heroReviews = page.locator('a[href="#beoordelingen"]').first();
     assert.doesNotMatch(await heroReviews.innerText(), /·/);
@@ -884,7 +888,6 @@ test("homepage keeps only the menu sticky and has no footer overscroll gap", asy
     await page.evaluate(() => window.scrollTo(0, 500));
     await page.waitForFunction(() => window.scrollY >= 400);
     assert.ok((await marquee.boundingBox()).y < 0);
-    assert.equal(Math.round((await header.boundingBox()).y), 0);
 
     await page.evaluate(() =>
       window.scrollTo(0, document.documentElement.scrollHeight),
@@ -907,6 +910,45 @@ test("homepage keeps only the menu sticky and has no footer overscroll gap", asy
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForFunction(() => window.scrollY === 0);
     assert.equal(Math.round((await marquee.boundingBox()).y), 0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the header hides down and returns up or after scroll idle", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const header = page.locator("header").first();
+    const account = header.getByRole("link", { name: "Mijn account" });
+    await account.waitFor();
+
+    await page.evaluate(() => window.scrollTo(0, 700));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "true",
+    );
+    assert.match(await header.getAttribute("class"), /-translate-y-full/);
+
+    await page.evaluate(() => window.scrollBy(0, -120));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "false",
+    );
+    assert.doesNotMatch(
+      await header.getAttribute("class"),
+      /-translate-y-full/,
+    );
+
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "true",
+    );
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "false",
+      undefined,
+      { timeout: 1_500 },
+    );
+    await account.focus();
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
   } finally {
     await context.close();
   }
@@ -1067,8 +1109,18 @@ test("the mobile menu closes with Escape and navigates to a compound", async () 
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    const menu = page.getByRole("button", { name: "Menu openen" });
+    const header = page.locator("header").first();
+    const menu = page.locator('button[aria-controls="mobile-nav"]');
+    assert.equal(await menu.getAttribute("aria-label"), "Menu openen");
     await menu.click();
+    assert.equal(await menu.getAttribute("aria-expanded"), "true");
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
+    await page
+      .getByRole("navigation", { name: "Mobiel menu" })
+      .waitFor({ state: "visible" });
+    await page.waitForTimeout(350);
+    assert.equal(await menu.getAttribute("aria-expanded"), "true");
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
     await page.keyboard.press("Escape");
     assert.equal(await menu.getAttribute("aria-expanded"), "false");
 

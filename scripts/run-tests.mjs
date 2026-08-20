@@ -11,6 +11,9 @@ const protectedNames = [
   "NEON_API_KEY",
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
+  "GROK_AUTH_ISSUER",
+  "GROK_AUTH_CLIENT_ID",
+  "GROK_AUTH_CLIENT_SECRET",
   "ADDRESS_VALIDATION_TOKEN_SECRET",
   "ORDER_ACCESS_TOKEN_SECRET",
   "ADDRESS_VALIDATION_TOKEN_SECRET",
@@ -32,6 +35,7 @@ const protectedNames = [
   "MAIL_FROM_ADDRESS",
   "MAIL_FROM_NAME",
   "MAIL_OWNER_ADDRESS",
+  "REQUIRE_ADDRESS_VALIDATION",
   "APICHECK_API_KEY",
   "APICHECK_BASE_URL",
   "GOOGLE_ADDRESS_VALIDATION_API_KEY",
@@ -46,6 +50,7 @@ const protectedNames = [
   "VITE_NO_INDEX",
   "VITE_PUBLIC_HOSTNAME",
   "VITE_AUTH_ENABLED",
+  "VITE_OAUTH_ENABLED",
   "VITE_EMAIL_PASSWORD_AUTH_ENABLED",
   "TRUST_HOSTINGER_PROXY",
 ];
@@ -63,6 +68,7 @@ Object.assign(environment, {
 const serialTestFiles = new Set([
   "scripts/account-browser.test.mjs",
   "scripts/auth-disabled-deployment.test.mjs",
+  "scripts/oauth-capability.test.mjs",
   "scripts/production-runtime.test.mjs",
   "scripts/security-rpc.test.mjs",
   "scripts/storefront.test.mjs",

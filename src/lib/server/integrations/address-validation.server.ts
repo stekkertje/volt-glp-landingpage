@@ -6,6 +6,7 @@ import {
   readJsonObject,
   type HttpTransport,
 } from "./integration-error";
+import { resolveAddressValidationConfiguration } from "./address-validation-config.server";
 
 export const EU_COUNTRY_CODES = [
   "AT",
@@ -515,10 +516,11 @@ export function createAddressValidationServiceFromEnv(
     "apiCheckApiKey" | "googleApiKey"
   > = {},
 ) {
+  const configuration = resolveAddressValidationConfiguration(process.env);
   return createAddressValidationService({
     ...overrides,
-    apiCheckApiKey: process.env.APICHECK_API_KEY,
-    googleApiKey: process.env.GOOGLE_ADDRESS_VALIDATION_API_KEY,
+    apiCheckApiKey: configuration.apiCheckApiKey,
+    googleApiKey: configuration.googleApiKey,
     apiCheckBaseUrl: overrides.apiCheckBaseUrl ?? process.env.APICHECK_BASE_URL,
     googleBaseUrl:
       overrides.googleBaseUrl ?? process.env.GOOGLE_ADDRESS_VALIDATION_BASE_URL,

@@ -176,6 +176,7 @@ before(async () => {
         APICHECK_API_KEY: "auth-disabled-test-key",
         APICHECK_BASE_URL: addressApiBaseUrl,
         VITE_AUTH_ENABLED: "false",
+        VITE_OAUTH_ENABLED: "false",
         ADMIN_EMAILS: "niet-gebruikt@example.test",
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
         ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,

@@ -16,13 +16,27 @@ const LINKS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const lines = useCartStore((s) => s.lines);
   const count = cartCount(lines);
   const openCart = useCartStore((s) => s.openCart);
 
   const chromeRef = useRef<HTMLElement | null>(null);
+  const lastY = useRef(0);
+  const hiddenRef = useRef(false);
+  const openRef = useRef(false);
+  const ignoreScrollUntil = useRef(0);
+  const idleTimer = useRef<number | null>(null);
+  const ticking = useRef(false);
+
+  openRef.current = open;
+  hiddenRef.current = hidden;
 
   const setMenuOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    hiddenRef.current = false;
+    setHidden(false);
+    ignoreScrollUntil.current = Date.now() + 500;
+    lastY.current = window.scrollY || document.documentElement.scrollTop || 0;
     setOpen(next);
   };
 
@@ -37,24 +51,93 @@ export function SiteHeader() {
       if (root.contains(e.target as Node)) return;
       setMenuOpen(false);
     };
-    const onScroll = () => setMenuOpen(false);
     document.addEventListener("keydown", onKey);
     // bubble phase so the hamburger toggle click finishes first
     document.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("scroll", onScroll);
     };
   }, [open]);
+
+  useEffect(() => {
+    lastY.current = window.scrollY || document.documentElement.scrollTop || 0;
+
+    const setHiddenSafe = (next: boolean) => {
+      if (hiddenRef.current === next) return;
+      hiddenRef.current = next;
+      setHidden(next);
+    };
+
+    const scheduleShow = () => {
+      if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+      idleTimer.current = window.setTimeout(() => setHiddenSafe(false), 280);
+    };
+
+    const applyScroll = () => {
+      ticking.current = false;
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      const delta = y - lastY.current;
+
+      if (openRef.current) {
+        if (Date.now() < ignoreScrollUntil.current || Math.abs(delta) < 24) {
+          lastY.current = y;
+          return;
+        }
+        setOpen(false);
+        setHiddenSafe(false);
+        lastY.current = y;
+        return;
+      }
+
+      if (y < 16) {
+        setHiddenSafe(false);
+        lastY.current = y;
+        scheduleShow();
+        return;
+      }
+      if (Math.abs(delta) < 4) {
+        scheduleShow();
+        return;
+      }
+
+      setHiddenSafe(delta > 0);
+      lastY.current = y;
+      scheduleShow();
+    };
+
+    const onScroll = () => {
+      if (ticking.current) return;
+      ticking.current = true;
+      window.requestAnimationFrame(applyScroll);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    };
+  }, []);
+
+  const revealHeader = () => {
+    if (!hiddenRef.current) return;
+    hiddenRef.current = false;
+    setHidden(false);
+  };
 
   return (
     <>
       <AnnounceBar />
       <header
         ref={chromeRef}
-        className="sticky top-0 z-50 border-b border-border bg-bg/95 backdrop-blur-xl"
+        data-scroll-hidden={hidden && !open ? "true" : "false"}
+        onFocusCapture={revealHeader}
+        className={cn(
+          "sticky top-0 z-50 border-b border-border bg-bg/95 backdrop-blur-xl transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none",
+          hidden && !open
+            ? "-translate-y-full pointer-events-none"
+            : "translate-y-0",
+        )}
       >
         <div className="relative">
           <div className="container-max section-pad flex h-16 items-center justify-between gap-4 md:h-[4.25rem]">

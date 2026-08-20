@@ -151,6 +151,9 @@ before(async () => {
     NODE_ENV: "test",
     npm_lifecycle_event: "test",
     VITE_AUTH_ENABLED: "true",
+    VITE_OAUTH_ENABLED: "true",
+    GROK_AUTH_CLIENT_ID: "account-browser-oauth-client",
+    GROK_AUTH_CLIENT_SECRET: "account-browser-oauth-client-secret",
     BETTER_AUTH_URL: "",
     BETTER_AUTH_SECRET: AUTH_SECRET,
     ORDER_ACCESS_TOKEN_SECRET: ACCESS_SECRET,
@@ -235,6 +238,47 @@ test("klant doorloopt registratie, herstel, login, claimlink en mobiel account",
         },
       });
     }, email);
+
+    let resolveOAuthRequest;
+    const oauthRequest = new Promise((resolve) => {
+      resolveOAuthRequest = resolve;
+    });
+    await page.route("**/api/auth/sign-in/oauth2", async (route) => {
+      const serverResponse = await route.fetch();
+      resolveOAuthRequest({
+        request: route.request().postDataJSON(),
+        status: serverResponse.status(),
+        response: await serverResponse.json(),
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ url: null, redirect: false }),
+      });
+    });
+    await page.goto(`${baseUrl}/login?redirect=/admin`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByRole("button", { name: "Doorgaan met Google" }).waitFor();
+    await page.getByRole("button", { name: "Doorgaan met X" }).waitFor();
+    await page.getByLabel("E-mailadres").waitFor();
+    await page.getByRole("button", { name: "Doorgaan met Google" }).click();
+    const configuredOAuth = await oauthRequest;
+    assert.deepEqual(configuredOAuth.request, {
+      providerId: "grok-google",
+      callbackURL: "/admin",
+      errorCallbackURL: "/login?redirect=%2Fadmin",
+      disableRedirect: true,
+    });
+    assert.equal(configuredOAuth.status, 200);
+    assert.equal(configuredOAuth.response.redirect, false);
+    const configuredOAuthUrl = new URL(configuredOAuth.response.url);
+    assert.equal(
+      configuredOAuthUrl.searchParams.get("client_id"),
+      "account-browser-oauth-client",
+    );
+    assert.equal(configuredOAuthUrl.searchParams.get("idp"), "google");
+    await page.unroute("**/api/auth/sign-in/oauth2");
 
     await page.goto(`${baseUrl}/registreren`, { waitUntil: "networkidle" });
     await page.getByLabel("Naam").fill("Mobiele Accountklant");

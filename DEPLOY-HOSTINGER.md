@@ -39,6 +39,7 @@ ORDER_ACCESS_TOKEN_SECRET=<minimaal 32 tekens>
 ADMIN_PASSWORD_BASE64=<base64/base64url van het bestaande wachtwoord>
 ADMIN_SESSION_SECRET=<minimaal 32 tekens>
 VITE_AUTH_ENABLED=true
+VITE_OAUTH_ENABLED=false
 VITE_NO_INDEX=1
 NO_INDEX=1
 VITE_PUBLIC_HOSTNAME=afslank-injecties.nl
@@ -51,6 +52,7 @@ SMTP_PASSWORD=<Hostinger-mailboxwachtwoord>
 MAIL_FROM_ADDRESS=info@afslank-injecties.nl
 MAIL_FROM_NAME=VOLT
 MAIL_OWNER_ADDRESS=info@afslank-injecties.nl
+REQUIRE_ADDRESS_VALIDATION=1
 APICHECK_API_KEY=<server-only sleutel>
 GOOGLE_ADDRESS_VALIDATION_API_KEY=<server-only sleutel>
 MYPARCEL_API_KEY=<ruwe server-only sleutel; de app maakt zelf Basic base64-auth>
@@ -65,6 +67,15 @@ migratie-URL moet daarnaast expliciete credentials bevatten. Configureer in
 deze wachtwoord-adminopzet geen `ADMIN_EMAILS`. Klantaccounts gebruiken
 e-mail/wachtwoord via Better Auth. De wachtwoord-admin blijft daarvan
 gescheiden.
+
+Google/X OAuth staat voor deze Hostinger-opzet standaard uit met
+`VITE_OAUTH_ENABLED=false`; de shop gebruikt e-mail/wachtwoord. Zet OAuth alleen
+bewust op `true` wanneer voor `https://afslank-injecties.nl` een eigen broker-
+client bestaat en voeg dan beide server-only secrets
+`GROK_AUTH_CLIENT_ID` en `GROK_AUTH_CLIENT_SECRET` toe. Een productiebuild met
+OAuth aan en een ontbrekende credential stopt fail-closed. De ingebouwde
+previewclient is uitsluitend geldig voor Grok-previewhosts en wordt nooit als
+productiefallback gebruikt.
 
 Gebruik op Hostinger `ADMIN_PASSWORD_BASE64` en laat `ADMIN_PASSWORD` leeg of
 weg. De app decodeert de waarde strikt naar UTF-8; het wachtwoord dat je op

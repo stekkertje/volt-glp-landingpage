@@ -1,13 +1,20 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   AuthMessage,
   AuthShell,
   authInputClass,
 } from "@/components/account/auth-shell";
 import { Button } from "@/components/ui/button";
-import { authClient, authEnabled } from "@/lib/auth/client";
+import {
+  authClient,
+  authEnabled,
+  GROK_PROVIDERS,
+  oauthEnabled,
+  oauthEnabledForCurrentBrowser,
+  signIn,
+} from "@/lib/auth/client";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (
@@ -60,7 +67,32 @@ function LoginPage() {
     verificationError,
   } = Route.useSearch();
   const [submitting, setSubmitting] = useState(false);
+  const [providerSubmitting, setProviderSubmitting] = useState<string | null>(
+    null,
+  );
+  const [showOAuth, setShowOAuth] = useState(oauthEnabled);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setShowOAuth(oauthEnabledForCurrentBrowser());
+  }, []);
+
+  const onProviderSignIn = async (providerId: string, label: string) => {
+    setProviderSubmitting(providerId);
+    setError("");
+    try {
+      await signIn(providerId, {
+        callbackURL: redirectTo,
+        errorCallbackURL: `/login?redirect=${encodeURIComponent(redirectTo)}`,
+      });
+    } catch {
+      setError(
+        `Inloggen via ${label} lukt nu niet. Probeer het later opnieuw.`,
+      );
+    } finally {
+      setProviderSubmitting(null);
+    }
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -114,6 +146,37 @@ function LoginPage() {
       )}
       {error && <AuthMessage tone="error">{error}</AuthMessage>}
 
+      {showOAuth && GROK_PROVIDERS.length > 0 && (
+        <>
+          <div className="space-y-2">
+            {GROK_PROVIDERS.map((provider) => (
+              <Button
+                key={provider.providerId}
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={submitting || providerSubmitting !== null}
+                onClick={() =>
+                  void onProviderSignIn(provider.providerId, provider.label)
+                }
+              >
+                {providerSubmitting === provider.providerId && (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                )}
+                {providerSubmitting === provider.providerId
+                  ? `Verbinden met ${provider.label}…`
+                  : `Doorgaan met ${provider.label}`}
+              </Button>
+            ))}
+          </div>
+          <div className="my-5 flex items-center gap-3 text-xs font-semibold text-dim">
+            <span className="h-px flex-1 bg-border" aria-hidden />
+            <span>of met e-mailadres</span>
+            <span className="h-px flex-1 bg-border" aria-hidden />
+          </div>
+        </>
+      )}
+
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block space-y-1.5">
           <span className="text-xs font-semibold">E-mailadres</span>
@@ -143,7 +206,11 @@ function LoginPage() {
             Wachtwoord vergeten?
           </Link>
         </div>
-        <Button type="submit" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={submitting || providerSubmitting !== null}
+        >
           {submitting && (
             <Loader2 className="size-4 animate-spin" aria-hidden />
           )}
