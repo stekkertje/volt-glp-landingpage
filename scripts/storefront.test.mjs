@@ -427,6 +427,19 @@ test("the mobile sticky bar shows the cart summary", async () => {
     const text = await sticky.innerText();
     assert.match(text, /Winkelwagen/);
     assert.match(text, /€\s?85,00/);
+
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    const [footerBox, stickyBox] = await Promise.all([
+      page.locator("footer").boundingBox(),
+      sticky.boundingBox(),
+    ]);
+    assert.ok(footerBox && stickyBox);
+    assert.ok(
+      footerBox.y + footerBox.height <= stickyBox.y,
+      "De vaste mobiele winkelwagenbalk mag de footer niet bedekken.",
+    );
   } finally {
     await context.close();
   }
@@ -1233,6 +1246,18 @@ test("direct checkout navigation and hard reload hydrate a persisted cart", asyn
       .getByRole("heading", { name: "Waar mogen we bezorgen?" })
       .waitFor();
     await page.getByText("Semaglutide 4mg - Pen", { exact: true }).waitFor();
+    await page
+      .getByText(
+        "We sturen na je bestelling handmatig een apart betaalverzoek naar je e-mailadres. Je betaalt hier nog niets.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(
+      await page
+        .getByText(/Betaalinformatie staat op de volgende pagina/)
+        .count(),
+      0,
+    );
     assert.equal(
       await page.getByText(/Switched to client rendering/).count(),
       0,

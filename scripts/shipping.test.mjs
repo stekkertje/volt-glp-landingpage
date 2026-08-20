@@ -161,6 +161,40 @@ test("admin kan een gewijzigd adres expliciet opnieuw valideren", async () => {
   assert.equal(validated.addressValidationStatus, "valid");
 });
 
+test("alleen naam en telefoon wijzigen bewaart het geldige adresbewijs", async () => {
+  const created = await createOrderRecord(orderInput());
+  const sql = await getSql();
+  const beforeRows = await sql.query(
+    `select address_validation_provider, address_validation_status,
+       address_validation_fingerprint, address_validated_at
+     from orders where id = $1`,
+    [created.order.id],
+  );
+
+  const updated = await updateOrderAddressRecord({
+    id: created.order.id,
+    expectedUpdatedAt: created.order.updatedAt,
+    name: "Gewijzigde Ontvanger",
+    phone: "0687654321",
+    street: created.order.street,
+    houseNumber: created.order.houseNumber,
+    postcode: created.order.postcode,
+    city: created.order.city,
+    country: created.order.country,
+  });
+  assert.equal(updated.name, "Gewijzigde Ontvanger");
+  assert.equal(updated.phone, "0687654321");
+  assert.equal(updated.addressValidationStatus, "valid");
+
+  const afterRows = await sql.query(
+    `select address_validation_provider, address_validation_status,
+       address_validation_fingerprint, address_validated_at
+     from orders where id = $1`,
+    [created.order.id],
+  );
+  assert.deepEqual(afterRows[0], beforeRows[0]);
+});
+
 test("shipmentclaim herverifieert de adresfingerprint atomair vóór providergebruik", async () => {
   const created = await createOrderRecord(orderInput());
   const sql = await getSql();

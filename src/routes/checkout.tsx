@@ -861,8 +861,8 @@ function CheckoutPage() {
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <p className="flex items-start gap-2 text-sm font-semibold text-fg">
                     <LockKeyhole className="mt-0.5 size-4 shrink-0 text-primary" />
-                    Betaalinformatie staat op de volgende pagina en in je
-                    e-mail.
+                    We sturen na je bestelling handmatig een apart betaalverzoek
+                    naar je e-mailadres. Je betaalt hier nog niets.
                   </p>
                 </div>
 

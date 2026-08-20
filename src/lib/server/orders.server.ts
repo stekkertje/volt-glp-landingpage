@@ -1420,6 +1420,14 @@ const ADDRESS_FIELDS = [
   "country",
 ] as const;
 
+const PHYSICAL_ADDRESS_FIELDS = [
+  "street",
+  "houseNumber",
+  "postcode",
+  "city",
+  "country",
+] as const;
+
 function sameVersion(actual: Date | string, expected: string): boolean {
   return asIsoString(actual) === new Date(expected).toISOString();
 }
@@ -1469,6 +1477,9 @@ export async function updateOrderAddressRecord(
     const changedFields = ADDRESS_FIELDS.filter(
       (field) => before[field] !== after[field],
     );
+    const physicalAddressChanged = PHYSICAL_ADDRESS_FIELDS.some(
+      (field) => before[field] !== after[field],
+    );
     const addressValidation = input.addressValidationToken
       ? verifyAddressValidationToken(input.addressValidationToken, after)
       : null;
@@ -1505,15 +1516,36 @@ export async function updateOrderAddressRecord(
     `;
     if (existingShipment[0]) throw new OrderAddressLockedError();
 
+    const nextValidationProvider = addressValidation
+      ? addressValidation.provider
+      : physicalAddressChanged
+        ? null
+        : current.address_validation_provider;
+    const nextValidationStatus = addressValidation
+      ? "valid"
+      : physicalAddressChanged
+        ? "unvalidated"
+        : current.address_validation_status;
+    const nextValidationFingerprint = addressValidation
+      ? addressValidation.fingerprint
+      : physicalAddressChanged
+        ? null
+        : current.address_validation_fingerprint;
+    const nextValidatedAt = addressValidation
+      ? addressValidation.validatedAt.toISOString()
+      : physicalAddressChanged
+        ? null
+        : current.address_validated_at;
+
     const updated = await sql<{ updated_at: Date | string }>`
       update orders
       set name = ${after.name}, phone = ${after.phone}, street = ${after.street},
           house_number = ${after.houseNumber}, postcode = ${after.postcode},
           city = ${after.city}, country = ${after.country},
-          address_validation_provider = ${addressValidation?.provider ?? null},
-          address_validation_status = ${addressValidation ? "valid" : "unvalidated"},
-          address_validation_fingerprint = ${addressValidation?.fingerprint ?? null},
-          address_validated_at = ${addressValidation?.validatedAt.toISOString() ?? null},
+          address_validation_provider = ${nextValidationProvider},
+          address_validation_status = ${nextValidationStatus},
+          address_validation_fingerprint = ${nextValidationFingerprint},
+          address_validated_at = ${nextValidatedAt},
           updated_at = now()
       where id = ${input.id} and updated_at = ${input.expectedUpdatedAt}
       returning updated_at
