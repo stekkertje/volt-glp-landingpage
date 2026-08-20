@@ -264,6 +264,19 @@ test("auth-disabled deployment houdt de wachtwoord-admin bereikbaar", async () =
     await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
+    assert.equal(await page.title(), "Beheer | Afslank-injecties.nl");
+    const brandLink = page.getByRole("link", {
+      name: /Afslank-injecties\.nl\s+Beheer/,
+    });
+    const storeLink = page.getByRole("link", { name: "Terug naar winkel" });
+    await brandLink.waitFor();
+    const [brandBox, storeBox] = await Promise.all([
+      brandLink.boundingBox(),
+      storeLink.boundingBox(),
+    ]);
+    assert.ok(brandBox && storeBox);
+    assert.ok(brandBox.x + brandBox.width <= storeBox.x);
+    assert.equal(await page.getByText(/^VOLT/).count(), 0);
   } finally {
     await context.close();
   }

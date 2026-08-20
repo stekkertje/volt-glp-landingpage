@@ -18,7 +18,7 @@ Documentatie-only wijzigingen vereisen geen applicatiebuild; controleer dan link
 - Controleer primaire CTA, toetsenbordbediening, focus, labels, contrast en layoutverschuivingen.
 - Controleer sticky header, mobiele koopbalk, cookie-/modaloverlap en winkelwagendrawer indien geraakt.
 - Houd UI-copy Nederlands, zonder em-dash en zonder onbevestigde medische claims.
-- Vergelijk visueel met de bestaande lichte, koele VOLT-stijl; introduceer geen dark theme of beige herontwerp.
+- Vergelijk visueel met de bestaande lichte, koele stijl van Afslank-injecties.nl; introduceer geen dark theme of beige herontwerp.
 
 ## Product, prijs, korting en checkout
 

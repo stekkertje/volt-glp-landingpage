@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from "playwright";
+import { fileURLToPath } from "node:url";
 
 const browser = await chromium.launch({
   headless: true,
@@ -134,7 +135,7 @@ try {
       <body>
         <main>
           <section>
-            <div class="brand"><span class="mark">V</span> VOLT<span class="dot">.</span></div>
+            <div class="brand"><span class="mark">A</span> Afslank-injecties.nl</div>
             <p class="eyebrow">GLP-1 afvallen</p>
             <h1>Vial of <span class="accent">kant-en-klare pen.</span></h1>
             <p class="sub">Semaglutide, Tirzepatide en Retatrutide. Labgetest en discreet verzonden in NL en BE.</p>
@@ -159,7 +160,7 @@ try {
   `);
   await page.locator(".photo").evaluate((image) => image.decode());
   await page.screenshot({
-    path: "/workspace/public/og.jpg",
+    path: fileURLToPath(new URL("../public/og.jpg", import.meta.url)),
     type: "jpeg",
     quality: 88,
   });

@@ -60,7 +60,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
   head: () => ({
     meta: [
-      { title: "Beheer | VOLT" },
+      { title: "Beheer | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),
@@ -178,17 +178,20 @@ function AdminFrame({ children }: { children: ReactNode }) {
     <div className="min-h-dvh bg-bg-elevated text-fg">
       <header className="border-b border-border bg-surface">
         <div className="container-max section-pad flex min-h-16 items-center justify-between gap-4 py-3">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-fg">
-              V
+          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-fg">
+              A
             </span>
-            <span className="font-extrabold tracking-tight">
-              VOLT<span className="text-primary">.</span> Beheer
+            <span className="min-w-0 text-sm font-extrabold leading-tight tracking-tight sm:text-base">
+              <span className="block truncate">Afslank-injecties.nl</span>
+              <span className="block text-xs font-semibold text-muted">
+                Beheer
+              </span>
             </span>
           </Link>
           <Link
             to="/"
-            className="text-sm font-semibold text-muted hover:text-fg"
+            className="shrink-0 text-xs font-semibold text-muted hover:text-fg sm:text-sm"
           >
             Terug naar winkel
           </Link>

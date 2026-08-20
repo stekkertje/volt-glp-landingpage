@@ -88,7 +88,7 @@ Object.assign(serverEnvironment, {
     "utf8",
   ).toString("base64url"),
   MAIL_FROM_ADDRESS: "info@example.test",
-  MAIL_FROM_NAME: "VOLT CI",
+  MAIL_FROM_NAME: "Afslank-injecties.nl CI",
   MAIL_OWNER_ADDRESS: "owner@example.test",
 });
 

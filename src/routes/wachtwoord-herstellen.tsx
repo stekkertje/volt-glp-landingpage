@@ -19,7 +19,7 @@ export const Route = createFileRoute("/wachtwoord-herstellen")({
   component: ResetPasswordPage,
   head: () => ({
     meta: [
-      { title: "Nieuw wachtwoord | VOLT" },
+      { title: "Nieuw wachtwoord | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

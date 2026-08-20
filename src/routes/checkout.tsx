@@ -27,11 +27,11 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
   head: () => ({
     meta: [
-      { title: "Afrekenen | VOLT" },
+      { title: "Afrekenen | Afslank-injecties.nl" },
       {
         name: "description",
         content:
-          "Plaats je VOLT-bestelling voor levering in Nederland of België.",
+          "Plaats je bestelling bij Afslank-injecties.nl voor levering in Nederland of België.",
       },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],

@@ -1,4 +1,4 @@
-# VOLT GLP-1 shop
+# Afslank-injecties.nl webshop
 
 Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als vial of kant-en-klare pen.
 

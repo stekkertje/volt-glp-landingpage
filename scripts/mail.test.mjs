@@ -68,6 +68,7 @@ test("Hostinger SMTP configuration is complete or disabled, never partial", () =
   assert.equal(configuration.port, 465);
   assert.equal(configuration.secure, true);
   assert.equal(configuration.fromAddress, "info@example.test");
+  assert.equal(configuration.fromName, "Afslank-injecties.nl");
   assert.equal(configuration.ownerAddress, "beheer@example.test");
 
   assert.throws(
@@ -145,6 +146,10 @@ test("contact templates are Dutch, escaped and promise 48 hours on workdays", ()
   assert.match(owner.htmlBody, /&lt;script&gt;/);
   assert.match(customer.textBody, /binnen 48 uur op werkdagen/);
   assert.match(customer.htmlBody, /binnen 48 uur op werkdagen/);
+  assert.match(customer.textBody, /Afslank-injecties\.nl/);
+  assert.match(customer.htmlBody, /Afslank-injecties\.nl/);
+  assert.doesNotMatch(customer.textBody, /\bVOLT\b/);
+  assert.doesNotMatch(customer.htmlBody, /\bVOLT\b/);
   assert.doesNotMatch(customer.htmlBody, /Beste <Noor>/);
 });
 
@@ -195,6 +200,8 @@ test("order templates escape customer data and preserve the paid amount", () => 
   for (const mail of [customer, owner, status, address, products]) {
     assert.equal(mail.htmlBody.toLowerCase().includes("<script>"), false);
     assert.doesNotMatch(mail.htmlBody, /Beste <Noor>/);
+    assert.doesNotMatch(mail.htmlBody, /\bVOLT\b/);
+    assert.doesNotMatch(mail.textBody, /\bVOLT\b/);
   }
   assert.match(customer.textBody, /€\s*169,00/);
   assert.match(customer.textBody, /bedrag.*blijft leidend/i);

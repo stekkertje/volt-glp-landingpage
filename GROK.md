@@ -1,4 +1,4 @@
-# VOLT GLP-1 webshop · projectbriefing
+# Afslank-injecties.nl webshop · projectbriefing
 
 Lees dit bestand **eerst**. Dit is de volledige context van het project.
 Werk verder op de bestaande code. **Niet opnieuw scaffolden.**
@@ -8,7 +8,7 @@ Werk verder op de bestaande code. **Niet opnieuw scaffolden.**
 ## STARTPROMPT (plak dit als eerste bericht)
 
 ```
-Je werkt in de VOLT GLP-1 webshop. Lees GROK.md volledig.
+Je werkt in de webshop van Afslank-injecties.nl. Lees GROK.md volledig.
 
 Dit is een bestaande, bijna-af Nederlandse webshop met zes GLP-1 producten.
 Niet opnieuw bouwen.
@@ -34,7 +34,7 @@ Bevestig kort dat je GROK.md hebt gelezen en wacht op de volgende opdracht.
 Nederlandse **GLP-1 webshop** voor Semaglutide, Tirzepatide en Retatrutide.
 Elke stof is beschikbaar als vial of kant-en-klare pen.
 
-Merk: **VOLT**  
+Merk: **Afslank-injecties.nl**
 Categorie: **GLP-1 Afvallen**
 Taal: **volledig Nederlands**
 
