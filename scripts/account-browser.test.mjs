@@ -20,7 +20,7 @@ const MAIL_ENVIRONMENT = {
   SMTP_PASSWORD_BASE64: "",
   SMTP_PASSWORD: "account-browser-smtp-password",
   MAIL_FROM_ADDRESS: "info@example.test",
-  MAIL_FROM_NAME: "VOLT Test",
+  MAIL_FROM_NAME: "Afslank-injecties.nl Test",
   MAIL_OWNER_ADDRESS: "owner@example.test",
 };
 
@@ -282,6 +282,9 @@ test("klant doorloopt registratie, herstel, login, claimlink en mobiel account",
     await page.unroute("**/api/auth/sign-in/oauth2");
 
     await page.goto(`${baseUrl}/registreren`, { waitUntil: "networkidle" });
+    assert.equal(await page.title(), "Account aanmaken | Afslank-injecties.nl");
+    await page.getByRole("link", { name: /Afslank-injecties\.nl/ }).waitFor();
+    assert.equal(await page.getByText(/^VOLT$/).count(), 0);
     await page.getByLabel("Naam").fill("Mobiele Accountklant");
     await page.getByLabel("E-mailadres").fill(email);
     await page.getByLabel(/^Wachtwoord/).fill(firstPassword);
@@ -458,6 +461,7 @@ test("klant doorloopt registratie, herstel, login, claimlink en mobiel account",
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.waitForURL(`${baseUrl}/account`);
     await page.getByRole("heading", { name: "Bestelgeschiedenis" }).waitFor();
+    assert.equal(await page.title(), "Mijn account | Afslank-injecties.nl");
 
     await page.getByRole("button", { name: "Bevestigingslink sturen" }).click();
     await page.getByText(/Controleer je e-mail om eerdere/i).waitFor();

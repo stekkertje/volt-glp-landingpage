@@ -33,7 +33,7 @@ export const Route = createFileRoute("/account")({
   component: AccountPage,
   head: () => ({
     meta: [
-      { title: "Mijn account | VOLT" },
+      { title: "Mijn account | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

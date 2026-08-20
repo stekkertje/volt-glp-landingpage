@@ -53,7 +53,7 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
   head: () => ({
     meta: [
-      { title: "Inloggen | VOLT" },
+      { title: "Inloggen | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

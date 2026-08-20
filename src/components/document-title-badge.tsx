@@ -3,12 +3,14 @@ import { useRouterState } from "@tanstack/react-router";
 import { cartCount, useCartStore } from "@/lib/cart-store";
 import { getProduct, SITE } from "@/lib/product";
 
-const BASE = "GLP-1 Afvallen | VOLT";
+const BASE = "GLP-1 Afvallen | Afslank-injecties.nl";
 
 export function DocumentTitleBadge() {
   const lines = useCartStore((s) => s.lines);
   const count = cartCount(lines);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const product = pathname.startsWith("/product/")
     ? getProduct(pathname.split("/").filter(Boolean).at(-1))
     : undefined;
@@ -16,7 +18,13 @@ export function DocumentTitleBadge() {
     ? `${product.name} kopen | ${SITE.brand}`
     : pathname.startsWith("/product/")
       ? `Product | ${SITE.brand}`
-      : BASE;
+      : pathname === "/checkout"
+        ? `Afrekenen | ${SITE.brand}`
+        : pathname === "/account"
+          ? `Mijn account | ${SITE.brand}`
+          : pathname.startsWith("/bestelling/")
+            ? `Bestelling | ${SITE.brand}`
+            : BASE;
 
   useEffect(() => {
     document.title = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;

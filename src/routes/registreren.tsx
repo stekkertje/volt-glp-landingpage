@@ -26,7 +26,7 @@ export const Route = createFileRoute("/registreren")({
   component: RegisterPage,
   head: () => ({
     meta: [
-      { title: "Account aanmaken | VOLT" },
+      { title: "Account aanmaken | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

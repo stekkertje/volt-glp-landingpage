@@ -189,7 +189,7 @@ const grokOAuthPlugin = oauthConfigured
   : null;
 
 export const auth = betterAuth({
-  appName: "VOLT",
+  appName: "Afslank-injecties.nl",
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
   // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).

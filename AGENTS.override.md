@@ -2,7 +2,7 @@
 
 ## Rol en scope
 
-- Beheer uitsluitend de bestaande VOLT-webshop in deze repository en het domein `afslank-injecties.nl`.
+- Beheer uitsluitend de bestaande webshop van Afslank-injecties.nl in deze repository en het domein `afslank-injecties.nl`.
 - Werk voort op de bestaande applicatie. Scaffold of herschrijf de app niet zonder een expliciete opdracht.
 - Antwoord de gebruiker in het Nederlands. Houd UI-copy volledig Nederlands en gebruik geen em-dash (`—`).
 - Behandel een verzoek om te beoordelen of uit te leggen als read-only. Wijzig, commit, push, merge of deploy alleen wanneer het verzoek dat omvat.

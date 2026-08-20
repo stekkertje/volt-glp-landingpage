@@ -18,7 +18,7 @@ function accountMailLayout(title: string, body: string): string {
       <tr><td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#fff;border:1px solid #e4e7eb;border-radius:16px">
           <tr><td style="padding:28px">
-            <div style="color:#f06423;font-size:20px;font-weight:800;letter-spacing:.08em">VOLT</div>
+            <div style="color:#f06423;font-size:20px;font-weight:800">Afslank-injecties.nl</div>
             <h1 style="margin:20px 0 12px;font-size:24px;line-height:1.25">${escapeHtml(title)}</h1>
             ${body}
             <p style="margin:24px 0 0;color:#667085;font-size:13px;line-height:1.5">afslank-injecties.nl</p>
@@ -51,11 +51,11 @@ export function accountVerificationMail(input: {
     userId: input.userId,
     to: input.email,
     subject,
-    textBody: `Beste ${name},\n\nBevestig je e-mailadres om je VOLT-account te activeren:\n${input.url}\n\nDeze link is 1 uur geldig. Heb je dit account niet aangemaakt? Dan kun je deze e-mail negeren.`,
+    textBody: `Beste ${name},\n\nBevestig je e-mailadres om je account bij Afslank-injecties.nl te activeren:\n${input.url}\n\nDeze link is 1 uur geldig. Heb je dit account niet aangemaakt? Dan kun je deze e-mail negeren.`,
     htmlBody: accountMailLayout(
       subject,
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${escapeHtml(name)},</p>
-       <p style="margin:0;line-height:1.6">Bevestig je e-mailadres om je VOLT-account te activeren.</p>
+       <p style="margin:0;line-height:1.6">Bevestig je e-mailadres om je account bij Afslank-injecties.nl te activeren.</p>
        ${actionButton("E-mailadres bevestigen", input.url)}
        <p style="margin:18px 0 0;color:#667085;font-size:13px;line-height:1.5">Deze link is 1 uur geldig. Heb je dit account niet aangemaakt? Dan kun je deze e-mail negeren.</p>`,
     ),

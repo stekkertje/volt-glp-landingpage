@@ -16,7 +16,7 @@ export const Route = createFileRoute("/wachtwoord-vergeten")({
   component: ForgotPasswordPage,
   head: () => ({
     meta: [
-      { title: "Wachtwoord vergeten | VOLT" },
+      { title: "Wachtwoord vergeten | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

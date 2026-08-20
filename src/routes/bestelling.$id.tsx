@@ -27,7 +27,7 @@ export const Route = createFileRoute("/bestelling/$id")({
   component: OrderConfirmationPage,
   head: () => ({
     meta: [
-      { title: "Bestelling | VOLT" },
+      { title: "Bestelling | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

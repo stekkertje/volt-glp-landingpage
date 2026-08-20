@@ -103,6 +103,8 @@ test("email/password signup requires verification and queues a hashed verificati
   assert.match(queued[0].dedupe_key, /^account-verify:[a-f0-9]{64}$/);
   assert.equal(queued[0].user_id, result.user.id);
   assert.match(queued[0].text_body, /Bevestig je e-mailadres/);
+  assert.match(queued[0].text_body, /Afslank-injecties\.nl/);
+  assert.doesNotMatch(queued[0].text_body, /\bVOLT\b/);
   assert.equal(
     queued[0].text_body.includes(queued[0].dedupe_key.slice(15)),
     false,

@@ -1,4 +1,4 @@
-# VOLT project instructions
+# Afslank-injecties.nl project instructions
 
 ## Product price changes
 
@@ -33,4 +33,3 @@ below is verified.
   options, cart, checkout preview, and the server-created order total. Also run
   the relevant pricing/order tests, `npm run typecheck`, `npm run lint`, and a
   production build. Fix inconsistencies before marking the work ready.
-

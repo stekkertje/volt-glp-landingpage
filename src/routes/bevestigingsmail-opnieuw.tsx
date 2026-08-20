@@ -16,7 +16,7 @@ export const Route = createFileRoute("/bevestigingsmail-opnieuw")({
   component: ResendVerificationPage,
   head: () => ({
     meta: [
-      { title: "Bevestigingsmail opnieuw sturen | VOLT" },
+      { title: "Bevestigingsmail opnieuw sturen | Afslank-injecties.nl" },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
   }),

@@ -19,7 +19,7 @@ function layout(title: string, content: string): string {
       <tr><td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e4e7eb;border-radius:16px">
           <tr><td style="padding:28px">
-            <div style="color:#f06423;font-size:20px;font-weight:800;letter-spacing:.08em">VOLT</div>
+            <div style="color:#f06423;font-size:20px;font-weight:800">Afslank-injecties.nl</div>
             <h1 style="margin:20px 0 12px;font-size:24px;line-height:1.25">${escapeHtml(title)}</h1>
             ${content}
             <p style="margin:24px 0 0;color:#667085;font-size:13px;line-height:1.5">afslank-injecties.nl</p>
@@ -95,7 +95,7 @@ export function orderCustomerConfirmationMail(input: {
        <p style="margin:16px 0 0"><a href="${accountUrl}" style="display:inline-block;border-radius:10px;background:#f06423;color:#ffffff;padding:11px 16px;text-decoration:none;font-weight:700">Account aanmaken</a></p>`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nWe hebben je bestelling ${input.orderNumber} ontvangen.\n\n${plainOrderLines(input.lines)}\n\nTotaal bij bestelling: ${formatEuro(input.totalCents)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\nHet bedrag dat bij het plaatsen van de bestelling is vastgelegd blijft leidend.\n\n${accountText}\n\nMet vriendelijke groet,\nVOLT`,
+    textBody: `Beste ${input.name},\n\nWe hebben je bestelling ${input.orderNumber} ontvangen.\n\n${plainOrderLines(input.lines)}\n\nTotaal bij bestelling: ${formatEuro(input.totalCents)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\nHet bedrag dat bij het plaatsen van de bestelling is vastgelegd blijft leidend.\n\n${accountText}\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: layout(
       `Bestelling ${input.orderNumber} ontvangen`,
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${escapeHtml(input.name)},</p>
@@ -143,7 +143,7 @@ export function orderStatusChangedMail(input: {
   const subject = `Status van bestelling ${input.orderNumber}: ${label}`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nDe status van je bestelling ${input.orderNumber} is gewijzigd naar: ${label}.\n\nMet vriendelijke groet,\nVOLT`,
+    textBody: `Beste ${input.name},\n\nDe status van je bestelling ${input.orderNumber} is gewijzigd naar: ${label}.\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: layout(
       `Status gewijzigd naar ${label}`,
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${escapeHtml(input.name)},</p>
@@ -160,7 +160,7 @@ export function orderAddressChangedMail(input: {
   const subject = `Bezorgadres van bestelling ${input.orderNumber} gewijzigd`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nHet bezorgadres voor bestelling ${input.orderNumber} is gewijzigd naar:\n\n${plainAddress(input.address)}\n\nHeb je deze wijziging niet verwacht? Neem dan contact met ons op.\n\nMet vriendelijke groet,\nVOLT`,
+    textBody: `Beste ${input.name},\n\nHet bezorgadres voor bestelling ${input.orderNumber} is gewijzigd naar:\n\n${plainAddress(input.address)}\n\nHeb je deze wijziging niet verwacht? Neem dan contact met ons op.\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: layout(
       "Bezorgadres gewijzigd",
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${escapeHtml(input.name)},</p>
@@ -180,7 +180,7 @@ export function orderProductsChangedMail(input: {
   const subject = `Producten van bestelling ${input.orderNumber} gewijzigd`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nDe te leveren producten voor bestelling ${input.orderNumber} zijn gewijzigd:\n\n${plainOrderLines(input.lines)}\n\nHet bij de bestelling vastgelegde bedrag van ${formatEuro(input.paidTotalCents)} blijft ongewijzigd.\n\nHeb je deze wijziging niet verwacht? Neem dan contact met ons op.\n\nMet vriendelijke groet,\nVOLT`,
+    textBody: `Beste ${input.name},\n\nDe te leveren producten voor bestelling ${input.orderNumber} zijn gewijzigd:\n\n${plainOrderLines(input.lines)}\n\nHet bij de bestelling vastgelegde bedrag van ${formatEuro(input.paidTotalCents)} blijft ongewijzigd.\n\nHeb je deze wijziging niet verwacht? Neem dan contact met ons op.\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: layout(
       "Producten gewijzigd",
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${escapeHtml(input.name)},</p>
@@ -220,13 +220,13 @@ export function contactCustomerReceiptMail(input: {
   const safeName = escapeHtml(input.name);
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nBedankt voor je bericht. We hebben het goed ontvangen en reageren binnen 48 uur op werkdagen.\n\nMet vriendelijke groet,\nVOLT`,
+    textBody: `Beste ${input.name},\n\nBedankt voor je bericht. We hebben het goed ontvangen en reageren binnen 48 uur op werkdagen.\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: layout(
       "We hebben je bericht ontvangen",
       `<p style="margin:0 0 14px;line-height:1.6">Beste ${safeName},</p>
        <p style="margin:0 0 14px;line-height:1.6">Bedankt voor je bericht. We hebben het goed ontvangen.</p>
        <p style="margin:0;line-height:1.6"><strong>We reageren binnen 48 uur op werkdagen.</strong></p>
-       <p style="margin:22px 0 0;line-height:1.6">Met vriendelijke groet,<br>VOLT</p>`,
+       <p style="margin:22px 0 0;line-height:1.6">Met vriendelijke groet,<br>Afslank-injecties.nl</p>`,
     ),
   };
 }
