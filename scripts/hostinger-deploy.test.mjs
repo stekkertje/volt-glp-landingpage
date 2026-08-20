@@ -36,6 +36,7 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
     "NODE_ENV",
     "NPM_CONFIG_INCLUDE",
     "REQUIRE_DATABASE",
+    "REQUIRE_MAIL",
     "DATABASE_URL",
     "MIGRATION_DATABASE_URL",
     "BETTER_AUTH_SECRET",
@@ -54,7 +55,8 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
   assert.match(example, /^NODE_ENV=production$/m);
   assert.match(example, /^NPM_CONFIG_INCLUDE=dev$/m);
   assert.match(example, /^REQUIRE_DATABASE=1$/m);
-  assert.match(example, /^VITE_AUTH_ENABLED=false$/m);
+  assert.match(example, /^REQUIRE_MAIL=1$/m);
+  assert.match(example, /^VITE_AUTH_ENABLED=true$/m);
   assert.match(example, /^TRUST_HOSTINGER_PROXY=1$/m);
   assert.match(rootRoute, /name:\s*["']robots["']/);
   assert.match(rootRoute, /noindex, nofollow, noarchive/);

@@ -12,8 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as BevestigingsmailOpnieuwRouteImport } from './routes/bevestigingsmail-opnieuw'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegistrerenRouteImport } from './routes/registreren'
+import { Route as WachtwoordHerstellenRouteImport } from './routes/wachtwoord-herstellen'
+import { Route as WachtwoordVergetenRouteImport } from './routes/wachtwoord-vergeten'
 import { Route as BestellingIdRouteImport } from './routes/bestelling.$id'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -33,6 +37,11 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BevestigingsmailOpnieuwRoute = BevestigingsmailOpnieuwRouteImport.update({
+  id: '/bevestigingsmail-opnieuw',
+  path: '/bevestigingsmail-opnieuw',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -41,6 +50,21 @@ const CheckoutRoute = CheckoutRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegistrerenRoute = RegistrerenRouteImport.update({
+  id: '/registreren',
+  path: '/registreren',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WachtwoordHerstellenRoute = WachtwoordHerstellenRouteImport.update({
+  id: '/wachtwoord-herstellen',
+  path: '/wachtwoord-herstellen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WachtwoordVergetenRoute = WachtwoordVergetenRouteImport.update({
+  id: '/wachtwoord-vergeten',
+  path: '/wachtwoord-vergeten',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BestellingIdRoute = BestellingIdRouteImport.update({
@@ -63,8 +87,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/bevestigingsmail-opnieuw': typeof BevestigingsmailOpnieuwRoute
   '/checkout': typeof CheckoutRoute
   '/login': typeof LoginRoute
+  '/registreren': typeof RegistrerenRoute
+  '/wachtwoord-herstellen': typeof WachtwoordHerstellenRoute
+  '/wachtwoord-vergeten': typeof WachtwoordVergetenRoute
   '/bestelling/$id': typeof BestellingIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -73,8 +101,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/bevestigingsmail-opnieuw': typeof BevestigingsmailOpnieuwRoute
   '/checkout': typeof CheckoutRoute
   '/login': typeof LoginRoute
+  '/registreren': typeof RegistrerenRoute
+  '/wachtwoord-herstellen': typeof WachtwoordHerstellenRoute
+  '/wachtwoord-vergeten': typeof WachtwoordVergetenRoute
   '/bestelling/$id': typeof BestellingIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -84,8 +116,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/bevestigingsmail-opnieuw': typeof BevestigingsmailOpnieuwRoute
   '/checkout': typeof CheckoutRoute
   '/login': typeof LoginRoute
+  '/registreren': typeof RegistrerenRoute
+  '/wachtwoord-herstellen': typeof WachtwoordHerstellenRoute
+  '/wachtwoord-vergeten': typeof WachtwoordVergetenRoute
   '/bestelling/$id': typeof BestellingIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -96,8 +132,12 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/bevestigingsmail-opnieuw'
     | '/checkout'
     | '/login'
+    | '/registreren'
+    | '/wachtwoord-herstellen'
+    | '/wachtwoord-vergeten'
     | '/bestelling/$id'
     | '/product/$slug'
     | '/api/auth/$'
@@ -106,8 +146,12 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/bevestigingsmail-opnieuw'
     | '/checkout'
     | '/login'
+    | '/registreren'
+    | '/wachtwoord-herstellen'
+    | '/wachtwoord-vergeten'
     | '/bestelling/$id'
     | '/product/$slug'
     | '/api/auth/$'
@@ -116,8 +160,12 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
+    | '/bevestigingsmail-opnieuw'
     | '/checkout'
     | '/login'
+    | '/registreren'
+    | '/wachtwoord-herstellen'
+    | '/wachtwoord-vergeten'
     | '/bestelling/$id'
     | '/product/$slug'
     | '/api/auth/$'
@@ -127,8 +175,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
+  BevestigingsmailOpnieuwRoute: typeof BevestigingsmailOpnieuwRoute
   CheckoutRoute: typeof CheckoutRoute
   LoginRoute: typeof LoginRoute
+  RegistrerenRoute: typeof RegistrerenRoute
+  WachtwoordHerstellenRoute: typeof WachtwoordHerstellenRoute
+  WachtwoordVergetenRoute: typeof WachtwoordVergetenRoute
   BestellingIdRoute: typeof BestellingIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -157,6 +209,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bevestigingsmail-opnieuw': {
+      id: '/bevestigingsmail-opnieuw'
+      path: '/bevestigingsmail-opnieuw'
+      fullPath: '/bevestigingsmail-opnieuw'
+      preLoaderRoute: typeof BevestigingsmailOpnieuwRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkout': {
       id: '/checkout'
       path: '/checkout'
@@ -169,6 +228,27 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/registreren': {
+      id: '/registreren'
+      path: '/registreren'
+      fullPath: '/registreren'
+      preLoaderRoute: typeof RegistrerenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wachtwoord-herstellen': {
+      id: '/wachtwoord-herstellen'
+      path: '/wachtwoord-herstellen'
+      fullPath: '/wachtwoord-herstellen'
+      preLoaderRoute: typeof WachtwoordHerstellenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wachtwoord-vergeten': {
+      id: '/wachtwoord-vergeten'
+      path: '/wachtwoord-vergeten'
+      fullPath: '/wachtwoord-vergeten'
+      preLoaderRoute: typeof WachtwoordVergetenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bestelling/$id': {
@@ -199,8 +279,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
+  BevestigingsmailOpnieuwRoute: BevestigingsmailOpnieuwRoute,
   CheckoutRoute: CheckoutRoute,
   LoginRoute: LoginRoute,
+  RegistrerenRoute: RegistrerenRoute,
+  WachtwoordHerstellenRoute: WachtwoordHerstellenRoute,
+  WachtwoordVergetenRoute: WachtwoordVergetenRoute,
   BestellingIdRoute: BestellingIdRoute,
   ProductSlugRoute: ProductSlugRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

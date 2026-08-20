@@ -83,37 +83,56 @@ const createOrderBaseSchema = z
   })
   .strict();
 
-export const createOrderSchema = createOrderBaseSchema
-  .superRefine((value, context) => {
-    const valid =
-      value.country === "NL"
-        ? /^[1-9]\d{3}[A-Z]{2}$/.test(value.postcode)
-        : /^[1-9]\d{3}$/.test(value.postcode);
-    if (!valid) {
-      context.addIssue({
-        code: "custom",
-        path: ["postcode"],
-        message:
-          value.country === "NL"
-            ? "Vul een geldige Nederlandse postcode in."
-            : "Vul een geldige Belgische postcode in.",
-      });
-    }
-  })
-  .transform((value) => ({
-    ...value,
-    postcode:
-      value.country === "NL"
-        ? `${value.postcode.slice(0, 4)} ${value.postcode.slice(4)}`
-        : value.postcode,
-  }));
+const addressValidationTokenSchema = z
+  .string({ message: "Controleer het bezorgadres opnieuw." })
+  .trim()
+  .min(40, { message: "Controleer het bezorgadres opnieuw." })
+  .max(2_048, { message: "Controleer het bezorgadres opnieuw." });
+
+const withValidPostcode = <Schema extends typeof createOrderBaseSchema>(
+  schema: Schema,
+) =>
+  schema
+    .superRefine((value, context) => {
+      const valid =
+        value.country === "NL"
+          ? /^[1-9]\d{3}[A-Z]{2}$/.test(value.postcode)
+          : /^[1-9]\d{3}$/.test(value.postcode);
+      if (!valid) {
+        context.addIssue({
+          code: "custom",
+          path: ["postcode"],
+          message:
+            value.country === "NL"
+              ? "Vul een geldige Nederlandse postcode in."
+              : "Vul een geldige Belgische postcode in.",
+        });
+      }
+    })
+    .transform((value) => ({
+      ...value,
+      postcode:
+        value.country === "NL"
+          ? `${value.postcode.slice(0, 4)} ${value.postcode.slice(4)}`
+          : value.postcode,
+    }));
+
+/** Local checkout validation before a server-issued address proof exists. */
+export const createOrderDraftSchema = withValidPostcode(createOrderBaseSchema);
+
+/** Final order input. The server also verifies the signed, address-bound proof. */
+export const createOrderSchema = withValidPostcode(
+  createOrderBaseSchema.extend({
+    addressValidationToken: addressValidationTokenSchema,
+  }),
+);
 
 export const orderViewerSchema = z
   .object({
     id: z.string().trim().min(1).max(100).optional(),
     orderNumber: z.string().trim().min(1).max(32).optional(),
-    accessCode: z.string().trim().min(1).max(100).optional(),
   })
+  .strict()
   .refine((value) => Boolean(value.id || value.orderNumber), {
     message: "Bestelling ontbreekt.",
   });
@@ -138,5 +157,103 @@ export const updateOrderStatusSchema = orderIdSchema.extend({
   status: orderStatusSchema,
 });
 
+const expectedUpdatedAtSchema = z
+  .string()
+  .trim()
+  .datetime({ offset: true, message: "De wijzigingsversie is ongeldig." });
+
+export const updateOrderAddressSchema = orderIdSchema
+  .extend({
+    expectedUpdatedAt: expectedUpdatedAtSchema,
+    name: requiredText("Naam", 120),
+    phone: optionalText(40),
+    street: requiredText("Straat", 120),
+    houseNumber: requiredText("Huisnummer", 30),
+    postcode: z.preprocess(
+      (value) =>
+        typeof value === "string"
+          ? value.trim().toUpperCase().replace(/\s+/g, "")
+          : value,
+      z
+        .string({ message: "Postcode is verplicht." })
+        .min(1, { message: "Postcode is verplicht." })
+        .max(8, { message: "Postcode is te lang." }),
+    ),
+    city: requiredText("Plaats", 120),
+    country: countrySchema,
+    addressValidationToken: addressValidationTokenSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const valid =
+      value.country === "NL"
+        ? /^[1-9]\d{3}[A-Z]{2}$/.test(value.postcode)
+        : /^[1-9]\d{3}$/.test(value.postcode);
+    if (!valid) {
+      context.addIssue({
+        code: "custom",
+        path: ["postcode"],
+        message:
+          value.country === "NL"
+            ? "Vul een geldige Nederlandse postcode in."
+            : "Vul een geldige Belgische postcode in.",
+      });
+    }
+  })
+  .transform((value) => ({
+    ...value,
+    postcode:
+      value.country === "NL"
+        ? `${value.postcode.slice(0, 4)} ${value.postcode.slice(4)}`
+        : value.postcode,
+  }));
+
+const fulfillmentLineSchema = z
+  .object({
+    slug: requiredText("Product", 100),
+    optionId: requiredText("Productoptie", 100),
+    qty: z
+      .number({ message: "Aantal moet een getal zijn." })
+      .int({ message: "Aantal moet een geheel getal zijn." })
+      .min(1, { message: "Aantal moet minimaal 1 zijn." })
+      .max(10, { message: "Aantal mag maximaal 10 zijn." }),
+  })
+  .strict();
+
+export const updateOrderFulfillmentSchema = orderIdSchema
+  .extend({
+    expectedUpdatedAt: expectedUpdatedAtSchema,
+    lines: z.array(fulfillmentLineSchema).min(1).max(50),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const variants = new Set<string>();
+    let total = 0;
+    value.lines.forEach((line, index) => {
+      total += line.qty;
+      const key = `${line.slug}\0${line.optionId}`;
+      if (variants.has(key)) {
+        context.addIssue({
+          code: "custom",
+          path: ["lines", index],
+          message: "Elke productoptie mag maar één keer voorkomen.",
+        });
+      }
+      variants.add(key);
+    });
+    if (total > 90) {
+      context.addIssue({
+        code: "custom",
+        path: ["lines"],
+        message: "Een bestelling mag maximaal 90 stuks bevatten.",
+      });
+    }
+  });
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+export type CreateOrderDraftInput = z.infer<typeof createOrderDraftSchema>;
 export type OrderViewerInput = z.infer<typeof orderViewerSchema>;
+export type UpdateOrderAddressInput = z.infer<typeof updateOrderAddressSchema>;
+export type UpdateOrderFulfillmentInput = z.infer<
+  typeof updateOrderFulfillmentSchema
+>;

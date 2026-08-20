@@ -2,6 +2,19 @@ import { formatEuro } from "@/lib/utils";
 import { orderLineSummary } from "@/lib/product";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/order-status";
 import type { PublicOrder } from "@/lib/server/orders.server";
+import type { TrackingStatus } from "@/lib/server/integrations/myparcel.server";
+import { ExternalLink } from "lucide-react";
+
+const trackingStatusLabels: Record<TrackingStatus, string> = {
+  concept: "Zending wordt voorbereid",
+  registered: "Zending aangemeld",
+  handed_over: "Overgedragen aan vervoerder",
+  in_transit: "Onderweg",
+  delivered: "Bezorgd",
+  exception: "Vertraging of bijzonderheid",
+  returned: "Retour onderweg",
+  unknown: "Status wordt bijgewerkt",
+};
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   return (
@@ -63,6 +76,36 @@ export function OrderDetails({ order }: { order: PublicOrder }) {
           </div>
         </dl>
       </section>
+
+      {order.tracking && (
+        <section className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <h2 className="text-sm font-bold tracking-tight">
+            Verzending en tracking
+          </h2>
+          <p className="mt-2 text-sm text-muted">
+            {trackingStatusLabels[order.tracking.trackingStatus]}
+          </p>
+          {order.tracking.barcode && (
+            <p className="mt-1 text-xs text-muted">
+              Track &amp; trace:{" "}
+              <span className="font-semibold text-fg">
+                {order.tracking.barcode}
+              </span>
+            </p>
+          )}
+          {order.tracking.trackingUrl && (
+            <a
+              href={order.tracking.trackingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+            >
+              Volg je pakket
+              <ExternalLink className="size-3.5" aria-hidden />
+            </a>
+          )}
+        </section>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface p-4">

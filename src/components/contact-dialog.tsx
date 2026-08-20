@@ -25,6 +25,7 @@ export function ContactDialog() {
   }>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
 
   useDialogFocus(open, close, panelRef, nameInputRef);
 
@@ -36,6 +37,7 @@ export function ContactDialog() {
       setErrors({});
       setSubmitError("");
       setSending(false);
+      idempotencyKeyRef.current = crypto.randomUUID();
     }
   }, [open]);
 
@@ -63,9 +65,19 @@ export function ContactDialog() {
     setSending(true);
     setSubmitError("");
     try {
-      await createContactMessage({ data: { name, email, message } });
+      await createContactMessage({
+        data: {
+          idempotencyKey: idempotencyKeyRef.current,
+          name,
+          email,
+          message,
+        },
+      });
       close();
-      pushToast("Bericht verstuurd", "We reageren binnen 24 uur op werkdagen.");
+      pushToast(
+        "Bericht ontvangen",
+        "Je krijgt een bevestiging per e-mail. We reageren binnen 48 uur op werkdagen.",
+      );
     } catch (error) {
       setSubmitError(
         rateLimitFeedback(error) ??
@@ -105,7 +117,7 @@ export function ContactDialog() {
                 Contact
               </h2>
               <p className="text-xs text-muted">
-                Reactie binnen 24 uur op werkdagen
+                Reactie binnen 48 uur op werkdagen
               </p>
             </div>
           </div>

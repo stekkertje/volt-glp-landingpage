@@ -16,8 +16,8 @@ import {
   prepareCheckoutAttemptSeedForSubmit,
   type CheckoutAttemptSeed,
 } from "@/lib/checkout-idempotency";
-import { stageOrderRecoveryCode } from "@/lib/order-recovery-memory";
-import { createOrderSchema } from "@/lib/server/order-schema";
+import { createOrderDraftSchema } from "@/lib/server/order-schema";
+import { validateCheckoutAddress } from "@/lib/server/address-validation";
 import { createOrder, getPricingPreview } from "@/lib/server/orders";
 import { isConflictServerError, rateLimitFeedback } from "@/lib/server-error";
 import { orderLineSummary } from "@/lib/product";
@@ -42,11 +42,39 @@ type PricingPreview = Awaited<ReturnType<typeof getPricingPreview>>;
 type ConfirmedOrder = {
   id: string;
   orderNumber: string;
+  email: string;
 };
 type PricingInput = {
   lines: { slug: string; optionId: string; qty: number }[];
   discountCode?: string;
 };
+
+type CheckoutAddress = {
+  street: string;
+  houseNumber: string;
+  postcode: string;
+  city: string;
+  country: "NL" | "BE";
+};
+
+type AddressSuggestion = {
+  address: CheckoutAddress;
+  changedFields: string[];
+  validationToken: string;
+};
+
+const addressFieldLabels: Record<string, string> = {
+  street: "straat",
+  houseNumber: "huisnummer",
+  postcode: "postcode",
+  city: "plaats",
+};
+
+function sameAddress(left: CheckoutAddress, right: CheckoutAddress): boolean {
+  return (Object.keys(left) as Array<keyof CheckoutAddress>).every(
+    (key) => left[key] === right[key],
+  );
+}
 
 function pricingRequestKey(input: PricingInput): string {
   return JSON.stringify({
@@ -165,11 +193,18 @@ function CheckoutPage() {
   );
   const [formError, setFormError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [addressSuggestion, setAddressSuggestion] =
+    useState<AddressSuggestion | null>(null);
+  const [addressProof, setAddressProof] = useState<{
+    address: CheckoutAddress;
+    validationToken: string;
+  } | null>(null);
   const checkoutAttempt = useRef<CheckoutAttemptSeed | null>(null);
   const confirmedOrderRef = useRef<ConfirmedOrder | null>(null);
   const pricingRequestSequence = useRef(0);
   const emptyRedirected = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (formError) errorRef.current?.focus();
@@ -276,7 +311,7 @@ function CheckoutPage() {
     setFieldErrors({});
     const form = event.currentTarget;
     const fields = new FormData(form);
-    const validation = createOrderSchema.safeParse({
+    const validation = createOrderDraftSchema.safeParse({
       name: String(fields.get("name") ?? ""),
       email: String(fields.get("email") ?? ""),
       phone: "",
@@ -307,6 +342,85 @@ function CheckoutPage() {
         target?.focus();
       });
       return;
+    }
+
+    const submittedAddress: CheckoutAddress = {
+      street: validation.data.street,
+      houseNumber: validation.data.houseNumber,
+      postcode: validation.data.postcode,
+      city: validation.data.city,
+      country: validation.data.country,
+    };
+    let chosenAddress = submittedAddress;
+    let addressValidationToken =
+      addressProof && sameAddress(addressProof.address, submittedAddress)
+        ? addressProof.validationToken
+        : null;
+
+    if (!addressValidationToken) {
+      setAddressSuggestion(null);
+      try {
+        const checked = await validateCheckoutAddress({
+          data: submittedAddress,
+        });
+        if (
+          checked.status === "needs_confirmation" &&
+          checked.normalizedAddress &&
+          checked.validationToken
+        ) {
+          setAddressSuggestion({
+            address: {
+              street: checked.normalizedAddress.street,
+              houseNumber: checked.normalizedAddress.houseNumber,
+              postcode: checked.normalizedAddress.postcode,
+              city: checked.normalizedAddress.city,
+              country: checked.normalizedAddress.country as "NL" | "BE",
+            },
+            changedFields: checked.changedFields,
+            validationToken: checked.validationToken,
+          });
+          setFormError(
+            "Controleer en bevestig eerst de voorgestelde adrescorrectie.",
+          );
+          setSubmitting(false);
+          requestAnimationFrame(() => errorRef.current?.focus());
+          return;
+        }
+        if (
+          checked.status !== "valid" ||
+          !checked.normalizedAddress ||
+          !checked.validationToken
+        ) {
+          setFormError(
+            checked.status === "invalid"
+              ? "Dit bezorgadres kon niet worden gevonden. Controleer vooral postcode en huisnummer."
+              : "De adrescontrole is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+          );
+          setSubmitting(false);
+          requestAnimationFrame(() => errorRef.current?.focus());
+          return;
+        }
+        chosenAddress = {
+          street: checked.normalizedAddress.street,
+          houseNumber: checked.normalizedAddress.houseNumber,
+          postcode: checked.normalizedAddress.postcode,
+          city: checked.normalizedAddress.city,
+          country: checked.normalizedAddress.country as "NL" | "BE",
+        };
+        addressValidationToken = checked.validationToken;
+        setAddressProof({
+          address: chosenAddress,
+          validationToken: checked.validationToken,
+        });
+      } catch (error) {
+        setFormError(
+          rateLimitFeedback(error) ??
+            "De adrescontrole is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+        );
+        setSubmitting(false);
+        requestAnimationFrame(() => errorRef.current?.focus());
+        return;
+      }
     }
 
     let submittedAttempt: CheckoutAttemptSeed | null = null;
@@ -364,10 +478,15 @@ function CheckoutPage() {
       result = await createOrder({
         data: {
           ...validation.data,
+          ...chosenAddress,
+          addressValidationToken,
           idempotencyKey,
         },
       });
     } catch (error) {
+      // A signed address proof is short-lived. Revalidate on every retry after
+      // a failed order RPC so an expired proof cannot trap the checkout.
+      setAddressProof(null);
       if (isCheckoutReplayExpiredError(error)) {
         if (submittedAttempt) {
           await markCheckoutAttemptReplayExpired(submittedAttempt);
@@ -395,9 +514,9 @@ function CheckoutPage() {
     const committed = {
       id: result.order.id,
       orderNumber: result.order.orderNumber,
+      email: result.order.email,
     };
     const confirmedAttempt = submittedAttempt!;
-    stageOrderRecoveryCode(result.order.id, result.guestAccessToken);
     confirmedOrderRef.current = committed;
     setConfirmedOrder(committed);
     emptyRedirected.current = true;
@@ -493,12 +612,10 @@ function CheckoutPage() {
               <strong className="text-fg">{confirmedOrder.orderNumber}</strong>
             </p>
             <p className="mt-2 text-sm text-muted">
-              Open de bevestiging vóór je deze pagina herlaadt en bewaar de
-              eenmalige herstelcode. Als gast kun je de bestelling op dit
-              apparaat tot 72 uur na plaatsing openen.{" "}
+              We sturen de orderbevestiging naar {confirmedOrder.email}. Je kunt
+              deze bestelling op dit apparaat tot 72 uur na plaatsing openen.{" "}
               {authEnabled &&
-                "Was je ingelogd, dan kun je gekoppelde bestellingen ook via je account openen. "}
-              De code wordt voor je veiligheid niet bewaard of opnieuw getoond.
+                "Maak een account met hetzelfde e-mailadres of log in om je bestelgeschiedenis veilig te bewaren. "}
             </p>
             <Button asChild size="lg" className="mt-6">
               <Link to="/bestelling/$id" params={{ id: confirmedOrder.id }}>
@@ -544,6 +661,7 @@ function CheckoutPage() {
               </h1>
 
               <form
+                ref={formRef}
                 className="mt-8 space-y-6 rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-7"
                 onSubmit={onSubmit}
               >
@@ -578,6 +696,75 @@ function CheckoutPage() {
                     error={fieldErrors.email}
                   />
                 </fieldset>
+
+                {addressSuggestion && (
+                  <section
+                    aria-label="Voorgestelde adrescorrectie"
+                    className="rounded-xl border border-primary/30 bg-primary/5 p-4"
+                  >
+                    <p className="text-sm font-bold text-fg">
+                      Bedoel je dit bezorgadres?
+                    </p>
+                    <p className="mt-1 text-sm text-muted">
+                      {addressSuggestion.address.street}{" "}
+                      {addressSuggestion.address.houseNumber}
+                      <br />
+                      {addressSuggestion.address.postcode}{" "}
+                      {addressSuggestion.address.city}
+                    </p>
+                    {addressSuggestion.changedFields.length > 0 && (
+                      <p className="mt-2 text-xs text-muted">
+                        Aangepast:{" "}
+                        {addressSuggestion.changedFields
+                          .map((field) => addressFieldLabels[field] ?? field)
+                          .join(", ")}
+                        .
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const form = formRef.current;
+                          if (!form) return;
+                          const address = addressSuggestion.address;
+                          for (const [name, value] of Object.entries(address)) {
+                            const control = form.elements.namedItem(name);
+                            if (
+                              control instanceof HTMLInputElement ||
+                              control instanceof HTMLSelectElement
+                            ) {
+                              control.value = value;
+                            }
+                          }
+                          setAddressProof({
+                            address,
+                            validationToken: addressSuggestion.validationToken,
+                          });
+                          setAddressSuggestion(null);
+                          setFormError("");
+                        }}
+                      >
+                        Dit adres gebruiken
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setAddressSuggestion(null);
+                          setFormError("");
+                          formRef.current
+                            ?.querySelector<HTMLElement>("[name='street']")
+                            ?.focus();
+                        }}
+                      >
+                        Zelf aanpassen
+                      </Button>
+                    </div>
+                  </section>
+                )}
 
                 <fieldset className="grid gap-4 sm:grid-cols-6">
                   <legend className="col-span-full mb-1 text-base font-bold">

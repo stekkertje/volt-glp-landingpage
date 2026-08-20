@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +15,7 @@ const TEST_DATABASE_SOURCE_MARKER =
   "[app-builder] verified database source: pglite";
 
 let baseUrl;
+let addressApiServer;
 let browser;
 let devServer;
 let serverOutput = "";
@@ -114,6 +116,32 @@ async function fillCheckout(page) {
 }
 
 before(async () => {
+  addressApiServer = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const number = url.searchParams.get("number") ?? "12";
+    const addition = url.searchParams.get("numberAddition") ?? "";
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        data: {
+          street: "Teststraat",
+          number,
+          numberAddition: addition,
+          postalcode: "1234AB",
+          city: "Utrecht",
+        },
+      }),
+    );
+  });
+  await new Promise((resolve, reject) => {
+    addressApiServer.once("error", reject);
+    addressApiServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = addressApiServer.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Geen adres-API-testpoort beschikbaar");
+  }
+  const addressApiBaseUrl = `http://127.0.0.1:${address.port}`;
   const port = await availablePort();
   baseUrl = `http://127.0.0.1:${port}`;
   viteCacheDir = await mkdtemp(join(tmpdir(), "volt-auth-disabled-vite-"));
@@ -130,6 +158,7 @@ before(async () => {
         NEON_API_KEY: "",
         BETTER_AUTH_SECRET: "",
         ORDER_ACCESS_TOKEN_SECRET: "",
+        ADDRESS_VALIDATION_TOKEN_SECRET: `${randomUUID()}-${randomUUID()}`,
         ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS: "",
         MAILBOX_ADDRESS: "",
         MAILBOX_PASSWORD: "",
@@ -144,6 +173,8 @@ before(async () => {
         npm_lifecycle_event: "test",
         VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
         VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
+        APICHECK_API_KEY: "auth-disabled-test-key",
+        APICHECK_BASE_URL: addressApiBaseUrl,
         VITE_AUTH_ENABLED: "false",
         ADMIN_EMAILS: "niet-gebruikt@example.test",
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
@@ -171,22 +202,24 @@ after(async () => {
     await browser?.close();
   } finally {
     await stopDevServer();
+    if (addressApiServer) {
+      await new Promise((resolve) => addressApiServer.close(() => resolve()));
+    }
     if (viteCacheDir) {
       await rm(viteCacheDir, { recursive: true, force: true });
     }
   }
 });
 
-test("auth-disabled deployment toont alleen gastorder-herstel en geen accountlogin", async () => {
+test("auth-disabled deployment toont geen niet-werkende accountacties", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
     await page.waitForURL(`${baseUrl}/account`);
     await page
-      .getByRole("heading", { name: "Bestelling terugvinden" })
+      .getByRole("heading", { name: "Account tijdelijk niet beschikbaar" })
       .waitFor();
-    assert.equal(await page.getByText("Heb je een account?").count(), 0);
     assert.equal(await page.getByRole("link", { name: "Inloggen" }).count(), 0);
     await page.getByLabel("Bestelnummer").waitFor();
     await page.getByLabel("Herstelcode").waitFor();
@@ -196,7 +229,7 @@ test("auth-disabled deployment toont alleen gastorder-herstel en geen accountlog
       0,
     );
     assert.equal(
-      await page.getByRole("link", { name: "Bestelling terugvinden" }).count(),
+      await page.getByRole("link", { name: "Account aanmaken" }).count(),
       0,
     );
     await page.goBack();
@@ -231,7 +264,7 @@ test("auth-disabled deployment houdt de wachtwoord-admin bereikbaar", async () =
   }
 });
 
-test("auth-disabled deployment plaatst en heropent een gastbestelling", async () => {
+test("auth-disabled deployment plaatst een gastbestelling zonder accountomweg", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(`${baseUrl}/product/semaglutide-4mg-pen`, {
@@ -248,38 +281,37 @@ test("auth-disabled deployment plaatst en heropent een gastbestelling", async ()
       0,
     );
     await fillCheckout(page);
-    await page.getByRole("button", { name: "Bestelling plaatsen" }).click();
-    await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    try {
+      await Promise.all([
+        page.waitForURL(/\/bestelling\/[^/]+$/, {
+          timeout: 15_000,
+          waitUntil: "commit",
+        }),
+        page.getByRole("button", { name: "Bestelling plaatsen" }).click(),
+      ]);
+    } catch (error) {
+      const alerts = await page.getByRole("alert").allInnerTexts();
+      throw new Error(
+        `Gastcheckout navigeerde niet. URL=${page.url()} meldingen=${JSON.stringify(alerts)} server=${serverOutput}`,
+        { cause: error },
+      );
+    }
 
     const orderNumber = (await page.getByText(/^MED-\d+$/).innerText()).trim();
-    const recoveryHeading = page.getByRole("heading", {
-      name: "Bewaar je herstelcode",
-    });
-    const confirmationLoaded = await recoveryHeading
-      .waitFor({ timeout: 3_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!confirmationLoaded) {
-      await page
-        .getByRole("link", { name: "Open de bevestiging" })
-        .evaluate((link) => link.click());
-    }
-    await recoveryHeading.waitFor();
-    const recoveryCode = (await page.locator("code").innerText()).trim();
     assert.match(orderNumber, /^MED-\d+$/);
-    assert.ok(recoveryCode.length >= 8);
+    await page.getByRole("heading", { level: 1, name: orderNumber }).waitFor();
+    assert.equal(await page.locator("code").count(), 0);
+    assert.equal(await page.getByText(/herstelcode/i).count(), 0);
     assert.equal(await page.getByText(/via je account openen/i).count(), 0);
 
-    await page
-      .getByRole("link", { name: "Bestelling terugvinden" })
-      .first()
-      .click();
-    await page.waitForURL(`${baseUrl}/account`);
-    await page.getByLabel("Bestelnummer").fill(orderNumber);
-    await page.getByLabel("Herstelcode").fill(recoveryCode);
-    await page.getByRole("button", { name: "Bestelling bekijken" }).click();
-    await page.waitForURL(/\/bestelling\/[^/]+$/);
+    await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("heading", { level: 1, name: orderNumber }).waitFor();
+
+    await page.goto(`${baseUrl}/account`, { waitUntil: "networkidle" });
+    await page
+      .getByRole("heading", { name: "Account tijdelijk niet beschikbaar" })
+      .waitFor();
+    assert.equal(await page.getByLabel("Herstelcode").count(), 0);
   } finally {
     await context.close();
   }

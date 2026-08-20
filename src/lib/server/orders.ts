@@ -8,6 +8,8 @@ import {
   orderIdSchema,
   orderViewerSchema,
   pricingPreviewSchema,
+  updateOrderAddressSchema,
+  updateOrderFulfillmentSchema,
   updateOrderStatusSchema,
 } from "@/lib/server/order-schema";
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
@@ -22,10 +24,16 @@ export const ORDER_SERVER_ERROR_POLICY = {
   allowedNames: new Set([
     "IdempotencyReplayExpiredError",
     "IdempotencyReplayUnavailableError",
+    "AddressValidationTokenError",
     "OrderAccessError",
+    "OrderAddressLockedError",
+    "OrderFulfillmentError",
+    "OrderFulfillmentLockedError",
     "OrderStatusConflictError",
     "OrderStatusTransitionError",
+    "OrderUpdateConflictError",
     "PricingError",
+    "ShipmentActionError",
   ]),
   messageByName: {
     IdempotencyConflictError: ORDER_CONFLICT_ERROR_MESSAGE,
@@ -34,10 +42,16 @@ export const ORDER_SERVER_ERROR_POLICY = {
     IdempotencyConflictError: 409,
     IdempotencyReplayExpiredError: 410,
     IdempotencyReplayUnavailableError: 503,
+    AddressValidationTokenError: 400,
     OrderAccessError: 404,
+    OrderAddressLockedError: 409,
+    OrderFulfillmentError: 400,
+    OrderFulfillmentLockedError: 409,
     OrderStatusConflictError: 409,
     OrderStatusTransitionError: 409,
+    OrderUpdateConflictError: 409,
     PricingError: 400,
+    ShipmentActionError: 400,
   },
 } satisfies PublicServerErrorPolicy;
 
@@ -101,23 +115,18 @@ export const createOrder = createServerFn({ method: "POST" })
         maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
       },
     );
-    return result;
+    return { order: result.order, replayed: result.replayed };
   });
 
 export const getOrderForViewer = createServerFn({ method: "POST" })
   .middleware([orderServerErrorMiddleware, optionalAuthMiddleware])
   .validator(orderViewerSchema)
   .handler(async ({ data, context }) => {
-    const { getCookie, setCookie } =
-      await import("@tanstack/react-start/server");
-    const {
-      GUEST_ACCESS_TOKEN_TTL_MS,
-      getOrderRecordForViewer,
-      guestOrderCookieValue,
-      parseGuestOrderCookie,
-    } = await import("./orders.server");
+    const { getCookie } = await import("@tanstack/react-start/server");
+    const { getOrderRecordForViewer, parseGuestOrderCookie } =
+      await import("./orders.server");
     const { isAdminViewer } = await import("./admin-auth.server");
-    if (data.accessCode || !context.userId) {
+    if (!context.userId) {
       const { enforceOrderAccessLimit } =
         await import("./abuse-protection.server");
       const { getRequestClientIdentifier } =
@@ -143,19 +152,6 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
       isAdmin: await isAdminViewer(context.bearerToken),
     });
 
-    if (data.accessCode) {
-      setCookie(
-        GUEST_ORDER_COOKIE,
-        guestOrderCookieValue(order.id, data.accessCode),
-        {
-          httpOnly: true,
-          sameSite: "strict",
-          secure: true,
-          path: "/",
-          maxAge: Math.floor(GUEST_ACCESS_TOKEN_TTL_MS / 1_000),
-        },
-      );
-    }
     return order;
   });
 
@@ -190,4 +186,54 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     const { updateOrderStatusRecord } = await import("./orders.server");
     assertSameOriginMutation();
     return updateOrderStatusRecord(data.id, data.expectedStatus, data.status);
+  });
+
+export const updateOrderAddress = createServerFn({ method: "POST" })
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
+  .validator(updateOrderAddressSchema)
+  .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    const { updateOrderAddressRecord } = await import("./orders.server");
+    assertSameOriginMutation();
+    return updateOrderAddressRecord(data);
+  });
+
+export const updateOrderFulfillment = createServerFn({ method: "POST" })
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
+  .validator(updateOrderFulfillmentSchema)
+  .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    const { updateOrderFulfillmentRecord } = await import("./orders.server");
+    assertSameOriginMutation();
+    return updateOrderFulfillmentRecord(data);
+  });
+
+export const createMyParcelConcept = createServerFn({ method: "POST" })
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
+  .validator(orderIdSchema)
+  .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    const { createMyParcelConceptRecord } = await import("./shipping.server");
+    assertSameOriginMutation();
+    return createMyParcelConceptRecord(data.id);
+  });
+
+export const requestMyParcelLabel = createServerFn({ method: "POST" })
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
+  .validator(orderIdSchema)
+  .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    const { requestMyParcelLabelRecord } = await import("./shipping.server");
+    assertSameOriginMutation();
+    return requestMyParcelLabelRecord(data.id);
+  });
+
+export const refreshMyParcelTracking = createServerFn({ method: "POST" })
+  .middleware([orderServerErrorMiddleware, adminMiddleware])
+  .validator(orderIdSchema)
+  .handler(async ({ data }) => {
+    const { assertSameOriginMutation } = await import("./admin-auth.server");
+    const { refreshMyParcelTrackingRecord } = await import("./shipping.server");
+    assertSameOriginMutation();
+    return refreshMyParcelTrackingRecord(data.id);
   });

@@ -39,9 +39,14 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
         "customers",
         "discount_codes",
         "order_access_tokens",
+        "order_claim_tokens",
+        "order_events",
+        "order_fulfillment_lines",
         "order_lines",
+        "order_shipments",
         "orders",
         "rate_limit_buckets",
+        "transactional_mail_outbox",
       ],
     ],
   );
@@ -52,9 +57,14 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
       "customers",
       "discount_codes",
       "order_access_tokens",
+      "order_claim_tokens",
+      "order_events",
+      "order_fulfillment_lines",
       "order_lines",
+      "order_shipments",
       "orders",
       "rate_limit_buckets",
+      "transactional_mail_outbox",
     ],
   );
 
@@ -94,6 +104,32 @@ test("the shop migration creates all tables and seeds VOLT10", async () => {
        and column_name = 'token_ciphertext'`,
   );
   assert.deepEqual(tokenColumns, [{ column_name: "token_ciphertext" }]);
+
+  const addressValidationColumns = await sql.query(
+    `select column_name
+     from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'orders'
+       and column_name = any($1)
+     order by column_name`,
+    [
+      [
+        "address_validated_at",
+        "address_validation_fingerprint",
+        "address_validation_provider",
+        "address_validation_status",
+      ],
+    ],
+  );
+  assert.deepEqual(
+    addressValidationColumns.map((row) => row.column_name),
+    [
+      "address_validated_at",
+      "address_validation_fingerprint",
+      "address_validation_provider",
+      "address_validation_status",
+    ],
+  );
 });
 
 test("the database rejects duplicate variants within one order", async () => {

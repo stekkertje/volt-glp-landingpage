@@ -1,8 +1,8 @@
 /**
  * Self-hosted Better Auth for THIS app (server-only).
  *
- * Pre-wired for live preview + deploy — do not rewrite this file. To enable
- * local email/password, flip the flag in `./email-password` only (see auth skill).
+ * Pre-wired for live preview + deploy. Local email/password is controlled by
+ * the single flag in `./email-password`; mail callbacks use the durable outbox.
  *
  * The app runs its own Better Auth at `/api/auth/*`, so the session cookie stays
  * on this app's own origin. Sign-in federates to the shared **Grok auth broker**
@@ -32,13 +32,18 @@ import { betterAuth } from "better-auth";
 import { bearer, genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
 import { postgresConnectionConfig } from "../db-policy";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GROK_PROVIDERS } from "./providers";
 import { pgliteDialect } from "./pglite-dialect";
+import {
+  accountVerificationMail,
+  passwordResetMail,
+} from "@/lib/server/account-mail-templates.server";
+import { enqueueTransactionalMail } from "@/lib/server/mail/outbox.server";
 import {
   GROK_ISSUER_DEFAULT,
   PREVIEW_ALLOWED_HOSTS,
@@ -78,7 +83,8 @@ const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 // for any `*.grok-sandbox.com` callback (see `./preview`).
 const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
 const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
-const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
+const grokClientSecret =
+  env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
 
 /** True when federated sign-in is active (real auth is enforced). */
 export const authConfigured =
@@ -120,7 +126,10 @@ const trustedOrigins: string[] = explicitBaseURL
       // Host wildcards (matched against Origin's host)
       ...previewAllowedHosts,
       // Full-origin wildcards (matched against Origin)
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+      ...previewAllowedHosts.flatMap((host) => [
+        `https://${host}`,
+        `http://${host}`,
+      ]),
       ...LOCAL_DEV_ORIGINS,
     ];
 
@@ -171,6 +180,7 @@ const grokOAuthPlugin = authConfigured
   : null;
 
 export const auth = betterAuth({
+  appName: "VOLT",
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
   // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).
@@ -205,8 +215,51 @@ export const auth = betterAuth({
   // flicker-prevention guidance (gate on `isPending`; SSR the session).
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
+  emailVerification: emailAndPasswordEnabled
+    ? {
+        sendOnSignUp: true,
+        sendOnSignIn: false,
+        autoSignInAfterVerification: false,
+        expiresIn: 60 * 60,
+        sendVerificationEmail: async ({ user, url, token }) => {
+          await enqueueTransactionalMail(
+            accountVerificationMail({
+              dedupeKey: `account-verify:${createHash("sha256").update(token).digest("hex")}`,
+              userId: user.id,
+              email: user.email,
+              name: user.name,
+              url,
+            }),
+          );
+        },
+      }
+    : undefined,
+
   // Local email/password — toggled only via `./email-password` (not a plugin).
-  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
+  ...(emailAndPasswordEnabled
+    ? {
+        emailAndPassword: {
+          enabled: true,
+          requireEmailVerification: true,
+          minPasswordLength: 12,
+          maxPasswordLength: 128,
+          autoSignIn: false,
+          resetPasswordTokenExpiresIn: 60 * 60,
+          revokeSessionsOnPasswordReset: true,
+          sendResetPassword: async ({ user, url, token }) => {
+            await enqueueTransactionalMail(
+              passwordResetMail({
+                dedupeKey: `account-password-reset:${createHash("sha256").update(token).digest("hex")}`,
+                userId: user.id,
+                email: user.email,
+                name: user.name,
+                url,
+              }),
+            );
+          },
+        },
+      }
+    : {}),
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a

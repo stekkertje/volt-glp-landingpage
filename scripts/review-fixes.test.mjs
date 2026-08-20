@@ -9,11 +9,9 @@ let GUEST_ORDER_COOKIE;
 let SITE;
 let canonicalCheckoutPayload;
 let checkoutIdempotencyKeyFromSeed;
-let consumeOrderRecoveryCode;
 let getAdminCapabilities;
 let isConflictServerError;
 let isSameOriginMutationRequest;
-let stageOrderRecoveryCode;
 
 const checkoutPayload = (overrides = {}) => ({
   name: "Noor de Vries",
@@ -47,8 +45,6 @@ before(async () => {
   ({ SITE } = await vite.ssrLoadModule("/src/lib/product.ts"));
   ({ canonicalCheckoutPayload, checkoutIdempotencyKeyFromSeed } =
     await vite.ssrLoadModule("/src/lib/checkout-idempotency.ts"));
-  ({ stageOrderRecoveryCode, consumeOrderRecoveryCode } =
-    await vite.ssrLoadModule("/src/lib/order-recovery-memory.ts"));
   ({ isConflictServerError } = await vite.ssrLoadModule(
     "/src/lib/server-error.ts",
   ));
@@ -92,12 +88,6 @@ test("checkout keeps one seed-derived key until an attempt is resolved", async (
 
   assert.equal(retry, first);
   assert.notEqual(nextAttempt, first);
-});
-
-test("a staged recovery code is memory-only and consumed once", () => {
-  stageOrderRecoveryCode("order-review-test", "ABCD-EFGH");
-  assert.equal(consumeOrderRecoveryCode("order-review-test"), "ABCD-EFGH");
-  assert.equal(consumeOrderRecoveryCode("order-review-test"), null);
 });
 
 test("same-origin mutation checks ignore spoofable forwarded hosts", () => {
@@ -248,11 +238,9 @@ test("review documentation and recovery flow contain no stale demo or recovery s
       readFile("src/lib/server/admin-auth.server.ts", "utf8"),
     ]);
   assert.doesNotMatch(briefing, /checkout zijn DEMO|demo-submit|nep-success/i);
-  assert.match(
-    account,
-    /<GuestOrderAccess showLogin=\{authEnabled && !user\} \/>/,
-  );
-  assert.match(account, /user && !user\.isDevFallback && <SignedInOrders \/>/);
+  assert.match(account, /<GuestOrderClaimPanel email=/);
+  assert.match(account, /<SignedInAccount user=\{user\}/);
+  assert.doesNotMatch(account, /GuestOrderAccess|accessCode|Herstelcode/);
   assert.doesNotMatch(confirmation, /sessionStorage/);
   assert.match(checkout, /Deze bestelling is al geplaatst/);
   assert.match(
@@ -261,6 +249,6 @@ test("review documentation and recovery flow contain no stale demo or recovery s
   );
   assert.doesNotMatch(orderFunctions, /secure:\s*process\.env\.NODE_ENV/);
   assert.doesNotMatch(adminAuth, /secure:\s*productionCookie/);
-  assert.equal((orderFunctions.match(/secure:\s*true/g) ?? []).length, 2);
+  assert.equal((orderFunctions.match(/secure:\s*true/g) ?? []).length, 1);
   assert.equal((adminAuth.match(/secure:\s*true/g) ?? []).length, 2);
 });

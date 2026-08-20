@@ -17,6 +17,12 @@ const requiredText = (label: string, max: number, min = 1) =>
 
 export const contactMessageSchema = z
   .object({
+    idempotencyKey: z
+      .string({ message: "Herhaalcode ontbreekt." })
+      .trim()
+      .min(16, { message: "Herhaalcode is ongeldig." })
+      .max(200, { message: "Herhaalcode is ongeldig." })
+      .regex(/^[A-Za-z0-9:_-]+$/, { message: "Herhaalcode is ongeldig." }),
     name: requiredText("Naam", 120, 3),
     email: z.preprocess(
       (value) =>

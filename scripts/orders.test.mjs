@@ -7,15 +7,22 @@ let vite;
 let getSql;
 let createOrderRecord;
 let getOrderRecordForViewer;
+let getAdminOrderRecord;
 let listAdminOrderRecords;
 let listOwnOrderRecords;
+let updateOrderAddressRecord;
+let updateOrderFulfillmentRecord;
 let updateOrderStatusRecord;
 let ORDER_STATUSES;
 let ALLOWED_ORDER_STATUS_TRANSITIONS;
+let issueAddressValidationToken;
+
+process.env.ADDRESS_VALIDATION_TOKEN_SECRET =
+  "orders-address-validation-secret-with-at-least-32-characters";
 
 function orderInput(overrides = {}) {
   const unique = randomUUID();
-  return {
+  const input = {
     name: "  Noor de Vries ",
     email: `NOOR+${unique}@EXAMPLE.TEST`,
     phone: " 0612345678 ",
@@ -29,6 +36,21 @@ function orderInput(overrides = {}) {
     discountCode: null,
     idempotencyKey: randomUUID(),
     ...overrides,
+  };
+  return {
+    ...input,
+    addressValidationToken:
+      overrides.addressValidationToken ??
+      issueAddressValidationToken({
+        address: {
+          street: input.street,
+          houseNumber: input.houseNumber,
+          postcode: input.postcode,
+          city: input.city,
+          country: input.country,
+        },
+        provider: input.country.toUpperCase() === "NL" ? "apicheck" : "google",
+      }),
   };
 }
 
@@ -50,11 +72,17 @@ before(async () => {
     server: { middlewareMode: true },
   });
   ({ getSql } = await vite.ssrLoadModule("/src/lib/db.ts"));
+  ({ issueAddressValidationToken } = await vite.ssrLoadModule(
+    "/src/lib/server/address-validation-token.server.ts",
+  ));
   ({
     createOrderRecord,
+    getAdminOrderRecord,
     getOrderRecordForViewer,
     listAdminOrderRecords,
     listOwnOrderRecords,
+    updateOrderAddressRecord,
+    updateOrderFulfillmentRecord,
     updateOrderStatusRecord,
   } = await vite.ssrLoadModule("/src/lib/server/orders.server.ts"));
   ({ ORDER_STATUSES, ALLOWED_ORDER_STATUS_TRANSITIONS } =
@@ -94,6 +122,21 @@ test("createOrder writes customer, order and lines using server prices", async (
     `select token_hash, token_ciphertext, issued_at, expires_at
      from order_access_tokens
      where order_id = $1`,
+    [result.order.id],
+  );
+  const fulfillmentLines = await sql.query(
+    `select slug, option_id, name, option_label, qty, source_order_line_id
+     from order_fulfillment_lines where order_id = $1`,
+    [result.order.id],
+  );
+  const orderEvents = await sql.query(
+    `select id, event_type, dedupe_key, actor_type
+     from order_events where order_id = $1`,
+    [result.order.id],
+  );
+  const orderMail = await sql.query(
+    `select kind, recipient, reply_to, dedupe_key, order_event_id
+     from transactional_mail_outbox where order_id = $1 order by kind`,
     [result.order.id],
   );
 
@@ -145,6 +188,31 @@ test("createOrder writes customer, order and lines using server prices", async (
       new Date(accessTokens[0].issued_at).getTime(),
     72 * 60 * 60 * 1_000,
   );
+  assert.deepEqual(
+    fulfillmentLines.map(({ source_order_line_id: _source, ...line }) => line),
+    [
+      {
+        slug: "semaglutide-2mg",
+        option_id: "none",
+        name: "Semaglutide 2mg",
+        option_label: "Geen extra's",
+        qty: 1,
+      },
+    ],
+  );
+  assert.match(fulfillmentLines[0].source_order_line_id, /^[a-f0-9-]{36}$/i);
+  assert.equal(orderEvents.length, 1);
+  assert.equal(orderEvents[0].event_type, "order_created");
+  assert.equal(orderEvents[0].actor_type, "system");
+  assert.equal(orderEvents[0].dedupe_key, `order:${result.order.id}:created`);
+  assert.deepEqual(
+    orderMail.map((mail) => mail.kind),
+    ["order_confirmation_customer", "order_confirmation_owner"],
+  );
+  assert.equal(orderMail[0].order_event_id, orderEvents[0].id);
+  assert.equal(orderMail[1].order_event_id, orderEvents[0].id);
+  assert.equal(orderMail[0].recipient, input.email.toLowerCase());
+  assert.equal(orderMail[1].reply_to, input.email.toLowerCase());
 });
 
 test("an idempotent retry returns the same guest proof without minting another", async () => {
@@ -160,7 +228,8 @@ test("an idempotent retry returns the same guest proof without minting another",
 
   const accessible = await getOrderRecordForViewer({
     id: first.order.id,
-    accessCode: second.guestAccessToken,
+    cookieOrderId: first.order.id,
+    cookieAccessToken: second.guestAccessToken,
     userId: null,
     isAdmin: false,
   });
@@ -184,6 +253,16 @@ test("an idempotent retry returns the same guest proof without minting another",
   assert.equal(tokens.length, 1);
   assert.ok(tokens.every((row) => /^[a-f0-9]{64}$/.test(row.token_hash)));
   assert.ok(tokens.every((row) => row.token_hash !== first.guestAccessToken));
+  const eventCount = await sql.query(
+    "select count(*)::int as count from order_events where order_id = $1",
+    [first.order.id],
+  );
+  const mailCount = await sql.query(
+    "select count(*)::int as count from transactional_mail_outbox where order_id = $1",
+    [first.order.id],
+  );
+  assert.deepEqual(eventCount, [{ count: 1 }]);
+  assert.deepEqual(mailCount, [{ count: 2 }]);
 });
 
 test("a replay collapses multiple active proofs to one", async () => {
@@ -338,7 +417,8 @@ test("an unreadable active ciphertext fails without revoking its valid hash", as
 
     const stillAccessible = await getOrderRecordForViewer({
       id: created.order.id,
-      accessCode: created.guestAccessToken,
+      cookieOrderId: created.order.id,
+      cookieAccessToken: created.guestAccessToken,
       userId: null,
       isAdmin: false,
     });
@@ -483,7 +563,8 @@ test("concurrent identical retries create one order and return the same proof", 
 
   const order = await getOrderRecordForViewer({
     id: first.order.id,
-    accessCode: second.guestAccessToken,
+    cookieOrderId: first.order.id,
+    cookieAccessToken: second.guestAccessToken,
     userId: null,
     isAdmin: false,
   });
@@ -585,7 +666,308 @@ test("admin order pagination returns distinct working pages", async () => {
   for (const order of created) assert.ok(ids.has(order.order.id));
 });
 
-test("expired recovery codes and cookies do not authorize an order", async () => {
+test("admin address updates are optimistic, audited and never change paid order data", async () => {
+  const created = await createOrderRecord(orderInput(), { userId: null });
+  const before = await getAdminOrderRecord(created.order.id);
+  const sql = await getSql();
+  const paidBefore = await sql.query(
+    `select subtotal_cents, stack_discount_cents, code_discount_cents,
+            shipping_cents, total_cents
+     from orders where id = $1`,
+    [created.order.id],
+  );
+  const linesBefore = await sql.query(
+    `select id, slug, option_id, unit_price_cents, qty, line_total_cents
+     from order_lines where order_id = $1 order by id`,
+    [created.order.id],
+  );
+
+  const updated = await updateOrderAddressRecord({
+    id: created.order.id,
+    expectedUpdatedAt: before.updatedAt,
+    name: "Noor Janssen",
+    phone: "0611111111",
+    street: "Nieuweweg",
+    houseNumber: "8 B",
+    postcode: "3511ab",
+    city: "Utrecht",
+    country: "nl",
+  });
+  assert.equal(updated.name, "Noor Janssen");
+  assert.equal(updated.postcode, "3511 AB");
+  assert.notEqual(updated.updatedAt, before.updatedAt);
+
+  const paidAfter = await sql.query(
+    `select subtotal_cents, stack_discount_cents, code_discount_cents,
+            shipping_cents, total_cents
+     from orders where id = $1`,
+    [created.order.id],
+  );
+  const linesAfter = await sql.query(
+    `select id, slug, option_id, unit_price_cents, qty, line_total_cents
+     from order_lines where order_id = $1 order by id`,
+    [created.order.id],
+  );
+  assert.deepEqual(paidAfter, paidBefore);
+  assert.deepEqual(linesAfter, linesBefore);
+
+  const changes = await sql.query(
+    `select e.id, e.event_type, e.actor_type, m.kind
+     from order_events e
+     join transactional_mail_outbox m on m.order_event_id = e.id
+     where e.order_id = $1 and e.event_type = 'address_changed'`,
+    [created.order.id],
+  );
+  assert.deepEqual(
+    changes.map(({ event_type, actor_type, kind }) => ({
+      event_type,
+      actor_type,
+      kind,
+    })),
+    [
+      {
+        event_type: "address_changed",
+        actor_type: "admin",
+        kind: "order_address_changed_customer",
+      },
+    ],
+  );
+
+  const noOp = await updateOrderAddressRecord({
+    id: created.order.id,
+    expectedUpdatedAt: updated.updatedAt,
+    name: updated.name,
+    phone: updated.phone ?? undefined,
+    street: updated.street,
+    houseNumber: updated.houseNumber,
+    postcode: updated.postcode,
+    city: updated.city,
+    country: updated.country,
+  });
+  assert.equal(noOp.updatedAt, updated.updatedAt);
+  const afterNoOp = await sql.query(
+    `select count(*)::int as count
+     from order_events where order_id = $1 and event_type = 'address_changed'`,
+    [created.order.id],
+  );
+  assert.deepEqual(afterNoOp, [{ count: 1 }]);
+
+  await assert.rejects(
+    updateOrderAddressRecord({
+      id: created.order.id,
+      expectedUpdatedAt: before.updatedAt,
+      name: updated.name,
+      phone: updated.phone ?? undefined,
+      street: updated.street,
+      houseNumber: updated.houseNumber,
+      postcode: updated.postcode,
+      city: "Amsterdam",
+      country: updated.country,
+    }),
+    /intussen gewijzigd|vernieuw/i,
+  );
+});
+
+test("admin fulfillment updates use the catalog without rewriting historical prices", async () => {
+  const created = await createOrderRecord(orderInput(), { userId: null });
+  const before = await getAdminOrderRecord(created.order.id);
+  const sql = await getSql();
+  const historicalBefore = await sql.query(
+    `select id, slug, option_id, name, option_label, unit_price_cents, qty,
+            line_total_cents
+     from order_lines where order_id = $1 order by id`,
+    [created.order.id],
+  );
+  const totalBefore = await sql.query(
+    `select subtotal_cents, stack_discount_cents, code_discount_cents,
+            shipping_cents, total_cents
+     from orders where id = $1`,
+    [created.order.id],
+  );
+
+  const updated = await updateOrderFulfillmentRecord({
+    id: created.order.id,
+    expectedUpdatedAt: before.updatedAt,
+    lines: [{ slug: "semaglutide-4mg-pen", optionId: "default", qty: 2 }],
+  });
+  assert.deepEqual(
+    updated.fulfillmentLines.map(
+      ({ slug, optionId, name, optionLabel, qty }) => ({
+        slug,
+        optionId,
+        name,
+        optionLabel,
+        qty,
+      }),
+    ),
+    [
+      {
+        slug: "semaglutide-4mg-pen",
+        optionId: "default",
+        name: "Semaglutide 4mg - Pen",
+        optionLabel: "4 mg",
+        qty: 2,
+      },
+    ],
+  );
+  assert.deepEqual(updated.lines, before.lines);
+  assert.deepEqual(
+    await sql.query(
+      `select id, slug, option_id, name, option_label, unit_price_cents, qty,
+              line_total_cents
+       from order_lines where order_id = $1 order by id`,
+      [created.order.id],
+    ),
+    historicalBefore,
+  );
+  assert.deepEqual(
+    await sql.query(
+      `select subtotal_cents, stack_discount_cents, code_discount_cents,
+              shipping_cents, total_cents
+       from orders where id = $1`,
+      [created.order.id],
+    ),
+    totalBefore,
+  );
+
+  const changes = await sql.query(
+    `select e.id, e.event_type, m.kind, m.text_body
+     from order_events e
+     join transactional_mail_outbox m on m.order_event_id = e.id
+     where e.order_id = $1 and e.event_type = 'products_changed'`,
+    [created.order.id],
+  );
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].kind, "order_products_changed_customer");
+  assert.match(changes[0].text_body, /betaalde bedrag|vastgelegde bedrag/i);
+  assert.match(changes[0].text_body, /Semaglutide 4mg/i);
+
+  const noOp = await updateOrderFulfillmentRecord({
+    id: created.order.id,
+    expectedUpdatedAt: updated.updatedAt,
+    lines: [{ slug: "semaglutide-4mg-pen", optionId: "default", qty: 2 }],
+  });
+  assert.equal(noOp.updatedAt, updated.updatedAt);
+  const afterNoOp = await sql.query(
+    `select count(*)::int as count
+     from order_events where order_id = $1 and event_type = 'products_changed'`,
+    [created.order.id],
+  );
+  assert.deepEqual(afterNoOp, [{ count: 1 }]);
+
+  await assert.rejects(
+    updateOrderFulfillmentRecord({
+      id: created.order.id,
+      expectedUpdatedAt: before.updatedAt,
+      lines: [{ slug: "tirzepatide-10mg", optionId: "none", qty: 1 }],
+    }),
+    /intussen gewijzigd|vernieuw/i,
+  );
+  await assert.rejects(
+    updateOrderFulfillmentRecord({
+      id: created.order.id,
+      expectedUpdatedAt: updated.updatedAt,
+      lines: [{ slug: "onbekend-product", optionId: "default", qty: 1 }],
+    }),
+    /product bestaat niet/i,
+  );
+});
+
+test("fulfillment is locked after completion, label request or carrier handover", async () => {
+  const sql = await getSql();
+  const replacement = [
+    { slug: "semaglutide-4mg-pen", optionId: "default", qty: 1 },
+  ];
+  const insertShipment = async (
+    orderId,
+    { labelStatus = "not_requested", labelRequested = false, trackingStatus },
+  ) => {
+    const unique = randomUUID();
+    await sql.query(
+      `insert into order_shipments (
+        id, order_id, reference_identifier, create_idempotency_key,
+        payload_hash, creation_status, provider_shipment_id, tracking_status,
+        label_status, label_requested_at, created_at, updated_at
+      ) values (
+        $1, $2, $3, $4, $5, 'created', $6, $7, $8,
+        case when $9 then now() else null end, now(), now()
+      )`,
+      [
+        unique,
+        orderId,
+        `ref-${unique}`,
+        `shipment-${unique}`,
+        "a".repeat(64),
+        `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`,
+        trackingStatus,
+        labelStatus,
+        labelRequested,
+      ],
+    );
+  };
+  const assertLocked = async (created) => {
+    const before = await getAdminOrderRecord(created.order.id);
+    await assert.rejects(
+      updateOrderFulfillmentRecord({
+        id: created.order.id,
+        expectedUpdatedAt: before.updatedAt,
+        lines: replacement,
+      }),
+      /vergrendeld|afgerond|verzending/i,
+    );
+    const fulfillment = await sql.query(
+      `select slug, option_id, qty
+       from order_fulfillment_lines where order_id = $1`,
+      [created.order.id],
+    );
+    assert.deepEqual(fulfillment, [
+      { slug: "semaglutide-2mg", option_id: "none", qty: 1 },
+    ]);
+    const events = await sql.query(
+      `select count(*)::int as count from order_events
+       where order_id = $1 and event_type = 'products_changed'`,
+      [created.order.id],
+    );
+    assert.deepEqual(events, [{ count: 0 }]);
+  };
+
+  for (const status of ["shipped", "cancelled"]) {
+    const created = await createOrderRecord(orderInput(), { userId: null });
+    await sql.query("update orders set status = $1 where id = $2", [
+      status,
+      created.order.id,
+    ]);
+    await assertLocked(created);
+  }
+
+  const labelled = await createOrderRecord(orderInput(), { userId: null });
+  await insertShipment(labelled.order.id, {
+    labelStatus: "ready",
+    labelRequested: true,
+    trackingStatus: "registered",
+  });
+  await assertLocked(labelled);
+
+  const handedOver = await createOrderRecord(orderInput(), { userId: null });
+  await insertShipment(handedOver.order.id, {
+    trackingStatus: "handed_over",
+  });
+  await assertLocked(handedOver);
+
+  const conceptOnly = await createOrderRecord(orderInput(), { userId: null });
+  await insertShipment(conceptOnly.order.id, {
+    trackingStatus: "registered",
+  });
+  const conceptBefore = await getAdminOrderRecord(conceptOnly.order.id);
+  const conceptUpdated = await updateOrderFulfillmentRecord({
+    id: conceptOnly.order.id,
+    expectedUpdatedAt: conceptBefore.updatedAt,
+    lines: replacement,
+  });
+  assert.equal(conceptUpdated.fulfillmentLines[0].slug, "semaglutide-4mg-pen");
+});
+
+test("expired guest cookies do not authorize an order", async () => {
   const created = await createOrderRecord(orderInput(), { userId: null });
   const sql = await getSql();
   await sql.query(
@@ -596,15 +978,6 @@ test("expired recovery codes and cookies do not authorize an order", async () =>
     [created.order.id],
   );
 
-  await assert.rejects(
-    getOrderRecordForViewer({
-      id: created.order.id,
-      accessCode: created.guestAccessToken,
-      userId: null,
-      isAdmin: false,
-    }),
-    /niet gevonden|toegankelijk/i,
-  );
   await assert.rejects(
     getOrderRecordForViewer({
       id: created.order.id,
@@ -638,20 +1011,6 @@ test("order number and email alone do not authorize a guest", async () => {
     getOrderRecordForViewer({
       orderNumber: created.order.orderNumber,
       email: input.email,
-      userId: null,
-      isAdmin: false,
-    }),
-    /niet gevonden|toegankelijk/i,
-  );
-});
-
-test("a wrong recovery code does not expose an order", async () => {
-  const created = await createOrderRecord(orderInput(), { userId: null });
-
-  await assert.rejects(
-    getOrderRecordForViewer({
-      id: created.order.id,
-      accessCode: "VERKEERDE-HERSTELCODE",
       userId: null,
       isAdmin: false,
     }),
@@ -709,4 +1068,18 @@ test("concurrent status updates with the same expected state cannot both win", a
     created.order.id,
   ]);
   assert.ok(["paid", "cancelled"].includes(rows[0].status));
+  const notifications = await sql.query(
+    `select e.event_type, e.payload, m.kind, m.dedupe_key
+     from order_events e
+     join transactional_mail_outbox m on m.order_event_id = e.id
+     where e.order_id = $1 and e.event_type = 'status_changed'`,
+    [created.order.id],
+  );
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].event_type, "status_changed");
+  assert.equal(notifications[0].kind, "order_status_changed_customer");
+  assert.match(
+    notifications[0].dedupe_key,
+    /^order-event:[a-f0-9-]+:customer$/i,
+  );
 });
