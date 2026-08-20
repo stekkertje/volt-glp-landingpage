@@ -242,18 +242,54 @@ test("klant doorloopt registratie, herstel, login, claimlink en mobiel account",
     await page.getByLabel(/^Wachtwoord/).fill(firstPassword);
     await page.getByLabel("Herhaal wachtwoord").fill(firstPassword);
     await page.getByRole("button", { name: "Account aanmaken" }).click();
+    const registrationCopy = page.getByText(
+      /Als dit e-mailadres nog niet bij ons bekend is/i,
+    );
+    await registrationCopy.waitFor();
+    const newAccountRegistrationCopy = await registrationCopy.innerText();
+
+    await page.goto(`${baseUrl}/registreren`, { waitUntil: "networkidle" });
+    await page.getByLabel("Naam").fill("Mobiele Accountklant");
+    await page.getByLabel("E-mailadres").fill(email);
+    await page.getByLabel(/^Wachtwoord/).fill(firstPassword);
+    await page.getByLabel("Herhaal wachtwoord").fill(firstPassword);
+    await page.getByRole("button", { name: "Account aanmaken" }).click();
+    await registrationCopy.waitFor();
+    assert.equal(
+      await registrationCopy.innerText(),
+      newAccountRegistrationCopy,
+    );
+
+    await page.goto(`${baseUrl}/registreren`, { waitUntil: "networkidle" });
+    await page.route("**/api/auth/sign-up/email", async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Testfout" }),
+      });
+    });
+    await page.getByLabel("Naam").fill("Tijdelijke Testfout");
     await page
-      .getByText(/Als dit e-mailadres nog niet bij ons bekend is/i)
+      .getByLabel("E-mailadres")
+      .fill(`registratiefout-${randomUUID()}@example.test`);
+    await page.getByLabel(/^Wachtwoord/).fill(firstPassword);
+    await page.getByLabel("Herhaal wachtwoord").fill(firstPassword);
+    await page.getByRole("button", { name: "Account aanmaken" }).click();
+    await page
+      .getByText("Account aanmaken lukt nu niet. Probeer het later opnieuw.")
       .waitFor();
+    assert.equal(await registrationCopy.count(), 0);
+    await page.unroute("**/api/auth/sign-up/email");
+
     const initialVerificationUrl = await waitForMailUrl(
       email,
       "/api/auth/verify-email?token=",
     );
     await page.waitForTimeout(1_100);
 
-    await page
-      .getByRole("link", { name: "Bevestigingsmail opnieuw sturen" })
-      .click();
+    await page.goto(`${baseUrl}/bevestigingsmail-opnieuw`, {
+      waitUntil: "networkidle",
+    });
     await page.getByLabel("E-mailadres").fill(email);
     await page
       .getByRole("button", { name: "Nieuwe bevestigingsmail aanvragen" })

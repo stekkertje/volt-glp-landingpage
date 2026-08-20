@@ -469,6 +469,7 @@ export type ShipmentCreationClaim =
   | { kind: "claimed"; token: string; reconcileOnly: boolean }
   | { kind: "existing"; record: ShipmentCreationRecord }
   | { kind: "busy" }
+  | { kind: "order_ineligible" }
   | { kind: "address_invalid" }
   | { kind: "conflict" };
 
@@ -524,6 +525,15 @@ export class ShipmentAddressChangedError extends Error {
       "Het bezorgadres is intussen gewijzigd of niet meer gevalideerd. Controleer het adres opnieuw.",
     );
     this.name = "ShipmentAddressChangedError";
+  }
+}
+
+export class ShipmentOrderStatusChangedError extends Error {
+  constructor() {
+    super(
+      "De bestelstatus is intussen gewijzigd. Voor deze bestelling kan geen MyParcel-concept worden aangemaakt.",
+    );
+    this.name = "ShipmentOrderStatusChangedError";
   }
 }
 
@@ -586,6 +596,9 @@ export function createIdempotentShipmentService(input: {
       if (claim.kind === "conflict") throw new ShipmentCreationConflictError();
       if (claim.kind === "address_invalid") {
         throw new ShipmentAddressChangedError();
+      }
+      if (claim.kind === "order_ineligible") {
+        throw new ShipmentOrderStatusChangedError();
       }
       if (claim.kind === "busy") throw new ShipmentCreationInProgressError();
       if (claim.kind === "existing" && claim.record.state === "created") {

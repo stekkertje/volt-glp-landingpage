@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSql, type Sql } from "@/lib/db";
+import { retainedMailBodyMatches } from "@/lib/server/mail/body-retention.server";
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
@@ -137,8 +138,8 @@ export async function queueTransactionalMail(
     row.recipient !== draft.to ||
     row.reply_to !== draft.replyTo ||
     row.subject !== draft.subject ||
-    row.text_body !== draft.textBody ||
-    row.html_body !== draft.htmlBody ||
+    !retainedMailBodyMatches(row.text_body, draft.textBody) ||
+    !retainedMailBodyMatches(row.html_body, draft.htmlBody) ||
     row.contact_message_id !== draft.contactMessageId ||
     row.order_id !== draft.orderId ||
     row.order_event_id !== draft.orderEventId ||

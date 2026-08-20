@@ -38,7 +38,9 @@ Controleer feiten in code of het externe systeem wanneer ze recent veranderd kun
 - Gast- en accountcheckout schrijven echte bestellingen naar PostgreSQL en vragen altijd een actueel bezorgadres.
 - Contactberichten worden opgeslagen en transactionele contact-, account- en bestelmail loopt via een duurzame outbox.
 - Klantaccounts ondersteunen verificatie, wachtwoordherstel, bestelgeschiedenis en een eenmalige e-mailclaim voor eerdere gastorders.
-- Gasttoegang tot de zojuist geplaatste bestelling gebruikt uitsluitend een tijdelijke HttpOnly-cookie; de handmatige herstelcode is verwijderd.
+- Gasttoegang tot iedere zojuist geplaatste bestelling gebruikt uitsluitend een
+  eigen tijdelijke host-only HttpOnly-cookie; de handmatige herstelcode is
+  verwijderd en een volgende gastbestelling overschrijft eerdere toegang niet.
 - Adressen worden server-side gecontroleerd via ApiCheck voor Nederland en Google Address Validation voor overige ondersteunde EU-landen.
 - Admin ondersteunt Better Auth-allowlisting en/of de geconfigureerde wachtwoordroute, ordermutaties en MyParcel-concepten, A6-labels en tracking.
 - Betaling blijft handmatig. Er is nog geen automatische betaalprovider, voorraadadministratie of refundflow.

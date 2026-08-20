@@ -61,6 +61,16 @@ const orderServerErrorMiddleware = createPublicServerErrorMiddleware(
 
 export const GUEST_ORDER_COOKIE = "__Host-volt-order-access";
 
+const ORDER_ID_COOKIE_SUFFIX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function guestOrderCookieName(orderId: string): string {
+  const normalized = orderId.trim().toLowerCase();
+  return `${GUEST_ORDER_COOKIE}-${
+    ORDER_ID_COOKIE_SUFFIX.test(normalized) ? normalized : "invalid"
+  }`;
+}
+
 export const getPricingPreview = createServerFn({ method: "POST" })
   .middleware([orderServerErrorMiddleware, sameSiteMiddleware])
   .validator(pricingPreviewSchema)
@@ -105,7 +115,7 @@ export const createOrder = createServerFn({ method: "POST" })
     }
     const result = await createOrderRecord(data, { userId: context.userId });
     setCookie(
-      GUEST_ORDER_COOKIE,
+      guestOrderCookieName(result.order.id),
       guestOrderCookieValue(result.order.id, result.guestAccessToken),
       {
         httpOnly: true,
@@ -143,7 +153,10 @@ export const getOrderForViewer = createServerFn({ method: "POST" })
         throw error;
       }
     }
-    const cookie = parseGuestOrderCookie(getCookie(GUEST_ORDER_COOKIE));
+    const cookie = parseGuestOrderCookie(
+      (data.id ? getCookie(guestOrderCookieName(data.id)) : null) ??
+        getCookie(GUEST_ORDER_COOKIE),
+    );
     const order = await getOrderRecordForViewer({
       ...data,
       cookieOrderId: cookie?.orderId,

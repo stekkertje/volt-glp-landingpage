@@ -103,25 +103,31 @@ export function createSqlShipmentCreationRepository(
   return {
     claim(input): Promise<ShipmentCreationClaim> {
       return withSqlTransaction(async (sql) => {
-        if (input.addressFingerprint) {
-          const orders = await sql<{
-            address_validation_status: string;
-            address_validation_fingerprint: string | null;
-          }>`
-            select address_validation_status, address_validation_fingerprint
-            from orders
-            where id = ${input.orderId}
-            limit 1
-            for update
-          `;
-          const order = orders[0];
-          if (
-            !order ||
-            order.address_validation_status !== "valid" ||
-            order.address_validation_fingerprint !== input.addressFingerprint
-          ) {
-            return { kind: "address_invalid" };
-          }
+        // This is the authoritative eligibility check. The caller builds its
+        // draft from an earlier read, so status and address must be rechecked
+        // while holding the same order lock that precedes the shipment claim.
+        const orders = await sql<{
+          status: string;
+          address_validation_status: string;
+          address_validation_fingerprint: string | null;
+        }>`
+          select status, address_validation_status,
+            address_validation_fingerprint
+          from orders
+          where id = ${input.orderId}
+          limit 1
+          for update
+        `;
+        const order = orders[0];
+        if (!order || !["paid", "packed"].includes(order.status)) {
+          return { kind: "order_ineligible" };
+        }
+        if (
+          input.addressFingerprint &&
+          (order.address_validation_status !== "valid" ||
+            order.address_validation_fingerprint !== input.addressFingerprint)
+        ) {
+          return { kind: "address_invalid" };
         }
         let row = await lockByCreationIdentity(sql, input);
         if (!row) {

@@ -9,6 +9,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { authClient, authEnabled } from "@/lib/auth/client";
 
+const REGISTRATION_ERROR =
+  "Account aanmaken lukt nu niet. Probeer het later opnieuw.";
+
+function isDuplicateAccountError(error: { code?: string }): boolean {
+  return (
+    error.code === "USER_ALREADY_EXISTS" ||
+    error.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+  );
+}
+
 export const Route = createFileRoute("/registreren")({
   beforeLoad: () => {
     if (!authEnabled) throw redirect({ to: "/account", replace: true });
@@ -38,6 +48,7 @@ function RegisterPage() {
       return;
     }
     setSubmitting(true);
+    setSuccess(false);
     setError("");
     try {
       const result = await authClient.signUp.email({
@@ -48,14 +59,15 @@ function RegisterPage() {
         password,
         callbackURL: "/login?verified=1",
       });
-      if (result.error) {
-        setError("Account aanmaken lukt nu niet. Controleer je gegevens.");
+      if (result.error && !isDuplicateAccountError(result.error)) {
+        setError(REGISTRATION_ERROR);
         return;
       }
+      // Een bestaand adres krijgt bewust dezelfde zichtbare status als nieuw.
       form.reset();
       setSuccess(true);
     } catch {
-      setError("Account aanmaken lukt nu niet. Probeer het later opnieuw.");
+      setError(REGISTRATION_ERROR);
     } finally {
       setSubmitting(false);
     }

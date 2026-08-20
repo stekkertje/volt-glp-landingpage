@@ -1230,8 +1230,11 @@ test("a product can be ordered and only its authorized guest sees confirmation",
       ),
       [],
     );
+    const orderId = decodeURIComponent(
+      new URL(page.url()).pathname.split("/").at(-1),
+    );
     const guestCookie = (await context.cookies()).find(
-      (cookie) => cookie.name === "__Host-volt-order-access",
+      (cookie) => cookie.name === `__Host-volt-order-access-${orderId}`,
     );
     assert.ok(guestCookie);
     assert.equal(guestCookie.secure, true);
@@ -2475,7 +2478,8 @@ test("a navigation failure keeps the same order accessible after reload", async 
     );
     assert.equal(await page.getByText(/herstelcode/i).count(), 0);
     const guestCookie = (await context.cookies()).find(
-      (cookie) => cookie.name === "__Host-volt-order-access",
+      (cookie) =>
+        cookie.name === `__Host-volt-order-access-${committedOrderId}`,
     );
     assert.equal(guestCookie?.httpOnly, true);
     assert.equal(orderRequests, 1);
@@ -3295,6 +3299,51 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
     )?.[1];
     assert.ok(retrySeconds);
     assert.equal(limitedResponse.headers()["retry-after"], retrySeconds);
+  } finally {
+    await context.close();
+  }
+});
+
+test("two guest orders keep independent temporary access", async () => {
+  await restartDevServerWithFreshDatabase();
+  const { context, page } = await newPage();
+  const placeGuestOrder = async (label) => {
+    await addPenAndOpenCheckout(page);
+    await fillCheckout(
+      page,
+      `two-orders-${label}-${randomUUID()}@example.test`,
+    );
+    const submit = await waitForCheckoutSubmit(page);
+    await submit.click();
+    await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    const orderId = decodeURIComponent(
+      new URL(page.url()).pathname.split("/").at(-1),
+    );
+    const orderNumber = (
+      await page
+        .getByRole("heading", { level: 1, name: /^MED-\d+$/ })
+        .innerText()
+    ).trim();
+    return { id: orderId, number: orderNumber, url: page.url() };
+  };
+
+  try {
+    const first = await placeGuestOrder("eerste");
+    const second = await placeGuestOrder("tweede");
+    const cookieNames = (await context.cookies())
+      .map((cookie) => cookie.name)
+      .filter((name) => name.startsWith("__Host-volt-order-access-"));
+
+    assert.ok(cookieNames.includes(`__Host-volt-order-access-${first.id}`));
+    assert.ok(cookieNames.includes(`__Host-volt-order-access-${second.id}`));
+    assert.notEqual(first.id, second.id);
+
+    await page.goto(first.url, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { level: 1, name: first.number }).waitFor();
+    await page.goto(second.url, { waitUntil: "networkidle" });
+    await page
+      .getByRole("heading", { level: 1, name: second.number })
+      .waitFor();
   } finally {
     await context.close();
   }

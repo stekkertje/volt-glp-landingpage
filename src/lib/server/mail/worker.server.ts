@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { getSql, type Sql } from "@/lib/db";
+import { getSql, type Sql, withSqlTransaction } from "@/lib/db";
 import { resolveMailConfiguration } from "@/lib/server/mail/config.server";
+import { scrubbedMailBodies } from "@/lib/server/mail/body-retention.server";
 import {
   deliverTransactionalMail,
   type MailDelivery,
@@ -120,21 +121,42 @@ function retryDelaySeconds(attempt: number): number {
  * can duplicate a customer-facing message. Keep it terminal and visible for
  * manual mailbox/provider verification.
  */
-async function recoverStaleClaims(sql: Sql): Promise<number> {
-  const rows = await sql.query<{ id: string }>(
-    `update transactional_mail_outbox
-     set status = 'failed',
-         next_attempt_at = null,
-         locked_at = null,
-         locked_by = null,
-         last_error = 'delivery_uncertain_after_worker_timeout',
-         updated_at = now()
-     where status = 'sending'
-       and locked_at < now() - ($1 * interval '1 minute')
-     returning id`,
-    [STALE_LOCK_MINUTES],
-  );
-  return rows.length;
+async function recoverStaleClaims(): Promise<number> {
+  return withSqlTransaction(async (sql) => {
+    const rows = await sql.query<
+      Pick<RawOutboxRow, "id" | "text_body" | "html_body">
+    >(
+      `select id, text_body, html_body
+       from transactional_mail_outbox
+       where status = 'sending'
+         and locked_at < now() - ($1 * interval '1 minute')
+       for update skip locked`,
+      [STALE_LOCK_MINUTES],
+    );
+    let recovered = 0;
+    for (const row of rows) {
+      const retained = scrubbedMailBodies({
+        textBody: row.text_body,
+        htmlBody: row.html_body,
+      });
+      const updated = await sql.query<{ id: string }>(
+        `update transactional_mail_outbox
+         set status = 'failed',
+             next_attempt_at = null,
+             locked_at = null,
+             locked_by = null,
+             last_error = 'delivery_uncertain_after_worker_timeout',
+             text_body = $1,
+             html_body = $2,
+             updated_at = now()
+         where id = $3 and status = 'sending'
+         returning id`,
+        [retained.textBody, retained.htmlBody, row.id],
+      );
+      recovered += updated.length;
+    }
+    return recovered;
+  });
 }
 
 async function claimNextMail(
@@ -182,14 +204,19 @@ async function markSent(
   workerId: string,
   providerMessageId: string | null,
 ): Promise<void> {
+  const retained = scrubbedMailBodies({
+    textBody: row.textBody,
+    htmlBody: row.htmlBody,
+  });
   const updated = await sql.query<{ id: string }>(
     `update transactional_mail_outbox
      set status = 'sent', sent_at = now(), next_attempt_at = null,
          locked_at = null, locked_by = null, last_error = null,
-         provider_message_id = $1, updated_at = now()
-     where id = $2 and status = 'sending' and locked_by = $3
+         provider_message_id = $1, text_body = $2, html_body = $3,
+         updated_at = now()
+     where id = $4 and status = 'sending' and locked_by = $5
      returning id`,
-    [providerMessageId, row.id, workerId],
+    [providerMessageId, retained.textBody, retained.htmlBody, row.id, workerId],
   );
   if (!updated[0]) {
     throw new Error(
@@ -206,21 +233,36 @@ async function markFailure(
 ): Promise<"deferred" | "failed"> {
   const terminal = row.attemptCount >= MAX_ATTEMPTS;
   const delay = retryDelaySeconds(row.attemptCount);
+  if (terminal) {
+    const retained = scrubbedMailBodies({
+      textBody: row.textBody,
+      htmlBody: row.htmlBody,
+    });
+    await sql.query(
+      `update transactional_mail_outbox
+       set status = 'failed', next_attempt_at = null,
+           locked_at = null, locked_by = null, last_error = $1,
+           text_body = $2, html_body = $3, updated_at = now()
+       where id = $4 and status = 'sending' and locked_by = $5`,
+      [
+        safeFailureCode(error),
+        retained.textBody,
+        retained.htmlBody,
+        row.id,
+        workerId,
+      ],
+    );
+    return "failed";
+  }
   await sql.query(
     `update transactional_mail_outbox
-     set status = $1,
-         next_attempt_at = case when $1 = 'failed' then null else now() + ($2 * interval '1 second') end,
-         locked_at = null, locked_by = null, last_error = $3, updated_at = now()
-     where id = $4 and status = 'sending' and locked_by = $5`,
-    [
-      terminal ? "failed" : "pending",
-      delay,
-      safeFailureCode(error),
-      row.id,
-      workerId,
-    ],
+     set status = 'pending',
+         next_attempt_at = now() + ($1 * interval '1 second'),
+         locked_at = null, locked_by = null, last_error = $2, updated_at = now()
+     where id = $3 and status = 'sending' and locked_by = $4`,
+    [delay, safeFailureCode(error), row.id, workerId],
   );
-  return terminal ? "failed" : "deferred";
+  return "deferred";
 }
 
 async function markDeliveryUncertain(
@@ -229,12 +271,23 @@ async function markDeliveryUncertain(
   workerId: string,
   error: unknown,
 ): Promise<void> {
+  const retained = scrubbedMailBodies({
+    textBody: row.textBody,
+    htmlBody: row.htmlBody,
+  });
   await sql.query(
     `update transactional_mail_outbox
      set status = 'failed', next_attempt_at = null,
-         locked_at = null, locked_by = null, last_error = $1, updated_at = now()
-     where id = $2 and status = 'sending' and locked_by = $3`,
-    [uncertainFailureCode(error), row.id, workerId],
+         locked_at = null, locked_by = null, last_error = $1,
+         text_body = $2, html_body = $3, updated_at = now()
+     where id = $4 and status = 'sending' and locked_by = $5`,
+    [
+      uncertainFailureCode(error),
+      retained.textBody,
+      retained.htmlBody,
+      row.id,
+      workerId,
+    ],
   );
 }
 
@@ -261,7 +314,7 @@ export async function processMailOutbox(
     failed: 0,
   };
 
-  result.failed += await recoverStaleClaims(sql);
+  result.failed += await recoverStaleClaims();
   for (let processed = 0; processed < limit; processed += 1) {
     const row = await claimNextMail(sql, workerId);
     if (!row) break;

@@ -212,6 +212,8 @@ npm run typecheck
   De migratoromgeving bevat geen losse connection-affecting `PG*`-variabelen;
   alle verbindingsinstellingen staan in de directe migratie-URL.
   PGLite is alleen voor dev/test.
-- Gasttoegang na checkout werkt met een HttpOnly-cookie die na 72 uur verloopt. Er is geen handmatige herstelcode meer.
+- Gasttoegang na checkout werkt per bestelling met een eigen host-only
+  HttpOnly-cookie die na 72 uur verloopt. Een volgende gastbestelling
+  overschrijft eerdere toegang niet. Er is geen handmatige herstelcode meer.
 - Eerdere gastorders kunnen na inloggen via een eenmalige e-maillink veilig aan het account worden gekoppeld.
 - Nog niet aanwezig: betaalprovider, voorraadbeheer en refunds.

@@ -158,7 +158,8 @@ historische orderregels.
 ## Backendroutes
 
 - `/checkout`: gast- of accountbestelling met serverprijzen, adrescontrole en idempotency.
-- `/bestelling/$id`: beveiligde bevestiging via account, admin of de HttpOnly-gastcookie uit checkout.
+- `/bestelling/$id`: beveiligde bevestiging via account, admin of de eigen
+  host-only HttpOnly-gastcookie van die checkout.
 - `/account`: klantaccount met bestelgeschiedenis, adres, tracking en veilige e-mailclaim van eerdere gastorders.
 - `/admin`: dagelijkse order-, contact-, mail- en MyParcel-afhandeling.
 

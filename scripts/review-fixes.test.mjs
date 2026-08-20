@@ -6,6 +6,7 @@ import { createServer } from "vite";
 let vite;
 let ADMIN_COOKIE_NAME;
 let GUEST_ORDER_COOKIE;
+let guestOrderCookieName;
 let SITE;
 let canonicalCheckoutPayload;
 let checkoutIdempotencyKeyFromSeed;
@@ -39,7 +40,7 @@ before(async () => {
   });
   ({ ADMIN_COOKIE_NAME, getAdminCapabilities, isSameOriginMutationRequest } =
     await vite.ssrLoadModule("/src/lib/server/admin-auth.server.ts"));
-  ({ GUEST_ORDER_COOKIE } = await vite.ssrLoadModule(
+  ({ GUEST_ORDER_COOKIE, guestOrderCookieName } = await vite.ssrLoadModule(
     "/src/lib/server/orders.ts",
   ));
   ({ SITE } = await vite.ssrLoadModule("/src/lib/product.ts"));
@@ -57,6 +58,13 @@ after(async () => {
 test("shop cookies use the host-only prefix", () => {
   assert.equal(ADMIN_COOKIE_NAME, "__Host-volt-admin-session");
   assert.equal(GUEST_ORDER_COOKIE, "__Host-volt-order-access");
+  const first = "11111111-1111-4111-8111-111111111111";
+  const second = "22222222-2222-4222-8222-222222222222";
+  assert.equal(
+    guestOrderCookieName(first),
+    `__Host-volt-order-access-${first}`,
+  );
+  assert.notEqual(guestOrderCookieName(first), guestOrderCookieName(second));
 });
 
 test("checkout payload serialization is canonical and changes with order data", () => {

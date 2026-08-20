@@ -224,7 +224,7 @@ try {
   );
   try {
     await page
-      .getByText("Bericht verstuurd", { exact: true })
+      .getByText("Bericht ontvangen", { exact: true })
       .waitFor({ timeout: 10_000 });
   } catch (error) {
     const feedback = await page.locator('[role="alert"]').allTextContents();

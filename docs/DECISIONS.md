@@ -47,7 +47,10 @@ Dit logboek bevat alleen keuzes die toekomstig beheer sturen. Tijdelijke uitvoer
 
 - Klantaccounts gebruiken Better Auth met e-mailverificatie, wachtwoordherstel en een eigen bestelgeschiedenis.
 - Checkout blijft voor iedere bestelling een volledig actueel bezorgadres vragen, ook wanneer de klant is ingelogd.
-- De handmatige tijdelijke herstelcode is verwijderd. De zojuist geplaatste gastorder blijft tijdelijk bereikbaar via een HttpOnly-cookie.
+- De handmatige tijdelijke herstelcode is verwijderd. Iedere zojuist geplaatste
+  gastorder blijft 72 uur onafhankelijk bereikbaar via een eigen host-only
+  HttpOnly-cookie, zodat een volgende gastbestelling eerdere toegang niet
+  overschrijft.
 - Eerdere gastorders worden uitsluitend na een eenmalige, kort geldige bevestigingslink naar het e-mailadres van het ingelogde account gekoppeld.
 
 ## 2026-08-20 · Transactionele e-mail

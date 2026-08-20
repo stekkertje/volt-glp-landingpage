@@ -64,7 +64,8 @@ function externalFailure(error: unknown): never {
     (error.name === "ShipmentCreationConflictError" ||
       error.name === "ShipmentCreationInProgressError" ||
       error.name === "ShipmentCreationUncertainError" ||
-      error.name === "ShipmentAddressChangedError")
+      error.name === "ShipmentAddressChangedError" ||
+      error.name === "ShipmentOrderStatusChangedError")
   ) {
     throw new ShipmentActionError(error.message, 409);
   }

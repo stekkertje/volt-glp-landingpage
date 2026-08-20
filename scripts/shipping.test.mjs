@@ -6,6 +6,7 @@ import { createServer } from "vite";
 
 let vite;
 let getSql;
+let withSqlTransaction;
 let createOrderRecord;
 let getOrderRecordForViewer;
 let issueAddressValidationToken;
@@ -54,7 +55,7 @@ before(async () => {
     logLevel: "silent",
     server: { middlewareMode: true },
   });
-  ({ getSql } = await vite.ssrLoadModule("/src/lib/db.ts"));
+  ({ getSql, withSqlTransaction } = await vite.ssrLoadModule("/src/lib/db.ts"));
   ({ issueAddressValidationToken } = await vite.ssrLoadModule(
     "/src/lib/server/address-validation-token.server.ts",
   ));
@@ -161,6 +162,9 @@ test("admin kan een gewijzigd adres expliciet opnieuw valideren", async () => {
 test("shipmentclaim herverifieert de adresfingerprint atomair vóór providergebruik", async () => {
   const created = await createOrderRecord(orderInput());
   const sql = await getSql();
+  await sql.query("update orders set status = 'paid' where id = $1", [
+    created.order.id,
+  ]);
   const rows = await sql.query(
     `select address_validation_fingerprint from orders where id = $1`,
     [created.order.id],
@@ -212,6 +216,88 @@ test("shipmentclaim herverifieert de adresfingerprint atomair vóór providergeb
     /bezorgadres is intussen gewijzigd/i,
   );
   assert.equal(providerCalls, 0);
+});
+
+test("statusrace vóór conceptclaim blokkeert provider voor cancelled en shipped", async () => {
+  for (const nextStatus of ["cancelled", "shipped"]) {
+    const created = await createOrderRecord(orderInput());
+    const sql = await getSql();
+    await sql.query("update orders set status = 'paid' where id = $1", [
+      created.order.id,
+    ]);
+    const rows = await sql.query(
+      `select address_validation_fingerprint from orders where id = $1`,
+      [created.order.id],
+    );
+    const staleFingerprint = rows[0].address_validation_fingerprint;
+
+    let releaseStatusLock;
+    let signalStatusLocked;
+    const statusLocked = new Promise((resolve) => {
+      signalStatusLocked = resolve;
+    });
+    const holdStatusLock = new Promise((resolve) => {
+      releaseStatusLock = resolve;
+    });
+    const statusChange = withSqlTransaction(async (transaction) => {
+      await transaction`
+        update orders set status = ${nextStatus}, updated_at = now()
+        where id = ${created.order.id}
+      `;
+      signalStatusLocked();
+      await holdStatusLock;
+    });
+    await statusLocked;
+
+    let providerCalls = 0;
+    const service = createIdempotentShipmentService({
+      repository: createSqlShipmentCreationRepository(),
+      client: {
+        async findByReference() {
+          providerCalls += 1;
+          return [];
+        },
+        async createConceptShipment() {
+          providerCalls += 1;
+          throw new Error("provider mag niet worden aangeroepen");
+        },
+      },
+    });
+    const conceptClaim = service.ensureShipment({
+      orderId: created.order.id,
+      idempotencyKey: `myparcel:${created.order.id}:v1`,
+      addressFingerprint: staleFingerprint,
+      draft: {
+        referenceIdentifier: created.order.orderNumber,
+        recipient: {
+          country: "NL",
+          city: created.order.city,
+          street: created.order.street,
+          houseNumber: "12",
+          houseNumberAddition: "A",
+          postcode: created.order.postcode,
+          person: created.order.name,
+          email: created.order.email,
+        },
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(providerCalls, 0, nextStatus);
+    releaseStatusLock();
+    await statusChange;
+    await assert.rejects(
+      conceptClaim,
+      /bestelstatus is intussen gewijzigd/i,
+      nextStatus,
+    );
+    assert.equal(providerCalls, 0, nextStatus);
+    const shipments = await sql.query(
+      "select id from order_shipments where order_id = $1",
+      [created.order.id],
+    );
+    assert.equal(shipments.length, 0, nextStatus);
+  }
 });
 
 test("lopende shipmentclaim blokkeert een gelijktijdige adreswijziging", async () => {

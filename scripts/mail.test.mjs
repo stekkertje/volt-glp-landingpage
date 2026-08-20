@@ -157,11 +157,13 @@ test("outbox deduplicates and marks successful delivery", async () => {
   const unique = randomUUID();
   const draft = {
     dedupeKey: `test:${unique}:success`,
-    kind: "contact_customer",
+    kind: "account_password_reset",
     to: "klant@example.test",
     subject: "Testbevestiging",
-    textBody: "Dit is een testbericht.",
-    htmlBody: "<p>Dit is een testbericht.</p>",
+    textBody:
+      "Open https://example.test/account#token=zeer-geheime-testtoken om door te gaan.",
+    htmlBody:
+      '<p>Open <a href="https://example.test/account#token=zeer-geheime-testtoken">je veilige link</a>.</p>',
   };
   const first = await enqueueTransactionalMail(draft);
   const duplicate = await enqueueTransactionalMail(draft);
@@ -186,7 +188,8 @@ test("outbox deduplicates and marks successful delivery", async () => {
 
   const sql = await getSql();
   const stored = await sql.query(
-    `select status, attempt_count, provider_message_id, sent_at, last_error
+    `select status, attempt_count, provider_message_id, sent_at, last_error,
+            text_body, html_body
      from transactional_mail_outbox where id = $1`,
     [first.id],
   );
@@ -195,6 +198,28 @@ test("outbox deduplicates and marks successful delivery", async () => {
   assert.equal(stored[0].provider_message_id, "test-provider-id");
   assert.ok(stored[0].sent_at);
   assert.equal(stored[0].last_error, null);
+  assert.match(
+    stored[0].text_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
+  assert.match(
+    stored[0].html_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
+  assert.doesNotMatch(stored[0].text_body, /zeer-geheime-testtoken/);
+  assert.doesNotMatch(stored[0].html_body, /zeer-geheime-testtoken/);
+
+  assert.deepEqual(await enqueueTransactionalMail(draft), {
+    id: first.id,
+    queued: false,
+  });
+  await assert.rejects(
+    enqueueTransactionalMail({
+      ...draft,
+      textBody: `${draft.textBody} andere inhoud`,
+    }),
+    /Conflicterende idempotente mailaanvraag/,
+  );
 });
 
 test("a stale sending claim becomes delivery-uncertain and is never auto-resend", async () => {
@@ -242,19 +267,29 @@ test("a stale sending claim becomes delivery-uncertain and is never auto-resend"
   assert.equal(deliveryAttempts, 1);
 
   const uncertain = await sql.query(
-    `select status, next_attempt_at, locked_at, locked_by, last_error
+    `select status, next_attempt_at, locked_at, locked_by, last_error,
+            text_body, html_body
      from transactional_mail_outbox where id = $1`,
     [queued.id],
   );
-  assert.deepEqual(uncertain, [
-    {
-      status: "failed",
-      next_attempt_at: null,
-      locked_at: null,
-      locked_by: null,
-      last_error: "delivery_uncertain_after_worker_timeout",
-    },
-  ]);
+  assert.equal(uncertain[0].status, "failed");
+  assert.equal(uncertain[0].next_attempt_at, null);
+  assert.equal(uncertain[0].locked_at, null);
+  assert.equal(uncertain[0].locked_by, null);
+  assert.equal(
+    uncertain[0].last_error,
+    "delivery_uncertain_after_worker_timeout",
+  );
+  assert.match(
+    uncertain[0].text_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
+  assert.match(
+    uncertain[0].html_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
+  assert.doesNotMatch(uncertain[0].text_body, /niet opnieuw worden verzonden/);
+  assert.doesNotMatch(uncertain[0].html_body, /niet opnieuw worden verzonden/);
 
   await processMailOutbox({
     limit: 10,
@@ -309,25 +344,27 @@ test("DATA and ambiguous socket failures become uncertain without automatic rese
 
   const sql = await getSql();
   const stored = await sql.query(
-    `select id, status, attempt_count, next_attempt_at, last_error
+    `select id, status, attempt_count, next_attempt_at, last_error,
+            text_body, html_body
      from transactional_mail_outbox where id in ($1, $2) order by id`,
     [dataMail.id, socketMail.id],
   );
   const byId = new Map(stored.map((row) => [row.id, row]));
-  assert.deepEqual(byId.get(dataMail.id), {
-    id: dataMail.id,
-    status: "failed",
-    attempt_count: 1,
-    next_attempt_at: null,
-    last_error: "delivery_uncertain_smtp_data",
-  });
-  assert.deepEqual(byId.get(socketMail.id), {
-    id: socketMail.id,
-    status: "failed",
-    attempt_count: 1,
-    next_attempt_at: null,
-    last_error: "delivery_uncertain_smtp_transport",
-  });
+  for (const [id, lastError] of [
+    [dataMail.id, "delivery_uncertain_smtp_data"],
+    [socketMail.id, "delivery_uncertain_smtp_transport"],
+  ]) {
+    const row = byId.get(id);
+    assert.equal(row.id, id);
+    assert.equal(row.status, "failed");
+    assert.equal(row.attempt_count, 1);
+    assert.equal(row.next_attempt_at, null);
+    assert.equal(row.last_error, lastError);
+    assert.match(row.text_body, /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/);
+    assert.match(row.html_body, /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/);
+    assert.doesNotMatch(row.text_body, /kan al zijn geaccepteerd/);
+    assert.doesNotMatch(row.html_body, /kan al zijn geaccepteerd/);
+  }
 
   await processMailOutbox({
     limit: 10,
@@ -367,7 +404,8 @@ test("SMTP failures are sanitized, retried and eventually become terminal", asyn
 
   const sql = await getSql();
   const stored = await sql.query(
-    `select status, attempt_count, next_attempt_at, last_error
+    `select status, attempt_count, next_attempt_at, last_error,
+            text_body, html_body
      from transactional_mail_outbox where id = $1`,
     [queued.id],
   );
@@ -376,6 +414,8 @@ test("SMTP failures are sanitized, retried and eventually become terminal", asyn
   assert.ok(stored[0].next_attempt_at);
   assert.equal(stored[0].last_error, "smtp_econnection_421_conn");
   assert.doesNotMatch(stored[0].last_error, /klant|password/);
+  assert.equal(stored[0].text_body, "Dit is een testbericht.");
+  assert.equal(stored[0].html_body, "<p>Dit is een testbericht.</p>");
 
   for (let attempt = 2; attempt <= 6; attempt += 1) {
     await sql.query(
@@ -397,7 +437,8 @@ test("SMTP failures are sanitized, retried and eventually become terminal", asyn
   }
 
   const exhausted = await sql.query(
-    `select status, attempt_count, next_attempt_at, last_error
+    `select status, attempt_count, next_attempt_at, last_error,
+            text_body, html_body
      from transactional_mail_outbox where id = $1`,
     [queued.id],
   );
@@ -405,4 +446,12 @@ test("SMTP failures are sanitized, retried and eventually become terminal", asyn
   assert.equal(exhausted[0].attempt_count, 6);
   assert.equal(exhausted[0].next_attempt_at, null);
   assert.equal(exhausted[0].last_error, "smtp_econnection_421_conn");
+  assert.match(
+    exhausted[0].text_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
+  assert.match(
+    exhausted[0].html_body,
+    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
+  );
 });
