@@ -15,6 +15,8 @@ let orderOwnerConfirmationMail;
 let orderStatusChangedMail;
 let orderAddressChangedMail;
 let orderProductsChangedMail;
+let SCRUBBED_MAIL_TEXT_BODY;
+let SCRUBBED_MAIL_HTML_BODY;
 
 const configuredEnvironment = {
   SMTP_USER: "info@example.test",
@@ -35,6 +37,8 @@ before(async () => {
   ({ processMailOutbox } = await vite.ssrLoadModule(
     "/src/lib/server/mail/worker.server.ts",
   ));
+  ({ SCRUBBED_MAIL_TEXT_BODY, SCRUBBED_MAIL_HTML_BODY } =
+    await vite.ssrLoadModule("/src/lib/server/mail/body-retention.server.ts"));
   ({ resolveMailConfiguration } = await vite.ssrLoadModule(
     "/src/lib/server/mail/config.server.ts",
   ));
@@ -173,6 +177,21 @@ test("outbox deduplicates and marks successful delivery", async () => {
     enqueueTransactionalMail({ ...draft, subject: "Andere inhoud" }),
     /Conflicterende idempotente mailaanvraag/,
   );
+  await assert.rejects(
+    enqueueTransactionalMail({
+      ...draft,
+      textBody: `${draft.textBody} andere inhoud`,
+    }),
+    /Conflicterende idempotente mailaanvraag/,
+  );
+  await assert.rejects(
+    enqueueTransactionalMail({
+      ...draft,
+      dedupeKey: `test:${unique}:reserved`,
+      textBody: SCRUBBED_MAIL_TEXT_BODY,
+    }),
+    /gereserveerde waarde/,
+  );
 
   const deliveries = [];
   const result = await processMailOutbox({
@@ -198,14 +217,8 @@ test("outbox deduplicates and marks successful delivery", async () => {
   assert.equal(stored[0].provider_message_id, "test-provider-id");
   assert.ok(stored[0].sent_at);
   assert.equal(stored[0].last_error, null);
-  assert.match(
-    stored[0].text_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
-  assert.match(
-    stored[0].html_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
+  assert.equal(stored[0].text_body, SCRUBBED_MAIL_TEXT_BODY);
+  assert.equal(stored[0].html_body, SCRUBBED_MAIL_HTML_BODY);
   assert.doesNotMatch(stored[0].text_body, /zeer-geheime-testtoken/);
   assert.doesNotMatch(stored[0].html_body, /zeer-geheime-testtoken/);
 
@@ -213,12 +226,12 @@ test("outbox deduplicates and marks successful delivery", async () => {
     id: first.id,
     queued: false,
   });
-  await assert.rejects(
-    enqueueTransactionalMail({
+  assert.deepEqual(
+    await enqueueTransactionalMail({
       ...draft,
-      textBody: `${draft.textBody} andere inhoud`,
+      textBody: `${draft.textBody} inhoud die niet meer wordt verzonden`,
     }),
-    /Conflicterende idempotente mailaanvraag/,
+    { id: first.id, queued: false },
   );
 });
 
@@ -280,14 +293,8 @@ test("a stale sending claim becomes delivery-uncertain and is never auto-resend"
     uncertain[0].last_error,
     "delivery_uncertain_after_worker_timeout",
   );
-  assert.match(
-    uncertain[0].text_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
-  assert.match(
-    uncertain[0].html_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
+  assert.equal(uncertain[0].text_body, SCRUBBED_MAIL_TEXT_BODY);
+  assert.equal(uncertain[0].html_body, SCRUBBED_MAIL_HTML_BODY);
   assert.doesNotMatch(uncertain[0].text_body, /niet opnieuw worden verzonden/);
   assert.doesNotMatch(uncertain[0].html_body, /niet opnieuw worden verzonden/);
 
@@ -360,8 +367,8 @@ test("DATA and ambiguous socket failures become uncertain without automatic rese
     assert.equal(row.attempt_count, 1);
     assert.equal(row.next_attempt_at, null);
     assert.equal(row.last_error, lastError);
-    assert.match(row.text_body, /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/);
-    assert.match(row.html_body, /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/);
+    assert.equal(row.text_body, SCRUBBED_MAIL_TEXT_BODY);
+    assert.equal(row.html_body, SCRUBBED_MAIL_HTML_BODY);
     assert.doesNotMatch(row.text_body, /kan al zijn geaccepteerd/);
     assert.doesNotMatch(row.html_body, /kan al zijn geaccepteerd/);
   }
@@ -446,12 +453,6 @@ test("SMTP failures are sanitized, retried and eventually become terminal", asyn
   assert.equal(exhausted[0].attempt_count, 6);
   assert.equal(exhausted[0].next_attempt_at, null);
   assert.equal(exhausted[0].last_error, "smtp_econnection_421_conn");
-  assert.match(
-    exhausted[0].text_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
-  assert.match(
-    exhausted[0].html_body,
-    /^\[inhoud-verwijderd:sha256:[a-f0-9]{64}\]$/,
-  );
+  assert.equal(exhausted[0].text_body, SCRUBBED_MAIL_TEXT_BODY);
+  assert.equal(exhausted[0].html_body, SCRUBBED_MAIL_HTML_BODY);
 });

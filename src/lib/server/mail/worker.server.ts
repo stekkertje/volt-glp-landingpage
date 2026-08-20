@@ -135,10 +135,7 @@ async function recoverStaleClaims(): Promise<number> {
     );
     let recovered = 0;
     for (const row of rows) {
-      const retained = scrubbedMailBodies({
-        textBody: row.text_body,
-        htmlBody: row.html_body,
-      });
+      const retained = scrubbedMailBodies();
       const updated = await sql.query<{ id: string }>(
         `update transactional_mail_outbox
          set status = 'failed',
@@ -204,10 +201,7 @@ async function markSent(
   workerId: string,
   providerMessageId: string | null,
 ): Promise<void> {
-  const retained = scrubbedMailBodies({
-    textBody: row.textBody,
-    htmlBody: row.htmlBody,
-  });
+  const retained = scrubbedMailBodies();
   const updated = await sql.query<{ id: string }>(
     `update transactional_mail_outbox
      set status = 'sent', sent_at = now(), next_attempt_at = null,
@@ -234,10 +228,7 @@ async function markFailure(
   const terminal = row.attemptCount >= MAX_ATTEMPTS;
   const delay = retryDelaySeconds(row.attemptCount);
   if (terminal) {
-    const retained = scrubbedMailBodies({
-      textBody: row.textBody,
-      htmlBody: row.htmlBody,
-    });
+    const retained = scrubbedMailBodies();
     await sql.query(
       `update transactional_mail_outbox
        set status = 'failed', next_attempt_at = null,
@@ -271,10 +262,7 @@ async function markDeliveryUncertain(
   workerId: string,
   error: unknown,
 ): Promise<void> {
-  const retained = scrubbedMailBodies({
-    textBody: row.textBody,
-    htmlBody: row.htmlBody,
-  });
+  const retained = scrubbedMailBodies();
   await sql.query(
     `update transactional_mail_outbox
      set status = 'failed', next_attempt_at = null,

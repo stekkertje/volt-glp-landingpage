@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { getSql, type Sql } from "@/lib/db";
-import { retainedMailBodyMatches } from "@/lib/server/mail/body-retention.server";
+import {
+  retainedMailBodiesMatch,
+  SCRUBBED_MAIL_HTML_BODY,
+  SCRUBBED_MAIL_TEXT_BODY,
+} from "@/lib/server/mail/body-retention.server";
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
@@ -80,6 +84,12 @@ function validateDraft(
   if (!draft.htmlBody.trim() || draft.htmlBody.length > 200_000) {
     throw new Error("De HTML-mailtekst is ongeldig.");
   }
+  if (
+    draft.textBody === SCRUBBED_MAIL_TEXT_BODY ||
+    draft.htmlBody === SCRUBBED_MAIL_HTML_BODY
+  ) {
+    throw new Error("De mailinhoud gebruikt een gereserveerde waarde.");
+  }
   return {
     dedupeKey,
     kind,
@@ -138,8 +148,12 @@ export async function queueTransactionalMail(
     row.recipient !== draft.to ||
     row.reply_to !== draft.replyTo ||
     row.subject !== draft.subject ||
-    !retainedMailBodyMatches(row.text_body, draft.textBody) ||
-    !retainedMailBodyMatches(row.html_body, draft.htmlBody) ||
+    !retainedMailBodiesMatch({
+      storedTextBody: row.text_body,
+      storedHtmlBody: row.html_body,
+      requestedTextBody: draft.textBody,
+      requestedHtmlBody: draft.htmlBody,
+    }) ||
     row.contact_message_id !== draft.contactMessageId ||
     row.order_id !== draft.orderId ||
     row.order_event_id !== draft.orderEventId ||
