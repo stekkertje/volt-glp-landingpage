@@ -48,7 +48,7 @@ SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=465
 SMTP_SECURE=true
 SMTP_USERNAME=<Hostinger-mailbox>
-SMTP_PASSWORD=<Hostinger-mailboxwachtwoord>
+SMTP_PASSWORD_BASE64=<base64/base64url van het exacte Hostinger-mailboxwachtwoord>
 MAIL_FROM_ADDRESS=info@afslank-injecties.nl
 MAIL_FROM_NAME=VOLT
 MAIL_OWNER_ADDRESS=info@afslank-injecties.nl
@@ -83,6 +83,17 @@ weg. De app decodeert de waarde strikt naar UTF-8; het wachtwoord dat je op
 zonder padding) worden ondersteund. Ongeldige codering, controltekens of beide
 wachtwoordvariabelen tegelijk laten de adminconfiguratie fail-closed mislukken.
 Het gedecodeerde wachtwoord blijft in productie minimaal 16 tekens.
+
+Gebruik voor SMTP op Hostinger bij voorkeur `SMTP_PASSWORD_BASE64` en laat
+`SMTP_PASSWORD` daarna weg. Base64 en base64url, met correcte of zonder padding,
+worden strikt naar UTF-8 gedecodeerd; een niet-lege ongeldige waarde,
+controltekens en niet-canonieke codering stoppen de mailconfiguratie zonder het
+geheim te tonen. Een lege waarde geldt als niet ingesteld.
+`SMTP_PASSWORD` en `MAILBOX_PASSWORD` blijven als raw compatibiliteitsfallback
+bestaan. Tijdens een veilige overgang mag de oude raw variabele tijdelijk naast
+`SMTP_PASSWORD_BASE64` blijven staan; de encoded waarde heeft dan bewust
+voorrang, ook wanneer Hostinger de raw speciale tekens heeft veranderd. Verwijder
+de raw variabele zodra de SMTP-controle met de encoded waarde groen is.
 
 `VITE_NO_INDEX` wordt tijdens de build in de HTML verwerkt. `NO_INDEX` wordt
 tijdens runtime gebruikt voor `X-Robots-Tag`. Beide blijven `1` zolang de site

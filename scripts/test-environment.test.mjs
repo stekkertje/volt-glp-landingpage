@@ -30,6 +30,7 @@ test("npm test cannot inherit production databases or deployment secrets", () =>
     "SMTP_SECURE",
     "SMTP_USER",
     "SMTP_USERNAME",
+    "SMTP_PASSWORD_BASE64",
     "SMTP_PASSWORD",
     "MAIL_FROM_ADDRESS",
     "MAIL_FROM_NAME",

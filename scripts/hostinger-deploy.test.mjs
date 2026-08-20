@@ -54,6 +54,7 @@ test("the Hostinger environment contract keeps noindex and required integrations
     "NO_INDEX",
     "VITE_PUBLIC_HOSTNAME",
     "TRUST_HOSTINGER_PROXY",
+    "SMTP_PASSWORD_BASE64",
     "APICHECK_API_KEY",
     "GOOGLE_ADDRESS_VALIDATION_API_KEY",
   ]) {
@@ -66,6 +67,7 @@ test("the Hostinger environment contract keeps noindex and required integrations
   assert.match(example, /^REQUIRE_ADDRESS_VALIDATION=1$/m);
   assert.match(example, /^VITE_AUTH_ENABLED=true$/m);
   assert.match(example, /^VITE_OAUTH_ENABLED=false$/m);
+  assert.match(example, /^SMTP_PASSWORD_BASE64=$/m);
   assert.match(example, /^GROK_AUTH_CLIENT_ID=$/m);
   assert.match(example, /^GROK_AUTH_CLIENT_SECRET=$/m);
   assert.match(example, /^TRUST_HOSTINGER_PROXY=1$/m);
