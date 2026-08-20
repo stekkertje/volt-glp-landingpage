@@ -8,6 +8,7 @@ let vite;
 let getSql;
 let withSqlTransaction;
 let createOrderRecord;
+let getAdminOrderRecord;
 let getOrderRecordForViewer;
 let issueAddressValidationToken;
 let createMyParcelConceptRecord;
@@ -62,6 +63,7 @@ before(async () => {
   ));
   ({
     createOrderRecord,
+    getAdminOrderRecord,
     getOrderRecordForViewer,
     updateOrderAddressRecord,
     updateOrderFulfillmentRecord,
@@ -123,11 +125,12 @@ test("order bewaart een geldig adresbewijs en weigert gewijzigd adres", async ()
 
 test("admin kan een gewijzigd adres expliciet opnieuw valideren", async () => {
   const created = await createOrderRecord(orderInput());
+  const current = await getAdminOrderRecord(created.order.id);
   const changed = await updateOrderAddressRecord({
-    id: created.order.id,
-    expectedUpdatedAt: created.order.updatedAt,
-    name: created.order.name,
-    phone: created.order.phone ?? undefined,
+    id: current.id,
+    expectedUpdatedAt: current.updatedAt,
+    name: current.name,
+    phone: current.phone ?? undefined,
     street: "Nieuwe Teststraat",
     houseNumber: "14",
     postcode: "1234 AB",
@@ -163,6 +166,7 @@ test("admin kan een gewijzigd adres expliciet opnieuw valideren", async () => {
 
 test("alleen naam en telefoon wijzigen bewaart het geldige adresbewijs", async () => {
   const created = await createOrderRecord(orderInput());
+  const current = await getAdminOrderRecord(created.order.id);
   const sql = await getSql();
   const beforeRows = await sql.query(
     `select address_validation_provider, address_validation_status,
@@ -172,15 +176,15 @@ test("alleen naam en telefoon wijzigen bewaart het geldige adresbewijs", async (
   );
 
   const updated = await updateOrderAddressRecord({
-    id: created.order.id,
-    expectedUpdatedAt: created.order.updatedAt,
+    id: current.id,
+    expectedUpdatedAt: current.updatedAt,
     name: "Gewijzigde Ontvanger",
     phone: "0687654321",
-    street: created.order.street,
-    houseNumber: created.order.houseNumber,
-    postcode: created.order.postcode,
-    city: created.order.city,
-    country: created.order.country,
+    street: current.street,
+    houseNumber: current.houseNumber,
+    postcode: current.postcode,
+    city: current.city,
+    country: current.country,
   });
   assert.equal(updated.name, "Gewijzigde Ontvanger");
   assert.equal(updated.phone, "0687654321");
@@ -342,10 +346,7 @@ test("lopende shipmentclaim blokkeert een gelijktijdige adreswijziging", async (
   await sql.query("update orders set status = 'paid' where id = $1", [
     created.order.id,
   ]);
-  const paid = await getOrderRecordForViewer({
-    id: created.order.id,
-    isAdmin: true,
-  });
+  const paid = await getAdminOrderRecord(created.order.id);
 
   let releaseFind;
   let signalFindStarted;
@@ -420,17 +421,18 @@ test("pending, ambiguous en created shipmentstatus vergrendelen adreswijziging",
           : null,
       ],
     );
+    const current = await getAdminOrderRecord(created.order.id);
     await assert.rejects(
       updateOrderAddressRecord({
-        id: created.order.id,
-        expectedUpdatedAt: created.order.updatedAt,
-        name: created.order.name,
-        phone: created.order.phone ?? undefined,
+        id: current.id,
+        expectedUpdatedAt: current.updatedAt,
+        name: current.name,
+        phone: current.phone ?? undefined,
         street: `${status} straat`,
-        houseNumber: created.order.houseNumber,
-        postcode: created.order.postcode,
-        city: created.order.city,
-        country: created.order.country,
+        houseNumber: current.houseNumber,
+        postcode: current.postcode,
+        city: current.city,
+        country: current.country,
       }),
       /kan niet meer worden gewijzigd/i,
       status,
@@ -473,10 +475,7 @@ test("failed shipment laat adrescorrectie en veilige payload-reset toe", async (
   assert.equal(failedRows[0].creation_status, "failed");
   const originalPayloadHash = failedRows[0].payload_hash;
 
-  const current = await getOrderRecordForViewer({
-    id: created.order.id,
-    isAdmin: true,
-  });
+  const current = await getAdminOrderRecord(created.order.id);
   const changed = await updateOrderAddressRecord({
     id: current.id,
     expectedUpdatedAt: current.updatedAt,
