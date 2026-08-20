@@ -1,5 +1,6 @@
 import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { resolveClientOAuthCapability } from "./oauth-capability";
 import { GROK_PROVIDERS } from "./providers";
 
 /**
@@ -29,6 +30,30 @@ export const authClient = createAuthClient({
  * `VITE_AUTH_ENABLED=false` to force it off (dev user — see `use-current-user`).
  */
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
+
+/**
+ * Production providers are opt-in. Development without an explicit flag is
+ * the Grok preview path and may use its restricted baked preview client.
+ */
+export const oauthEnabled = resolveClientOAuthCapability({
+  authEnabled,
+  explicitFlag: import.meta.env.VITE_OAUTH_ENABLED,
+  // Implicit preview OAuth is revealed after hydration by
+  // `oauthEnabledForCurrentBrowser`; keep the SSR/client first render equal.
+  isPreviewHost: false,
+});
+
+/** True for explicit OAuth, or for the restricted Grok sandbox after hydration. */
+export function oauthEnabledForCurrentBrowser(): boolean {
+  return resolveClientOAuthCapability({
+    authEnabled,
+    explicitFlag: import.meta.env.VITE_OAUTH_ENABLED,
+    isPreviewHost:
+      typeof window !== "undefined" &&
+      (window.location.hostname === "grok-sandbox.com" ||
+        window.location.hostname.endsWith(".grok-sandbox.com")),
+  });
+}
 
 /** The upstream providers to render sign-in buttons for. */
 export { GROK_PROVIDERS };
@@ -78,7 +103,11 @@ function inLivePreview(): boolean {
 }
 
 /** Message the popup posts back to the opener once sign-in completes. */
-type PopupMessage = { source: "grok-auth-popup"; token: string | null; error?: string };
+type PopupMessage = {
+  source: "grok-auth-popup";
+  token: string | null;
+  error?: string;
+};
 
 /**
  * Start sign-in with one upstream provider (`providerId` from `GROK_PROVIDERS`),
@@ -135,7 +164,11 @@ export async function signIn(
     if (typeof window !== "undefined") {
       const dest = new URL(callbackURL, window.location.origin);
       const here = window.location;
-      if (dest.origin !== here.origin || dest.pathname !== here.pathname || dest.search !== here.search) {
+      if (
+        dest.origin !== here.origin ||
+        dest.pathname !== here.pathname ||
+        dest.search !== here.search
+      ) {
         window.location.href = callbackURL;
       }
     }
@@ -146,6 +179,8 @@ export async function signIn(
     providerId,
     callbackURL,
     errorCallbackURL,
+    // Deze helper navigeert zelf één keer; voorkom een tweede clientredirect.
+    disableRedirect: true,
   });
   if (error) throw new Error(error.message ?? "Sign-in failed");
   if (data?.url) window.location.href = data.url;

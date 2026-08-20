@@ -38,6 +38,9 @@ for (const name of [
   "MAILBOX_ADDRESS",
   "MAILBOX_PASSWORD",
   "MAIL_TEST_RECIPIENT",
+  "REQUIRE_ADDRESS_VALIDATION",
+  "APICHECK_API_KEY",
+  "GOOGLE_ADDRESS_VALIDATION_API_KEY",
   "HOSTINGER_API_TOKEN",
   "CLOUDFLARE_API_TOKEN",
 ]) {
@@ -48,7 +51,11 @@ Object.assign(serverEnvironment, {
   HOST: "127.0.0.1",
   PORT: String(port),
   REQUIRE_DATABASE: "1",
+  REQUIRE_ADDRESS_VALIDATION: "1",
+  APICHECK_API_KEY: "ci-apicheck-address-key-not-for-production",
+  GOOGLE_ADDRESS_VALIDATION_API_KEY: "ci-google-address-key-not-for-production",
   VITE_AUTH_ENABLED: "false",
+  VITE_OAUTH_ENABLED: "false",
   VITE_NO_INDEX: "1",
   NO_INDEX: "1",
   VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
@@ -61,6 +68,50 @@ Object.assign(serverEnvironment, {
   ADMIN_SESSION_SECRET: "ci-admin-session-secret-32-characters-minimum",
   ADMIN_EMAILS: "",
 });
+
+async function assertMissingAddressValidationFailsFast() {
+  const environment = {
+    ...serverEnvironment,
+    APICHECK_API_KEY: "",
+    GOOGLE_ADDRESS_VALIDATION_API_KEY: "",
+  };
+  let failureOutput = "";
+  const processUnderTest = spawn(process.execPath, [entryFile.pathname], {
+    detached: true,
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  for (const stream of [processUnderTest.stdout, processUnderTest.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      failureOutput = `${failureOutput}${chunk}`.slice(-20_000);
+    });
+  }
+  const exitCode = await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("Runtime zonder adressleutels bleef actief.")),
+      10_000,
+    );
+    processUnderTest.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+  }).finally(() => {
+    if (processUnderTest.exitCode === null && processUnderTest.pid) {
+      try {
+        process.kill(-processUnderTest.pid, "SIGKILL");
+      } catch {
+        // Het proces was ondertussen al gestopt.
+      }
+    }
+  });
+  assert.notEqual(exitCode, 0, failureOutput);
+  assert.match(failureOutput, /APICHECK_API_KEY/);
+  assert.match(failureOutput, /GOOGLE_ADDRESS_VALIDATION_API_KEY/);
+  assert.doesNotMatch(failureOutput, /ci-(?:apicheck|google)-address-key/);
+}
+
+await assertMissingAddressValidationFailsFast();
 const server = spawn(process.execPath, [entryFile.pathname], {
   detached: true,
   env: serverEnvironment,
@@ -224,7 +275,7 @@ try {
   );
   try {
     await page
-      .getByText("Bericht verstuurd", { exact: true })
+      .getByText("Bericht ontvangen", { exact: true })
       .waitFor({ timeout: 10_000 });
   } catch (error) {
     const feedback = await page.locator('[role="alert"]').allTextContents();

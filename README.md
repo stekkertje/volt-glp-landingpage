@@ -2,7 +2,9 @@
 
 Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als vial of kant-en-klare pen.
 
-Checkout en contact schrijven naar de database. Betaling en e-mailafhandeling blijven handmatig.
+Checkout en contact schrijven naar de database. Transactionele e-mail,
+klantaccounts, adrescontrole en MyParcel-verzending zijn in de backend
+opgenomen. Betaling blijft handmatig.
 
 AI-beheer:
 
@@ -76,12 +78,17 @@ aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.m
 - Draai dit geheim veilig door eerst de nieuwe waarde in
   `ORDER_ACCESS_TOKEN_SECRET` te zetten en de vorige waarde tijdelijk op te
   nemen in `ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS` (kommagescheiden). Laat oude
-  waarden minimaal 72 uur staan. Een replay versleutelt een geldige code
-  automatisch opnieuw met de actuele sleutel zonder die code in te trekken.
+  waarden minimaal 72 uur staan. Een replay versleutelt een geldig gastbewijs
+  automatisch opnieuw met de actuele sleutel zonder het bewijs in te trekken.
   Roteer je `BETTER_AUTH_SECRET` terwijl dit ook de fallback voor besteltoegang
   is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
   op of stel vooraf een aparte ordersleutel in.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
+- Google/X OAuth is in productie expliciet opt-in via
+  `VITE_OAUTH_ENABLED=true` plus beide server-only waarden
+  `GROK_AUTH_CLIENT_ID` en `GROK_AUTH_CLIENT_SECRET`. Zonder die configuratie
+  gebruikt de shop alleen e-mail/wachtwoord; de Grok-previewclient is nooit een
+  fallback voor het publieke domein.
 - Admin via wachtwoord: zet `ADMIN_SESSION_SECRET` en exact één van
   `ADMIN_PASSWORD` of `ADMIN_PASSWORD_BASE64`. Gebruik op Hostinger bij voorkeur
   base64/base64url, zodat speciale tekens transportveilig blijven; het
@@ -155,11 +162,14 @@ historische orderregels.
 
 ## Backendroutes
 
-- `/checkout`: gastbestelling met serverprijzen en idempotency.
-- `/bestelling/$id`: beveiligde bevestiging via eigenaar, admin of tijdelijk gastbewijs.
-- `/account`: eigen orders na login of gasttoegang met herstelcode.
-- `/admin`: dagelijkse order- en contactafhandeling.
+- `/checkout`: gast- of accountbestelling met serverprijzen, adrescontrole en idempotency.
+- `/bestelling/$id`: beveiligde bevestiging via account, admin of de eigen
+  host-only HttpOnly-gastcookie van die checkout.
+- `/account`: klantaccount met bestelgeschiedenis, adres, tracking en veilige e-mailclaim van eerdere gastorders.
+- `/admin`: dagelijkse order-, contact-, mail- en MyParcel-afhandeling.
 
 ## Bewust handmatig
 
-Er is nog geen betaalprovider, automatische e-mail, voorraadbeheer, refundflow of verzendkoppeling.
+Er is nog geen betaalprovider, voorraadbeheer of refundflow. Transactionele
+e-mail loopt via de database-outbox. MyParcel-concepten, A6-labels en tracking
+zijn beheeracties; een label wordt nooit stil tijdens checkout aangemaakt.

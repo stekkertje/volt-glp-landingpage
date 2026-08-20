@@ -12,7 +12,7 @@ import { CartHydrate } from "@/components/cart-hydrate";
 
 export function SiteShell({ children }: { children: ReactNode }) {
   return (
-    <div id="top" className="min-h-screen bg-bg text-fg pb-24 md:pb-0">
+    <div id="top" className="min-h-dvh bg-bg pb-24 text-fg md:pb-0">
       <CartHydrate />
       <DocumentTitleBadge />
       <SiteHeader />

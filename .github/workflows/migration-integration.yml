@@ -87,6 +87,9 @@ jobs:
           VITE_PUBLIC_HOSTNAME: afslank-injecties.nl
           TRUST_HOSTINGER_PROXY: "1"
           REQUIRE_DATABASE: "1"
+          REQUIRE_ADDRESS_VALIDATION: "1"
+          APICHECK_API_KEY: ci-apicheck-address-key-not-for-production
+          GOOGLE_ADDRESS_VALIDATION_API_KEY: ci-google-address-key-not-for-production
         run: |
           npm run build:hostinger
           test -f .output/server/index.mjs

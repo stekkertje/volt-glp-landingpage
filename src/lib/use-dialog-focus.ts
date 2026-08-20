@@ -18,13 +18,21 @@ export function useDialogFocus(
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    const scrollY = window.scrollY;
     const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
     const focusFrame = window.requestAnimationFrame(() => {
-      const autofocusTarget =
-        panelRef.current?.querySelector<HTMLElement>(
-          "[data-dialog-autofocus]",
-        );
+      const autofocusTarget = panelRef.current?.querySelector<HTMLElement>(
+        "[data-dialog-autofocus]",
+      );
       (autofocusTarget ?? initialFocusRef.current)?.focus();
     });
 
@@ -59,7 +67,12 @@ export function useDialogFocus(
     return () => {
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKeyDown);
+      document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
       previousFocusRef.current?.focus();
       previousFocusRef.current = null;
     };

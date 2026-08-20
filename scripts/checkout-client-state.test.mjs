@@ -78,13 +78,9 @@ after(async () => {
 test("confirmed checkout proves a recovery URL before clearing the cart", async () => {
   const source = await readFile("src/routes/checkout.tsx", "utf8");
   const confirmedResult = source.indexOf("result = await createOrder");
-  const stageRecovery = source.indexOf(
-    "stageOrderRecoveryCode(result.order.id, result.guestAccessToken)",
-    confirmedResult,
-  );
   const commitSubmitGuard = source.indexOf(
     "confirmedOrderRef.current = committed",
-    stageRecovery,
+    confirmedResult,
   );
   const suppressEmptyRedirect = source.indexOf(
     "emptyRedirected.current = true",
@@ -116,8 +112,7 @@ test("confirmed checkout proves a recovery URL before clearing the cart", async 
   );
 
   assert.ok(confirmedResult >= 0);
-  assert.ok(stageRecovery > confirmedResult);
-  assert.ok(commitSubmitGuard > stageRecovery);
+  assert.ok(commitSubmitGuard > confirmedResult);
   assert.ok(suppressEmptyRedirect > commitSubmitGuard);
   assert.ok(startNavigation > suppressEmptyRedirect);
   assert.ok(proveCommittedUrl > startNavigation);

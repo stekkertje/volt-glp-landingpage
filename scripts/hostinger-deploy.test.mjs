@@ -25,17 +25,22 @@ test("Hostinger uses a Node 22 Nitro node-server build without changing the Verc
   assert.match(viteConfig, /serverDir:\s*["']\.\/server["']/);
 });
 
-test("the Hostinger environment contract keeps both noindex layers enabled", async () => {
-  const [example, rootRoute, middleware] = await Promise.all([
-    read(".env.example"),
-    read("src/routes/__root.tsx"),
-    read("server/middleware/00-security-headers.ts"),
-  ]);
+test("the Hostinger environment contract keeps noindex and required integrations enabled", async () => {
+  const [example, rootRoute, middleware, addressGuard, addressConfig] =
+    await Promise.all([
+      read(".env.example"),
+      read("src/routes/__root.tsx"),
+      read("server/middleware/00-security-headers.ts"),
+      read("server/middleware/01-address-validation-guard.ts"),
+      read("src/lib/server/integrations/address-validation-config.server.ts"),
+    ]);
 
   for (const name of [
     "NODE_ENV",
     "NPM_CONFIG_INCLUDE",
     "REQUIRE_DATABASE",
+    "REQUIRE_MAIL",
+    "REQUIRE_ADDRESS_VALIDATION",
     "DATABASE_URL",
     "MIGRATION_DATABASE_URL",
     "BETTER_AUTH_SECRET",
@@ -44,22 +49,37 @@ test("the Hostinger environment contract keeps both noindex layers enabled", asy
     "ADMIN_PASSWORD_BASE64",
     "ADMIN_SESSION_SECRET",
     "VITE_AUTH_ENABLED",
+    "VITE_OAUTH_ENABLED",
     "VITE_NO_INDEX",
     "NO_INDEX",
     "VITE_PUBLIC_HOSTNAME",
     "TRUST_HOSTINGER_PROXY",
+    "APICHECK_API_KEY",
+    "GOOGLE_ADDRESS_VALIDATION_API_KEY",
   ]) {
     assert.match(example, new RegExp(`^${name}=`, "m"), name);
   }
   assert.match(example, /^NODE_ENV=production$/m);
   assert.match(example, /^NPM_CONFIG_INCLUDE=dev$/m);
   assert.match(example, /^REQUIRE_DATABASE=1$/m);
-  assert.match(example, /^VITE_AUTH_ENABLED=false$/m);
+  assert.match(example, /^REQUIRE_MAIL=1$/m);
+  assert.match(example, /^REQUIRE_ADDRESS_VALIDATION=1$/m);
+  assert.match(example, /^VITE_AUTH_ENABLED=true$/m);
+  assert.match(example, /^VITE_OAUTH_ENABLED=false$/m);
+  assert.match(example, /^GROK_AUTH_CLIENT_ID=$/m);
+  assert.match(example, /^GROK_AUTH_CLIENT_SECRET=$/m);
   assert.match(example, /^TRUST_HOSTINGER_PROXY=1$/m);
   assert.match(rootRoute, /name:\s*["']robots["']/);
   assert.match(rootRoute, /noindex, nofollow, noarchive/);
   assert.match(middleware, /process\.env\.NO_INDEX\s*===\s*["']1["']/);
   assert.match(middleware, /process\.env\.VITE_NO_INDEX\s*===\s*["']1["']/);
+  assert.match(
+    addressGuard,
+    /resolveAddressValidationConfiguration\(process\.env\)/,
+  );
+  assert.match(addressConfig, /APICHECK_API_KEY/);
+  assert.match(addressConfig, /GOOGLE_ADDRESS_VALIDATION_API_KEY/);
+  assert.match(addressConfig, /REQUIRE_ADDRESS_VALIDATION/);
 });
 
 test("the Hostinger build requires its database on both build stages", async () => {

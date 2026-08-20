@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { createServer } from "vite";
 
 let vite;
 let createOrderSchema;
+let orderViewerSchema;
 let contactMessageSchema;
 
 function validOrder(overrides = {}) {
@@ -20,6 +22,7 @@ function validOrder(overrides = {}) {
     lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
     discountCode: "",
     idempotencyKey: "0123456789abcdef",
+    addressValidationToken: "address-validation-token-placeholder-long-enough",
     ...overrides,
   };
 }
@@ -30,7 +33,7 @@ before(async () => {
     logLevel: "silent",
     server: { middlewareMode: true },
   });
-  ({ createOrderSchema } = await vite.ssrLoadModule(
+  ({ createOrderSchema, orderViewerSchema } = await vite.ssrLoadModule(
     "/src/lib/server/order-schema.ts",
   ));
   ({ contactMessageSchema } = await vite.ssrLoadModule(
@@ -52,12 +55,39 @@ for (const field of ["name", "street", "houseNumber", "city"]) {
 
 test("contact validation rejects a whitespace-only name", () => {
   const result = contactMessageSchema.safeParse({
+    idempotencyKey: randomUUID(),
     name: "   ",
     email: "noor@example.test",
     message: "Dit bericht is lang genoeg.",
   });
   assert.equal(result.success, false);
   assert.ok(result.error.issues.some((issue) => issue.path[0] === "name"));
+});
+
+test("contact validation requires a useful name and e-mail address", () => {
+  for (const input of [
+    { name: "A", email: "noor@example.nl" },
+    { name: "Noor", email: "n@example.nl" },
+    { name: "Noor", email: "noor@example" },
+    { name: "Noor", email: "noor@example.x" },
+  ]) {
+    const result = contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
+      ...input,
+      message: "Dit bericht is lang genoeg.",
+    });
+    assert.equal(result.success, false, JSON.stringify(input));
+  }
+
+  assert.equal(
+    contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
+      name: "Noa",
+      email: "noor@example.nl",
+      message: "Dit bericht is lang genoeg.",
+    }).success,
+    true,
+  );
 });
 
 test("order validation normalizes and validates Dutch postcodes", () => {
@@ -68,8 +98,30 @@ test("order validation normalizes and validates Dutch postcodes", () => {
   for (const postcode of ["abc", "0123 AB", "1234", "12345 AB"]) {
     const invalid = createOrderSchema.safeParse(validOrder({ postcode }));
     assert.equal(invalid.success, false, postcode);
-    assert.ok(invalid.error.issues.some((issue) => issue.path[0] === "postcode"));
+    assert.ok(
+      invalid.error.issues.some((issue) => issue.path[0] === "postcode"),
+    );
   }
+});
+
+test("final order validation requires a server-issued address proof", () => {
+  const result = createOrderSchema.safeParse(
+    validOrder({ addressValidationToken: undefined }),
+  );
+  assert.equal(result.success, false);
+  assert.ok(
+    result.error.issues.some(
+      (issue) => issue.path[0] === "addressValidationToken",
+    ),
+  );
+});
+
+test("public order lookup rejects the removed manual recovery code", () => {
+  const result = orderViewerSchema.safeParse({
+    id: "order-test",
+    accessCode: "OUDE-TIJDELIJKE-CODE",
+  });
+  assert.equal(result.success, false);
 });
 
 test("order validation validates Belgian postcodes against the selected country", () => {
@@ -85,7 +137,9 @@ test("order validation validates Belgian postcodes against the selected country"
       validOrder({ country: "BE", postcode }),
     );
     assert.equal(invalid.success, false, postcode);
-    assert.ok(invalid.error.issues.some((issue) => issue.path[0] === "postcode"));
+    assert.ok(
+      invalid.error.issues.some((issue) => issue.path[0] === "postcode"),
+    );
   }
 });
 
@@ -105,6 +159,7 @@ test("order required-field limits apply after normalization", () => {
 test("contact field limits apply after trimming", () => {
   assert.equal(
     contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
       name: ` ${"a".repeat(120)} `,
       email: "noor@example.test",
       message: "1234567890",
@@ -113,6 +168,7 @@ test("contact field limits apply after trimming", () => {
   );
   assert.equal(
     contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
       name: ` ${"a".repeat(121)} `,
       email: "noor@example.test",
       message: "1234567890",
@@ -121,6 +177,7 @@ test("contact field limits apply after trimming", () => {
   );
   assert.equal(
     contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
       name: "Noor",
       email: "noor@example.test",
       message: "123456789",
@@ -129,6 +186,7 @@ test("contact field limits apply after trimming", () => {
   );
   assert.equal(
     contactMessageSchema.safeParse({
+      idempotencyKey: randomUUID(),
       name: "Noor",
       email: "noor@example.test",
       message: "a".repeat(4_001),

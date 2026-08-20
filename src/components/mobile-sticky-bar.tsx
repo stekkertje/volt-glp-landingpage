@@ -37,9 +37,7 @@ export function MobileStickyBar() {
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-fg">
-            Winkelwagen · {count}
-          </p>
+          <p className="truncate text-sm font-semibold text-fg">Winkelwagen</p>
           <p className="text-sm font-bold tabular-nums text-primary">
             {formatEuro(shownTotal)}
           </p>

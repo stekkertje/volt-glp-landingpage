@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -15,6 +16,8 @@ let browser;
 let devServer;
 let serverOutput = "";
 let viteCacheDir;
+let addressApiServer;
+let addressApiBaseUrl;
 const TEST_DATABASE_SOURCE_MARKER =
   "[app-builder] verified database source: pglite";
 
@@ -100,6 +103,30 @@ async function withPage(run) {
 }
 
 before(async () => {
+  addressApiServer = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        data: {
+          street: "Teststraat",
+          number: url.searchParams.get("number") ?? "12",
+          numberAddition: url.searchParams.get("numberAddition") ?? "",
+          postalcode: url.searchParams.get("postalcode") ?? "1234AB",
+          city: "Utrecht",
+        },
+      }),
+    );
+  });
+  await new Promise((resolve, reject) => {
+    addressApiServer.once("error", reject);
+    addressApiServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = addressApiServer.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Adresmock kon niet worden gestart.");
+  }
+  addressApiBaseUrl = `http://127.0.0.1:${address.port}`;
   const port = await availablePort();
   baseUrl = `http://127.0.0.1:${port}`;
   viteCacheDir = await mkdtemp(join(tmpdir(), "volt-security-rpc-vite-"));
@@ -123,6 +150,10 @@ before(async () => {
         VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
         ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
+        ADDRESS_VALIDATION_TOKEN_SECRET:
+          "security-rpc-address-validation-secret-at-least-32-characters",
+        APICHECK_API_KEY: "security-rpc-test-key",
+        APICHECK_BASE_URL: addressApiBaseUrl,
       },
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
@@ -149,6 +180,9 @@ after(async () => {
     if (viteCacheDir) {
       await rm(viteCacheDir, { recursive: true, force: true });
     }
+    if (addressApiServer?.listening) {
+      await new Promise((resolve) => addressApiServer.close(() => resolve()));
+    }
   }
 });
 
@@ -157,16 +191,24 @@ test("checkout conflict keeps a stable discriminant and HTTP 409 across RPC", as
     page.evaluate(
       async ({ unique }) => {
         const { createOrder } = await import("/src/lib/server/orders.ts");
+        const { validateCheckoutAddress } =
+          await import("/src/lib/server/address-validation.ts");
         const { isConflictServerError } =
           await import("/src/lib/server-error.ts");
-        const input = {
-          name: "RPC review",
-          email: `rpc-${unique}@example.test`,
+        const address = {
           street: "Teststraat",
           houseNumber: "12",
           postcode: "1234 AB",
           city: "Utrecht",
           country: "NL",
+        };
+        const checked = await validateCheckoutAddress({ data: address });
+        if (!checked.validationToken) throw new Error("Adresbewijs ontbreekt.");
+        const input = {
+          name: "RPC review",
+          email: `rpc-${unique}@example.test`,
+          ...address,
+          addressValidationToken: checked.validationToken,
           lines: [{ slug: "semaglutide-4mg-pen", optionId: "default", qty: 1 }],
           idempotencyKey: `rpc-conflict-${unique}`,
         };
@@ -197,7 +239,7 @@ test("checkout conflict keeps a stable discriminant and HTTP 409 across RPC", as
         };
 
         const first = await invoke(input);
-        const conflict = await invoke({ ...input, street: "Andere straat" });
+        const conflict = await invoke({ ...input, name: "Andere naam" });
         return { first, conflict };
       },
       { unique: randomUUID() },
@@ -225,6 +267,7 @@ test("origin guards return HTTP 403 at the real server-function endpoint", async
         let request;
         await createContactMessage({
           data: {
+            idempotencyKey: crypto.randomUUID(),
             name: "RPC origin review",
             email: `origin-${unique}@example.test`,
             message: "Dit is een geldig testbericht voor de RPC-grens.",
@@ -323,6 +366,7 @@ test("public server errors hide validation and unexpected internal details", asy
       try {
         await createContactMessage({
           data: {
+            idempotencyKey: crypto.randomUUID(),
             name: "",
             email: "not-an-email",
             message: "kort",

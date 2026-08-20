@@ -1,12 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Copy, ReceiptText } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, ReceiptText } from "lucide-react";
+import { useEffect, useState } from "react";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { SiteShell } from "@/components/site-shell";
 import { Button } from "@/components/ui/button";
 import { authEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { consumeOrderRecoveryCode } from "@/lib/order-recovery-memory";
 import { getOrderForViewer } from "@/lib/server/orders";
 
 type ViewerOrder = Awaited<ReturnType<typeof getOrderForViewer>>;
@@ -48,20 +47,6 @@ function OrderConfirmationPage() {
       ? clientLookup
       : null;
   const order = loaderOrder ?? matchingClientLookup?.order ?? null;
-  const orderId = order?.id;
-  const [stagedRecovery, setStagedRecovery] = useState<{
-    orderId: string;
-    code: string;
-  } | null>(null);
-  const [copyState, setCopyState] = useState<
-    "idle" | "copying" | "copied" | "error"
-  >("idle");
-  const lastConsumedOrderId = useRef<string | null>(null);
-  const copyRequestSequence = useRef(0);
-  const recoveryCode =
-    stagedRecovery && stagedRecovery.orderId === orderId
-      ? stagedRecovery.code
-      : null;
 
   useEffect(() => {
     if (loaderOrder || !viewerKey) return;
@@ -98,20 +83,6 @@ function OrderConfirmationPage() {
     };
   }, [loaderOrder, requestedOrderId, viewerKey]);
 
-  useEffect(() => {
-    copyRequestSequence.current += 1;
-    setCopyState("idle");
-    if (!orderId) {
-      lastConsumedOrderId.current = null;
-      setStagedRecovery(null);
-      return;
-    }
-    if (lastConsumedOrderId.current === orderId) return;
-    lastConsumedOrderId.current = orderId;
-    const code = consumeOrderRecoveryCode(orderId);
-    setStagedRecovery(code ? { orderId, code } : null);
-  }, [orderId]);
-
   if (!order && (!matchingClientLookup || matchingClientLookup.pending)) {
     return (
       <SiteShell>
@@ -135,13 +106,14 @@ function OrderConfirmationPage() {
             Bestelling niet beschikbaar
           </h1>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Deze bestelling bestaat niet of je hebt geen toegang. Gebruik je
-            herstelcode via{" "}
-            {authEnabled ? "je accountpagina" : "Bestelling terugvinden"}.
+            Deze bestelling bestaat niet of je hebt geen toegang.
+            {authEnabled
+              ? " Log in met het account waaraan de bestelling is gekoppeld."
+              : " Neem contact met ons op als je hulp nodig hebt."}
           </p>
           <Button className="mt-6" asChild>
             <Link to="/account">
-              {authEnabled ? "Naar account" : "Bestelling terugvinden"}
+              {authEnabled ? "Naar account" : "Hulp bij bestelling"}
             </Link>
           </Button>
         </main>
@@ -177,84 +149,17 @@ function OrderConfirmationPage() {
               </div>
             </div>
 
-            {recoveryCode && (
-              <section className="mt-5 rounded-xl border border-primary/25 bg-primary/5 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                  Eenmalig zichtbaar
-                </p>
-                <h2 className="mt-1 text-lg font-extrabold tracking-tight">
-                  Bewaar je herstelcode
-                </h2>
-                <p className="mt-1 text-sm text-muted">
-                  Hiermee kun je deze bestelling 72 uur lang als gast
-                  terugvinden.
-                </p>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <code className="min-w-0 flex-1 break-all rounded-lg border border-border bg-surface px-3 py-2.5 text-sm font-bold tracking-wide text-fg">
-                    {recoveryCode}
-                  </code>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={copyState === "copying"}
-                    aria-busy={copyState === "copying"}
-                    onClick={async () => {
-                      if (copyState === "copying") return;
-                      const requestSequence = ++copyRequestSequence.current;
-                      setCopyState("copying");
-                      try {
-                        await navigator.clipboard.writeText(recoveryCode);
-                        if (requestSequence === copyRequestSequence.current) {
-                          setCopyState("copied");
-                        }
-                      } catch {
-                        if (requestSequence === copyRequestSequence.current) {
-                          setCopyState("error");
-                        }
-                      }
-                    }}
-                  >
-                    <Copy className="size-4" aria-hidden />
-                    {copyState === "copying"
-                      ? "Kopiëren…"
-                      : copyState === "copied"
-                        ? "Gekopieerd"
-                        : copyState === "error"
-                          ? "Opnieuw kopiëren"
-                          : "Kopieer"}
-                  </Button>
-                </div>
-                {copyState === "copied" && (
-                  <p role="status" aria-live="polite" className="sr-only">
-                    Herstelcode gekopieerd.
-                  </p>
-                )}
-                {copyState === "error" && (
-                  <p role="alert" className="mt-3 text-sm text-danger">
-                    Kopiëren is niet gelukt. Selecteer de code en kopieer deze
-                    handmatig.
-                  </p>
-                )}
-              </section>
-            )}
-            {!recoveryCode && (
-              <p className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm text-muted">
-                Als gast kun je deze bestelling op dit apparaat tot 72 uur na
-                plaatsing openen.{" "}
-                {authEnabled &&
-                  "Was je ingelogd, dan kun je gekoppelde bestellingen ook via je account openen. "}
-                De eenmalige herstelcode wordt na herladen niet opnieuw getoond.
-              </p>
-            )}
-
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-8 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2">
               <div>
+                <p className="text-xs text-muted">Besteld op</p>
                 <p className="text-sm font-semibold">{createdAt}</p>
-                <p className="mt-1 text-xs text-muted">
-                  Status van je bestelling
-                </p>
               </div>
-              <OrderStatusBadge status={order.status} />
+              <div>
+                <p className="text-xs text-muted">Status van je bestelling</p>
+                <div className="mt-1">
+                  <OrderStatusBadge status={order.status} />
+                </div>
+              </div>
             </div>
 
             <div className="mt-5">
@@ -269,7 +174,7 @@ function OrderConfirmationPage() {
                 <Link to="/account">
                   {authEnabled
                     ? "Bestellingen bekijken"
-                    : "Bestelling terugvinden"}
+                    : "Hulp bij bestelling"}
                 </Link>
               </Button>
             </div>

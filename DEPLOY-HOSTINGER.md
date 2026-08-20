@@ -30,17 +30,32 @@ de secretomgeving, nooit in Git of buildlogs.
 NODE_ENV=production
 NPM_CONFIG_INCLUDE=dev
 REQUIRE_DATABASE=1
+REQUIRE_MAIL=1
 DATABASE_URL=<Neon direct/unpooled URL>
 MIGRATION_DATABASE_URL=<Neon direct/unpooled URL>
 BETTER_AUTH_SECRET=<minimaal 32 tekens>
+BETTER_AUTH_URL=https://afslank-injecties.nl
 ORDER_ACCESS_TOKEN_SECRET=<minimaal 32 tekens>
 ADMIN_PASSWORD_BASE64=<base64/base64url van het bestaande wachtwoord>
 ADMIN_SESSION_SECRET=<minimaal 32 tekens>
-VITE_AUTH_ENABLED=false
+VITE_AUTH_ENABLED=true
+VITE_OAUTH_ENABLED=false
 VITE_NO_INDEX=1
 NO_INDEX=1
 VITE_PUBLIC_HOSTNAME=afslank-injecties.nl
 TRUST_HOSTINGER_PROXY=1
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USERNAME=<Hostinger-mailbox>
+SMTP_PASSWORD=<Hostinger-mailboxwachtwoord>
+MAIL_FROM_ADDRESS=info@afslank-injecties.nl
+MAIL_FROM_NAME=VOLT
+MAIL_OWNER_ADDRESS=info@afslank-injecties.nl
+REQUIRE_ADDRESS_VALIDATION=1
+APICHECK_API_KEY=<server-only sleutel>
+GOOGLE_ADDRESS_VALIDATION_API_KEY=<server-only sleutel>
+MYPARCEL_API_KEY=<ruwe server-only sleutel; de app maakt zelf Basic base64-auth>
 ```
 
 `DATABASE_URL` en `MIGRATION_DATABASE_URL` moeten naar dezelfde Neon-branch en
@@ -49,7 +64,18 @@ directe/unpooled Neon-URL. De app pint `search_path=public` bij het openen van d
 verbinding; Neons transaction-pooler accepteert die startupoptie niet. De
 langlopende Hostinger Node-server kan de directe verbinding gebruiken. De
 migratie-URL moet daarnaast expliciete credentials bevatten. Configureer in
-deze wachtwoord-adminopzet geen `ADMIN_EMAILS`.
+deze wachtwoord-adminopzet geen `ADMIN_EMAILS`. Klantaccounts gebruiken
+e-mail/wachtwoord via Better Auth. De wachtwoord-admin blijft daarvan
+gescheiden.
+
+Google/X OAuth staat voor deze Hostinger-opzet standaard uit met
+`VITE_OAUTH_ENABLED=false`; de shop gebruikt e-mail/wachtwoord. Zet OAuth alleen
+bewust op `true` wanneer voor `https://afslank-injecties.nl` een eigen broker-
+client bestaat en voeg dan beide server-only secrets
+`GROK_AUTH_CLIENT_ID` en `GROK_AUTH_CLIENT_SECRET` toe. Een productiebuild met
+OAuth aan en een ontbrekende credential stopt fail-closed. De ingebouwde
+previewclient is uitsluitend geldig voor Grok-previewhosts en wordt nooit als
+productiefallback gebruikt.
 
 Gebruik op Hostinger `ADMIN_PASSWORD_BASE64` en laat `ADMIN_PASSWORD` leeg of
 weg. De app decodeert de waarde strikt naar UTF-8; het wachtwoord dat je op
@@ -83,6 +109,9 @@ npm start
 
 De build voert na `vite build` automatisch `npm run db:migrate` uit. Een
 migratiefout of ontbrekende databaseconfiguratie stopt de deployment.
+Met `REQUIRE_MAIL=1` weigert de Node-runtime daarnaast te starten wanneer de
+SMTP-gebruikersnaam of het SMTP-wachtwoord ontbreekt. Zo kan een deployment
+niet ongemerkt zonder transactionele e-mail online komen.
 
 ## Bestaand domein veilig omzetten
 
@@ -94,7 +123,8 @@ bestaan. Maak vóór iedere andere conversieroute eerst een volledige
 website-/mailbackup en controleer daarna opnieuw de mailbox en DNS-records.
 
 Controleer na deployment minimaal homepage, productpagina, checkout,
-gastbestelling, wachtwoord-admin en contact. Controleer daarnaast op iedere
+gastbestelling, registratie, e-mailbevestiging, inloggen, wachtwoordherstel,
+accountbestellingen, wachtwoord-admin en contact. Controleer daarnaast op iedere
 representatieve route beide noindex-lagen:
 
 ```bash
@@ -110,11 +140,33 @@ volledige live proef groen is.
 
 ## Mailacceptatie
 
-De app verzendt zelf nog geen automatische e-mail. Controleer de bestaande
-mailbox `info@afslank-injecties.nl` daarom los van de app:
+De app levert contact-, account- en bestelmail via een duurzame database-outbox
+en Hostinger SMTP. Test uitsluitend met de ingestelde testontvanger en de eigen
+mailbox `info@afslank-injecties.nl`:
 
-1. verstuur via Hostinger SMTP een testbericht naar de ingestelde testontvanger;
-2. verstuur ook een testbericht naar de mailbox zelf en bevestig de ontvangst
-   via Hostinger IMAP;
-3. controleer dat MX, SPF, DKIM en DMARC voor het domein aanwezig blijven;
-4. controleer na de Node-deploy opnieuw dat aanmelden en verzenden werken.
+1. verstuur een contactbericht en bevestig zowel de eigenaarsmail als de
+   klantbevestiging met de belofte van 48 uur op werkdagen;
+2. registreer een testaccount en controleer e-mailbevestiging,
+   wachtwoordherstel en inloggen;
+3. plaats één duidelijk gemarkeerde testbestelling en bevestig dat zowel klant
+   als eigenaar exact één bestelbevestiging ontvangt;
+4. wijzig in beheer achtereenvolgens status, bezorgadres en
+   fulfillmentproducten en controleer de bijbehorende klantmails;
+5. bevestig via IMAP dat de berichten aankomen en controleer dat MX, SPF, DKIM
+   en DMARC voor het domein aanwezig blijven;
+6. controleer de outbox op blijvend `pending` of `failed` en controleer de
+   Hostinger-logs zonder mailinhoud of adressen te loggen.
+
+## Adrescontrole en MyParcel
+
+- Nederland wordt server-side gecontroleerd via ApiCheck; overige ondersteunde
+  EU-adressen via Google Address Validation. De klant moet ook ingelogd altijd
+  zelf een actueel bezorgadres invullen en een voorgestelde correctie bevestigen.
+- MyParcel gebruikt uitsluitend de server-only API-sleutel. Maak een zending
+  idempotent op basis van het bestelnummer en reconcilieer een onzekere response
+  vóór een nieuwe create-call.
+- Conceptzending en labelaanvraag zijn aparte beheeracties. Voor de live proef
+  mag uitsluitend voor de duidelijk gemarkeerde testbestelling een testlabel
+  worden aangemaakt. Scan of overhandig dat label niet.
+- Controleer dat barcode, trackinglink en trackingstatus bij de juiste order in
+  beheer en in het klantaccount verschijnen.

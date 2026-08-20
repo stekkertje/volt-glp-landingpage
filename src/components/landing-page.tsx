@@ -123,13 +123,13 @@ export function LandingPage() {
               >
                 <Stars rating={SITE.rating} />
                 <span className="text-sm font-semibold tabular-nums">
-                  {SITE.rating}
-                </span>
-                <span className="text-sm text-muted underline-offset-2 hover:underline">
-                  · {SITE.reviewCount.toLocaleString("nl-NL")} beoordelingen
-                </span>
-              </a>
-            </div>
+                    {SITE.rating}
+                  </span>
+                  <span className="text-sm text-muted underline-offset-2 hover:underline">
+                    {SITE.reviewCount.toLocaleString("nl-NL")} beoordelingen
+                  </span>
+                </a>
+              </div>
 
             <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 space-y-4">
               {weekdeal && (
@@ -138,13 +138,13 @@ export function LandingPage() {
                     to="/product/$slug"
                     params={{ slug: weekdeal.slug }}
                     className="flex w-full flex-col gap-1 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-left transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                        Weekdeal · −20%
-                      </p>
-                      <p className="text-sm font-bold tracking-tight text-fg">
-                        {weekdeal.name}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                          Weekdeal −20%
+                        </p>
+                        <p className="text-sm font-bold tracking-tight text-fg">
+                          {weekdeal.name}
                       </p>
                       <p className="text-xs text-success font-semibold">
                         {formatEuro(weekdeal.priceCents)}
@@ -180,13 +180,16 @@ export function LandingPage() {
                 {weekdeal && (
                   <Button
                     size="lg"
-                    className="glow-primary w-full sm:flex-1"
-                    asChild
-                  >
-                    <Link to="/product/$slug" params={{ slug: weekdeal.slug }}>
-                      Koop {weekdeal.name}
-                      <ArrowRight className="size-4" />
-                    </Link>
+                      className="glow-primary w-full sm:flex-1"
+                      asChild
+                    >
+                      <Link
+                        to="/product/$slug"
+                        params={{ slug: weekdeal.slug }}
+                      >
+                        Koop {weekdeal.name}
+                        <ArrowRight className="size-4" />
+                      </Link>
                   </Button>
                 )}
                 <Button
@@ -339,8 +342,8 @@ export function LandingPage() {
             Zes mogelijkheden.
           </h2>
           <p className="mt-3 text-muted">
-            Semaglutide, Tirzepatide en Retatrutide, elk verkrijgbaar als pen
-            én vial.
+            Semaglutide, Tirzepatide en Retatrutide, elk verkrijgbaar als pen én
+            vial.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -382,7 +385,7 @@ export function LandingPage() {
             </h2>
           </div>
           <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-primary/50 bg-gradient-to-b from-primary/25 to-primary/10 p-6">
+            <div className="rounded-xl border border-primary/50 bg-gradient-to-b from-primary/25 to-primary/10 p-6 transition duration-200 hover:border-primary/70 hover:from-primary/30 hover:to-primary/15 active:border-primary/80 active:from-primary/35 active:to-primary/20">
               <p className="text-xs font-bold uppercase tracking-wider text-primary mb-4">
                 Pen · pluspunten
               </p>
@@ -401,18 +404,18 @@ export function LandingPage() {
                 ))}
               </ul>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6">
-              <p className="text-xs font-semibold uppercase tracking-wider text-bg/50 mb-4">
+            <div className="rounded-xl border border-primary/50 bg-gradient-to-b from-primary/25 to-primary/10 p-6 transition duration-200 hover:border-primary/70 hover:from-primary/30 hover:to-primary/15 active:border-primary/80 active:from-primary/35 active:to-primary/20">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary mb-4">
                 Vial · pluspunten
               </p>
               <ul className="space-y-3">
                 {FORM_COMPARE.vial.map((item) => (
                   <li
                     key={item}
-                    className="flex items-start gap-3 text-sm text-bg/80"
+                    className="flex items-start gap-3 text-sm font-medium text-white"
                   >
                     <Check
-                      className="size-4 shrink-0 text-primary mt-0.5"
+                      className="size-4 shrink-0 text-success mt-0.5"
                       strokeWidth={2.75}
                     />
                     {item}
