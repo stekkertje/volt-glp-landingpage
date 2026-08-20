@@ -221,9 +221,13 @@ test("auth-disabled deployment toont geen niet-werkende accountacties", async ()
       .getByRole("heading", { name: "Account tijdelijk niet beschikbaar" })
       .waitFor();
     assert.equal(await page.getByRole("link", { name: "Inloggen" }).count(), 0);
-    await page.getByLabel("Bestelnummer").waitFor();
-    await page.getByLabel("Herstelcode").waitFor();
-    await page.getByRole("button", { name: "Bestelling bekijken" }).waitFor();
+    await page.getByText(/Neem contact op als je hulp nodig hebt/).waitFor();
+    assert.equal(await page.getByLabel("Bestelnummer").count(), 0);
+    assert.equal(await page.getByLabel("Herstelcode").count(), 0);
+    assert.equal(
+      await page.getByRole("button", { name: "Bestelling bekijken" }).count(),
+      0,
+    );
     assert.equal(
       await page.getByRole("link", { name: "Bestelling volgen" }).count(),
       0,

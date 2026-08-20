@@ -1392,7 +1392,12 @@ test("a checkout request failure keeps the cart intact", async () => {
     await placeOrder.waitFor({ state: "visible" });
 
     await page.route("**/*", async (route) => {
-      if (route.request().method() === "POST") {
+      const request = route.request();
+      const body = request.postData() ?? "";
+      if (
+        request.method() === "POST" &&
+        /checkout-v2-[a-f0-9]{64}/.test(body)
+      ) {
         await route.abort();
       } else {
         await route.continue();
@@ -1517,7 +1522,9 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
     page = await context.newPage();
     await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
     await fillCheckout(page, checkoutEmail);
-    await page.getByLabel("Straat").fill("Gewijzigde straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Gewijzigde gegevens voor de conflictcontrole.");
     const retryButton = await waitForCheckoutSubmit(page);
     assert.equal(
       await page.evaluate(async () => {
@@ -1561,7 +1568,9 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
         JSON.parse(storedAttempt).expiresAt,
     );
 
-    await page.getByLabel("Straat").fill("Teststraat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Browserregressie voor de checkout.");
     const replayResponse = page.waitForResponse((response) => {
       const body = response.request().postData() ?? "";
       return response.status() === 200 && body.includes(committedKey);
@@ -1697,7 +1706,9 @@ test("a 410 replay expiry becomes terminal without rotating or extending the att
     });
     assert.ok(attemptBefore410);
 
-    await page.getByLabel("Straat").fill("Gewijzigde straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Gewijzigde gegevens voor de 410-controle.");
     const expiredResponse = page.waitForResponse(
       (response) => response.status() === 410,
     );
@@ -2740,7 +2751,9 @@ test("checkout replaces corrupt storage and keeps one key for an unresolved atte
     await page.getByText(/Je winkelwagen is bewaard/).waitFor();
     await placeOrder.click();
     await waitForObservedKeys(2);
-    await page.getByLabel("Straat").fill("Andere straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Andere gegevens met dezelfde veilige poging.");
     await placeOrder.click();
     await waitForObservedKeys(3);
 
