@@ -11,7 +11,7 @@ test("Codex reviews use only trusted instructions from the base commit", async (
   assert.match(workflow, /git worktree add --detach "\$REVIEW_WORKTREE" HEAD/);
   assert.match(workflow, /git show "\$BASE_SHA:\$path"/);
   assert.match(workflow, /-name AGENTS\.md -o -name AGENTS\.override\.md/);
-  assert.match(workflow, /--ignore-user-config/);
+  assert.doesNotMatch(workflow, /--ignore-user-config/);
   assert.match(workflow, /--ignore-rules/);
   assert.match(
     workflow,
