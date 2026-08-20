@@ -194,7 +194,7 @@ export function createMyParcelClient(options: MyParcelClientOptions) {
       });
     }
     return new Headers({
-      Authorization: `bearer ${Buffer.from(apiKey, "utf8").toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(apiKey, "utf8").toString("base64")}`,
       "User-Agent": userAgent,
       ...Object.fromEntries(new Headers(extra).entries()),
     });

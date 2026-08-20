@@ -386,6 +386,38 @@ test("account history returns immutable line prices, checkout address and only p
   assert.equal("providerShipmentId" in order.tracking, false);
 });
 
+test("account history hides shipments that were not created", async () => {
+  const accountId = randomUUID();
+  const email = `uncreated-shipment-${randomUUID()}@example.test`;
+  await insertUser({ id: accountId, email });
+  const sql = await getSql();
+
+  for (const creationStatus of ["pending", "ambiguous", "failed"]) {
+    const created = await createOrderRecord(checkoutInput(email), {
+      userId: accountId,
+    });
+    const shipmentId = randomUUID();
+    await sql.query(
+      `insert into order_shipments (
+        id, order_id, reference_identifier, create_idempotency_key,
+        payload_hash, creation_status, tracking_status, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, 'concept', now(), now())`,
+      [
+        shipmentId,
+        created.order.id,
+        `ref-${shipmentId}`,
+        `shipment-${shipmentId}`,
+        "a".repeat(64),
+        creationStatus,
+      ],
+    );
+  }
+
+  const history = await listAccountOrderRecords(accountId);
+  assert.equal(history.length, 3);
+  assert.ok(history.every((order) => order.tracking === null));
+});
+
 test("checkout keeps every address field mandatory even for signed-in orders", async () => {
   const checkout = await readFile(
     new URL("../src/routes/checkout.tsx", import.meta.url),

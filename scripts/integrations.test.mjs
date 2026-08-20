@@ -356,7 +356,10 @@ test("MyParcel-lookup gebruikt exacte referentie en lekt de sleutel nergens", as
   assert.doesNotMatch(seen.url, /myparcel-test-secret/);
   assert.equal(seen.init.body, undefined);
   const authorization = new Headers(seen.init.headers).get("Authorization");
-  assert.match(authorization, /^bearer /);
+  assert.equal(
+    authorization,
+    `Basic ${Buffer.from("myparcel-test-secret", "utf8").toString("base64")}`,
+  );
   assert.equal(authorization.includes("myparcel-test-secret"), false);
 });
 
@@ -443,6 +446,17 @@ test("labelopvraag en tracking zijn losse expliciete operaties", async () => {
   );
   assert.match(requests[0].url, /shipment_labels\/789\?format=A6$/);
   assert.match(requests[1].url, /tracktraces\/789$/);
+  for (const request of requests) {
+    const authorization = new Headers(request.init.headers).get(
+      "Authorization",
+    );
+    assert.equal(
+      authorization,
+      `Basic ${Buffer.from("test-key", "utf8").toString("base64")}`,
+    );
+    assert.equal(String(request.url).includes("test-key"), false);
+    assert.equal(String(request.init.body ?? "").includes("test-key"), false);
+  }
 });
 
 test("MyParcel-statussen hebben een stabiele klantstatusmapping", () => {
@@ -589,10 +603,7 @@ test("tijdelijke lookupfout vóór de eerste POST blijft veilig opnieuw POST-eli
     idempotencyKey: "ship-order-1-v1",
     draft: shipmentDraft(),
   };
-  await assert.rejects(
-    service.ensureShipment(request),
-    /myparcel:timeout/,
-  );
+  await assert.rejects(service.ensureShipment(request), /myparcel:timeout/);
   assert.equal(creates, 0);
   assert.equal(calls.at(-1)[0], "failed");
 
@@ -749,7 +760,10 @@ test("nonretryable reconciliatiefout maakt een onzekere POST nooit opnieuw POST-
   };
 
   await assert.rejects(service.ensureShipment(request), /myparcel:timeout/);
-  await assert.rejects(service.ensureShipment(request), /myparcel:unauthorized/);
+  await assert.rejects(
+    service.ensureShipment(request),
+    /myparcel:unauthorized/,
+  );
   assert.equal(creates, 1);
   assert.deepEqual(
     calls.map(([kind]) => kind),

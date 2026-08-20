@@ -967,6 +967,40 @@ test("fulfillment is locked after completion, label request or carrier handover"
   assert.equal(conceptUpdated.fulfillmentLines[0].slug, "semaglutide-4mg-pen");
 });
 
+test("public order detail hides shipments that were not created", async () => {
+  const sql = await getSql();
+  for (const creationStatus of ["pending", "ambiguous", "failed"]) {
+    const created = await createOrderRecord(orderInput(), { userId: null });
+    const shipmentId = randomUUID();
+    await sql.query(
+      `insert into order_shipments (
+        id, order_id, reference_identifier, create_idempotency_key,
+        payload_hash, creation_status, tracking_status, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, 'concept', now(), now())`,
+      [
+        shipmentId,
+        created.order.id,
+        `ref-${shipmentId}`,
+        `shipment-${shipmentId}`,
+        "a".repeat(64),
+        creationStatus,
+      ],
+    );
+
+    const publicOrder = await getOrderRecordForViewer({
+      id: created.order.id,
+      cookieOrderId: created.order.id,
+      cookieAccessToken: created.guestAccessToken,
+      userId: null,
+      isAdmin: false,
+    });
+    assert.equal(publicOrder.tracking, null, creationStatus);
+
+    const adminOrder = await getAdminOrderRecord(created.order.id);
+    assert.equal(adminOrder.shipment.creationStatus, creationStatus);
+  }
+});
+
 test("expired guest cookies do not authorize an order", async () => {
   const created = await createOrderRecord(orderInput(), { userId: null });
   const sql = await getSql();

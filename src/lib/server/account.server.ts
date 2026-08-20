@@ -202,6 +202,7 @@ export async function listAccountOrderRecords(
       select barcode, tracking_url, tracking_status, last_synced_at
       from order_shipments
       where order_id = o.id
+        and creation_status = 'created'
       order by created_at desc, id desc
       limit 1
     ) shipment on true

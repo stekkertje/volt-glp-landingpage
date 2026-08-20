@@ -53,7 +53,7 @@ MAIL_FROM_NAME=VOLT
 MAIL_OWNER_ADDRESS=info@afslank-injecties.nl
 APICHECK_API_KEY=<server-only sleutel>
 GOOGLE_ADDRESS_VALIDATION_API_KEY=<server-only sleutel>
-MYPARCEL_API_KEY=<server-only sleutel>
+MYPARCEL_API_KEY=<ruwe server-only sleutel; de app maakt zelf Basic base64-auth>
 ```
 
 `DATABASE_URL` en `MIGRATION_DATABASE_URL` moeten naar dezelfde Neon-branch en

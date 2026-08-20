@@ -721,6 +721,23 @@ async function loadLatestShipment(
   return rows[0] ?? null;
 }
 
+async function loadLatestCreatedShipment(
+  sql: Sql,
+  orderId: string,
+): Promise<ShipmentRow | null> {
+  const rows = await sql<ShipmentRow>`
+    select id, creation_status, provider_shipment_id, carrier_id, barcode,
+      tracking_url, provider_status_code, tracking_status, label_status,
+      label_requested_at, last_synced_at, created_at, updated_at
+    from order_shipments
+    where order_id = ${orderId}
+      and creation_status = 'created'
+    order by created_at desc, id desc
+    limit 1
+  `;
+  return rows[0] ?? null;
+}
+
 async function loadOrderById(sql: Sql, id: string): Promise<OrderRow | null> {
   const rows = await sql<OrderRow>`
     select id, order_number, user_id, email, name, phone, street, house_number,
@@ -765,7 +782,7 @@ async function loadPublicOrder(sql: Sql, row: OrderRow): Promise<PublicOrder> {
       where order_id = ${row.id}
       order by id
     `,
-    loadLatestShipment(sql, row.id),
+    loadLatestCreatedShipment(sql, row.id),
   ]);
   return toPublicOrder(row, lines, shipment);
 }
