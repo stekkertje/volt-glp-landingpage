@@ -42,3 +42,24 @@ Dit logboek bevat alleen keuzes die toekomstig beheer sturen. Tijdelijke uitvoer
 - Automatisch onderhoud werkt altijd via een aparte fixbranch en
   controleerbare PR, nooit rechtstreeks op `main` en nooit door vereiste checks
   te omzeilen.
+
+## 2026-08-20 · Klantaccounts en gastorderkoppeling
+
+- Klantaccounts gebruiken Better Auth met e-mailverificatie, wachtwoordherstel en een eigen bestelgeschiedenis.
+- Checkout blijft voor iedere bestelling een volledig actueel bezorgadres vragen, ook wanneer de klant is ingelogd.
+- De handmatige tijdelijke herstelcode is verwijderd. De zojuist geplaatste gastorder blijft tijdelijk bereikbaar via een HttpOnly-cookie.
+- Eerdere gastorders worden uitsluitend na een eenmalige, kort geldige bevestigingslink naar het e-mailadres van het ingelogde account gekoppeld.
+
+## 2026-08-20 · Transactionele e-mail
+
+- Contact-, account-, bestel- en relevante orderwijzigingsmails worden atomair in een PostgreSQL-outbox gezet en via Hostinger SMTP afgeleverd.
+- Bevestigde of mogelijk al geaccepteerde SMTP-delivery wordt nooit automatisch opnieuw verzonden. Onzekere afleveringen worden terminal gemarkeerd voor handmatige controle in beheer.
+- Productie start met `REQUIRE_MAIL=1` niet wanneer de vereiste SMTP-configuratie ontbreekt.
+
+## 2026-08-20 · Adrescontrole en MyParcel
+
+- Nederlandse adressen worden server-side gecontroleerd via ApiCheck; overige ondersteunde EU-adressen via Google Address Validation.
+- Een voorgesteld gecorrigeerd adres wordt nooit stil toegepast en vereist expliciete bevestiging van de klant of beheerder.
+- MyParcel-conceptaanmaak is idempotent en reconcilieert onzekere providerresponses voordat een nieuwe create-call mogelijk is.
+- Conceptaanmaak, A6-labelaanvraag en trackingrefresh zijn afzonderlijke beheeracties. Een label wordt niet automatisch tijdens checkout aangemaakt.
+- Fulfillmentregels zijn los van de onveranderlijke betaalde orderregels; historische producten en bedragen blijven de bron voor wat de klant heeft betaald.

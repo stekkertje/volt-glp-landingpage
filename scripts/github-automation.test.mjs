@@ -13,7 +13,11 @@ test("Codex reviews use only trusted instructions from the base commit", async (
   assert.match(workflow, /-name AGENTS\.md -o -name AGENTS\.override\.md/);
   assert.match(workflow, /--ignore-user-config/);
   assert.match(workflow, /--ignore-rules/);
-  assert.match(workflow, /--cd/);
+  assert.match(
+    workflow,
+    /working-directory: \$\{\{ runner\.temp \}\}\/codex-review-worktree/,
+  );
+  assert.doesNotMatch(workflow, /--cd/);
   assert.match(
     workflow,
     /if: steps\.trusted-prompt\.outputs\.available == 'true'/,

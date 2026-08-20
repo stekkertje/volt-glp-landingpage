@@ -21,7 +21,7 @@ Regels:
 - Preview/dev: 0.0.0.0:8080. Niet vragen om lokaal te runnen.
 - Catalogus met zes producten en afzonderlijke productpagina's.
 - Primair doel: een passende vorm kiezen en direct toevoegen.
-- Cart is clientstate. Checkout plaatst echte gastorders en contact wordt opgeslagen. Betaling en mail blijven handmatig.
+- Cart is clientstate. Checkout plaatst echte orders, contact wordt opgeslagen en transactionele mail loopt via de outbox. Betaling blijft handmatig.
 - Wijzig alleen wat gevraagd wordt. Geen extra features zonder opdracht.
 
 Bevestig kort dat je GROK.md hebt gelezen en wacht op de volgende opdracht.
@@ -159,9 +159,11 @@ Productpagina:
 ## Live status
 
 - Cart: Zustand-state in de browser; prijzen worden bij checkout opnieuw op de server berekend
-- Contact: gevalideerde berichten worden opgeslagen; er wordt nog geen e-mail verstuurd
-- Checkout: `/checkout` slaat echte gastorders op; betaling blijft een handmatig betaalverzoek
-- Auth/login: gekoppeld aan accountbestellingen en optionele admin-allowlist
+- Contact: gevalideerde berichten worden opgeslagen en sturen een ontvangstmail naar klant en eigenaar
+- Checkout: `/checkout` slaat echte gast- en accountorders op; betaling blijft een handmatig betaalverzoek
+- Auth/login: registratie, e-mailverificatie, wachtwoordherstel en accountbestellingen zijn gekoppeld
+- Adrescontrole: ApiCheck voor Nederland en Google Address Validation voor overige ondersteunde EU-adressen
+- Verzending: MyParcel-concept, aparte A6-labelactie en tracking zijn beschikbaar in beheer
 - PGLite: alleen lokale preview/testfallback; productie vereist Postgres via `DATABASE_URL`
 - `/__grok` PWA: platforminfrastructuur voor installatie
 - Hostinger Cloud Node.js: ondersteund via `npm run build:hostinger`
@@ -195,9 +197,9 @@ npm run typecheck
 
 ## Echte shopbackend
 
-- `/checkout` plaatst echte gastorders en contactberichten worden opgeslagen.
-- Betaling en e-mailafhandeling blijven handmatig.
-- `/admin` beheert bestellingen, statussen en contactberichten.
+- `/checkout` plaatst echte gast- of accountorders en contactberichten worden opgeslagen.
+- Betaling blijft handmatig. Contact-, account- en bestelmail loopt automatisch via een duurzame database-outbox.
+- `/admin` beheert bestellingen, statussen, fulfillment, adressen, contactberichten, mailproblemen en MyParcel.
 - Admin gebruikt zelfstandig `ADMIN_EMAILS` of `ADMIN_SESSION_SECRET` met exact
   één van `ADMIN_PASSWORD` en de transportveilige `ADMIN_PASSWORD_BASE64`.
 - Productie en deployments vereisen `DATABASE_URL` plus een expliciete directe
@@ -210,5 +212,6 @@ npm run typecheck
   De migratoromgeving bevat geen losse connection-affecting `PG*`-variabelen;
   alle verbindingsinstellingen staan in de directe migratie-URL.
   PGLite is alleen voor dev/test.
-- Gasttoegang werkt met een cookie of herstelcode die na 72 uur verloopt.
-- Nog niet aanwezig: betaalprovider, echte e-mail, voorraad, refunds en verzendkoppeling.
+- Gasttoegang na checkout werkt met een HttpOnly-cookie die na 72 uur verloopt. Er is geen handmatige herstelcode meer.
+- Eerdere gastorders kunnen na inloggen via een eenmalige e-maillink veilig aan het account worden gekoppeld.
+- Nog niet aanwezig: betaalprovider, voorraadbeheer en refunds.

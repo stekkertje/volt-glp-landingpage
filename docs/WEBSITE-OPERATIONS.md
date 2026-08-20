@@ -35,12 +35,13 @@ Controleer feiten in code of het externe systeem wanneer ze recent veranderd kun
 ## Functionele status
 
 - De winkelwagen draait in de browser; checkout valideert en herberekent server-side.
-- Gastcheckout schrijft echte bestellingen naar PostgreSQL.
-- Contactberichten worden in de backend opgeslagen.
-- Besteltoegang werkt via eigenaar/admin of tijdelijk gastbewijs/herstelcode.
-- Admin ondersteunt Better Auth-allowlisting en/of de geconfigureerde wachtwoordroute.
-- Betaling en e-mailafhandeling zijn handmatig.
-- Er is nog geen automatische betaalprovider, voorraadadministratie, refundflow of verzendkoppeling.
+- Gast- en accountcheckout schrijven echte bestellingen naar PostgreSQL en vragen altijd een actueel bezorgadres.
+- Contactberichten worden opgeslagen en transactionele contact-, account- en bestelmail loopt via een duurzame outbox.
+- Klantaccounts ondersteunen verificatie, wachtwoordherstel, bestelgeschiedenis en een eenmalige e-mailclaim voor eerdere gastorders.
+- Gasttoegang tot de zojuist geplaatste bestelling gebruikt uitsluitend een tijdelijke HttpOnly-cookie; de handmatige herstelcode is verwijderd.
+- Adressen worden server-side gecontroleerd via ApiCheck voor Nederland en Google Address Validation voor overige ondersteunde EU-landen.
+- Admin ondersteunt Better Auth-allowlisting en/of de geconfigureerde wachtwoordroute, ordermutaties en MyParcel-concepten, A6-labels en tracking.
+- Betaling blijft handmatig. Er is nog geen automatische betaalprovider, voorraadadministratie of refundflow.
 
 ## Autorisatiegrenzen
 

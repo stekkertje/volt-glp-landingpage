@@ -31,7 +31,7 @@ Controleer vóór wijzigingen `git status --short --branch`, de actieve branch e
 - Productie gebruikt PostgreSQL via Neon. PGLite is uitsluitend voor lokale development en tests.
 - Hostinger Cloud Node.js 22 is het actieve hostingpad. Cloudflare valt buiten scope tenzij de gebruiker het expliciet toevoegt.
 - De site blijft `noindex, nofollow, noarchive` in HTML en `X-Robots-Tag` totdat de gebruiker expliciet toestemming geeft om indexering aan te zetten.
-- Betaling, automatische e-mail, voorraad, refunds en verzendkoppelingen zijn niet geïmplementeerd. Presenteer ze niet als werkend.
+- Betaling, voorraadbeheer en refunds zijn niet geïmplementeerd. Transactionele e-mail, adrescontrole en MyParcel zijn wel onderdeel van de applicatie, maar presenteer ze pas als live werkend na een groene deploy- en praktijkcontrole.
 - Voeg geen nieuwe medische werkzaamheids-, veiligheids- of geschiktheidsclaims toe zonder expliciete, verifieerbare bron en opdracht. Signaleer misleidende of intern tegenstrijdige claims.
 
 ## Centrale bevoegdheidsregel voor onderhoud

@@ -90,9 +90,10 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: ${{ runner.temp }}/codex-review.md
+          working-directory: ${{ runner.temp }}/codex-review-worktree
           sandbox: read-only
           safety-strategy: drop-sudo
-          codex-args: '["--ephemeral", "--ignore-user-config", "--ignore-rules", "--cd", "${{ runner.temp }}/codex-review-worktree"]'
+          codex-args: '["--ephemeral", "--ignore-user-config", "--ignore-rules"]'
           allow-users: stekkertje
 
   post-feedback:
