@@ -58,7 +58,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.0.0",
     "kysely": "^0.28.5",
-    "lucide-react": "^0.510.0",
+    "lucide-react": "^1.31.0",
     "nodemailer": "^9.0.5",
     "pg": "^8.16.3",
     "react": "^19.2.0",
