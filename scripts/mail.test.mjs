@@ -15,6 +15,9 @@ let orderOwnerConfirmationMail;
 let orderStatusChangedMail;
 let orderAddressChangedMail;
 let orderProductsChangedMail;
+let accountVerificationMail;
+let passwordResetMail;
+let guestOrderClaimMail;
 let SCRUBBED_MAIL_TEXT_BODY;
 let SCRUBBED_MAIL_HTML_BODY;
 
@@ -51,6 +54,10 @@ before(async () => {
     orderAddressChangedMail,
     orderProductsChangedMail,
   } = await vite.ssrLoadModule("/src/lib/server/mail/templates.ts"));
+  ({ accountVerificationMail, passwordResetMail, guestOrderClaimMail } =
+    await vite.ssrLoadModule(
+      "/src/lib/server/account-mail-templates.server.ts",
+    ));
 });
 
 after(async () => {
@@ -68,7 +75,7 @@ test("Hostinger SMTP configuration is complete or disabled, never partial", () =
   assert.equal(configuration.port, 465);
   assert.equal(configuration.secure, true);
   assert.equal(configuration.fromAddress, "info@example.test");
-  assert.equal(configuration.fromName, "Afslank-injecties.nl");
+  assert.equal(configuration.fromName, "Afslank Injecties");
   assert.equal(configuration.ownerAddress, "beheer@example.test");
 
   assert.throws(
@@ -146,14 +153,66 @@ test("contact templates are Dutch, escaped and promise 48 hours on workdays", ()
   assert.match(owner.htmlBody, /&lt;script&gt;/);
   assert.match(customer.textBody, /binnen 48 uur op werkdagen/);
   assert.match(customer.htmlBody, /binnen 48 uur op werkdagen/);
+  assert.doesNotMatch(customer.textBody, /Neem contact met ons op/i);
+  assert.doesNotMatch(customer.htmlBody, /Contact opnemen/i);
   assert.match(customer.textBody, /Afslank-injecties\.nl/);
   assert.match(customer.htmlBody, /Afslank-injecties\.nl/);
   assert.doesNotMatch(customer.textBody, /\bVOLT\b/);
   assert.doesNotMatch(customer.htmlBody, /\bVOLT\b/);
   assert.doesNotMatch(customer.htmlBody, /Beste <Noor>/);
+  for (const mail of [owner, customer]) {
+    assert.match(mail.htmlBody, /max-width:600px/);
+    assert.match(mail.htmlBody, /#0e7484/i);
+    assert.match(mail.htmlBody, />Bezoek website<\/a>/);
+    assert.doesNotMatch(mail.htmlBody, /#f06423/i);
+    assert.doesNotMatch(mail.htmlBody, /<script|<style/i);
+  }
 });
 
-test("order templates escape customer data and preserve the paid amount", () => {
+test("account templates use the shared VOLT layout and preserve secure links", () => {
+  const shared = {
+    dedupeKey: "account-mail-test",
+    userId: "user-test",
+    email: "noor@example.test",
+    name: "<Noor>",
+  };
+  const verification = accountVerificationMail({
+    ...shared,
+    url: "https://afslank-injecties.nl/api/auth/verify-email?token=test&callbackURL=%2Faccount",
+  });
+  const reset = passwordResetMail({
+    ...shared,
+    dedupeKey: "password-mail-test",
+    url: "https://afslank-injecties.nl/api/auth/reset-password/test",
+  });
+  const claim = guestOrderClaimMail({
+    ...shared,
+    dedupeKey: "claim-mail-test",
+    url: "https://afslank-injecties.nl/account#claim=test",
+  });
+
+  assert.equal(verification.kind, "account_verify");
+  assert.equal(reset.kind, "account_password_reset");
+  assert.equal(claim.kind, "guest_order_claim");
+  assert.match(verification.textBody, /Deze link is 1 uur geldig/);
+  assert.match(reset.textBody, /nieuw wachtwoord/);
+  assert.match(claim.textBody, /30 minuten geldig/);
+  assert.match(verification.htmlBody, /token=test&amp;callbackURL/);
+
+  for (const mail of [verification, reset, claim]) {
+    assert.doesNotMatch(mail.htmlBody, /Beste <Noor>/);
+    assert.match(mail.htmlBody, /max-width:600px/);
+    assert.match(mail.htmlBody, /#0e7484/i);
+    assert.match(mail.htmlBody, />Bezoek website<\/a>/);
+    assert.doesNotMatch(mail.htmlBody, /#f06423/i);
+    assert.doesNotMatch(mail.htmlBody, /<script|<style/i);
+  }
+  assert.doesNotMatch(verification.htmlBody, /Hulp of een vraag\?/);
+  assert.doesNotMatch(reset.htmlBody, /Hulp of een vraag\?/);
+  assert.match(claim.htmlBody, /Hulp of een vraag\?/);
+});
+
+test("order templates escape customer data and omit removed warning copy", () => {
   const shared = {
     orderNumber: "MED-4000",
     name: "<Noor>",
@@ -162,6 +221,8 @@ test("order templates escape customer data and preserve the paid amount", () => 
         name: "Semaglutide <script>",
         optionLabel: "4 mg & pen",
         qty: 2,
+        slug: "semaglutide-4mg-pen",
+        lineTotalCents: 16900,
       },
     ],
     totalCents: 16900,
@@ -175,6 +236,10 @@ test("order templates escape customer data and preserve the paid amount", () => 
     },
   };
   const customer = orderCustomerConfirmationMail(shared);
+  const customerWithAccount = orderCustomerConfirmationMail({
+    ...shared,
+    hasAccount: true,
+  });
   const owner = orderOwnerConfirmationMail({
     ...shared,
     email: "noor@example.test",
@@ -202,14 +267,61 @@ test("order templates escape customer data and preserve the paid amount", () => 
     assert.doesNotMatch(mail.htmlBody, /Beste <Noor>/);
     assert.doesNotMatch(mail.htmlBody, /\bVOLT\b/);
     assert.doesNotMatch(mail.textBody, /\bVOLT\b/);
+    assert.match(mail.htmlBody, /max-width:600px/);
+    assert.match(mail.htmlBody, /#0e7484/i);
+    assert.match(mail.htmlBody, />Bezoek website<\/a>/);
+    assert.doesNotMatch(mail.htmlBody, /#f06423/i);
+    assert.doesNotMatch(mail.htmlBody, /<style/i);
   }
   assert.match(customer.textBody, /€\s*169,00/);
-  assert.match(customer.textBody, /bedrag.*blijft leidend/i);
+  assert.match(customer.textBody, /Bestelnummer: MED-4000/);
+  assert.match(customer.textBody, /Producten:/);
+  assert.match(customer.textBody, /Semaglutide <script>.*€\s*169,00/);
+  assert.doesNotMatch(customer.textBody, /bedrag.*blijft leidend/i);
   assert.match(customer.textBody, /afslank-injecties\.nl\/registreren/);
-  assert.match(customer.textBody, /veilige bevestigingslink/);
+  assert.doesNotMatch(customer.textBody, /veilige bevestigingslink/);
+  assert.match(customer.textBody, /Neem contact met ons op/);
+  assert.match(customer.htmlBody, /Bedankt voor je bestelling/);
+  assert.match(customer.htmlBody, /Bestelnummer/);
+  assert.match(customer.htmlBody, /Producten/);
+  assert.match(customer.htmlBody, /Bezorgadres/);
+  assert.match(customer.htmlBody, /#0e7484/i);
+  assert.match(customer.htmlBody, /role="presentation"/);
+  assert.match(customer.htmlBody, /max-width:600px/);
+  assert.match(customer.htmlBody, /font-size:18px/);
+  assert.match(customer.htmlBody, /href="https:\/\/afslank-injecties\.nl"/);
+  assert.match(customer.htmlBody, /€\s*169,00/);
+  assert.match(
+    customer.htmlBody,
+    /src="https:\/\/afslank-injecties\.nl\/images\/producten\/semaglutide-4mg-pen__01__800\.webp"/,
+  );
+  assert.match(customer.htmlBody, /width="64" height="64"/);
+  assert.match(customer.htmlBody, />Contact opnemen<\/a>/);
+  assert.equal(
+    customer.htmlBody.match(/<table role="presentation" width="160"/g)
+      ?.length,
+    2,
+  );
+  assert.match(customer.htmlBody, /bgcolor="#0e7484"/);
+  assert.match(
+    customer.htmlBody,
+    /src="https:\/\/afslank-injecties\.nl\/images\/mail\/ai-support\.png"/,
+  );
+  assert.match(customer.htmlBody, /alt="Hulp en contact"/);
+  assert.match(customer.htmlBody, /Afslanken met injecties/);
+  assert.match(customer.htmlBody, />Bezoek website<\/a>/);
+  assert.match(customer.htmlBody, /bgcolor="#0b0c0f"/);
+  assert.match(customerWithAccount.htmlBody, /terug in je account/);
+  assert.doesNotMatch(customerWithAccount.htmlBody, /Account aanmaken/);
+  assert.doesNotMatch(customer.htmlBody, /#f06423/i);
+  assert.doesNotMatch(customer.htmlBody, /<script|<style/i);
+  assert.doesNotMatch(customer.htmlBody, /tracking|width="1"|height="1"/i);
   assert.match(status.textBody, /Verzonden/);
   assert.match(address.textBody, /Test & Straat/);
-  assert.match(products.textBody, /vastgelegde bedrag.*ongewijzigd/i);
+  assert.doesNotMatch(address.textBody, /niet verwacht|Neem dan/i);
+  assert.doesNotMatch(address.htmlBody, /Niet door jou gewijzigd|Neem dan/i);
+  assert.doesNotMatch(products.textBody, /bedrag|niet verwacht|Neem dan/i);
+  assert.doesNotMatch(products.htmlBody, /Vastgelegd bedrag|blijft ongewijzigd|niet verwacht|Neem dan/i);
 });
 
 test("outbox deduplicates and marks successful delivery", async () => {

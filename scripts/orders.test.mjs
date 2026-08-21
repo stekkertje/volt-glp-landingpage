@@ -954,7 +954,10 @@ test("admin fulfillment updates use the catalog without rewriting historical pri
   );
   assert.equal(changes.length, 1);
   assert.equal(changes[0].kind, "order_products_changed_customer");
-  assert.match(changes[0].text_body, /betaalde bedrag|vastgelegde bedrag/i);
+  assert.doesNotMatch(
+    changes[0].text_body,
+    /betaalde bedrag|vastgelegde bedrag|blijft ongewijzigd/i,
+  );
   assert.match(changes[0].text_body, /Semaglutide 4mg/i);
 
   const noOp = await updateOrderFulfillmentRecord({

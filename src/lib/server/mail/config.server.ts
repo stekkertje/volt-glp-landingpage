@@ -174,7 +174,7 @@ export function resolveMailConfiguration(
 
   const smtpPort = port(value(environment, "SMTP_PORT"));
   const fromName =
-    value(environment, "MAIL_FROM_NAME") ?? "Afslank-injecties.nl";
+    value(environment, "MAIL_FROM_NAME") ?? "Afslank Injecties";
   if (
     fromName.length > 120 ||
     fromName.includes("\r") ||
