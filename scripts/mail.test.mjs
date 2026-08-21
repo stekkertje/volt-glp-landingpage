@@ -297,6 +297,7 @@ test("order templates escape customer data and omit removed warning copy", () =>
   );
   assert.match(customer.htmlBody, /width="64" height="64"/);
   assert.match(customer.htmlBody, />Contact opnemen<\/a>/);
+  assert.match(customer.htmlBody, /href="https:\/\/afslank-injecties\.nl\/\?contact=1"/);
   assert.equal(
     customer.htmlBody.match(/<table role="presentation" width="160"/g)
       ?.length,

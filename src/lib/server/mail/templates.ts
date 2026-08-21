@@ -4,7 +4,7 @@ import { formatEuro } from "@/lib/utils";
 
 const SITE_URL = "https://afslank-injecties.nl";
 // Vervang dit door de directe hulplink zodra de klantondersteuning live staat.
-const CUSTOMER_SUPPORT_URL = SITE_URL;
+const CUSTOMER_SUPPORT_URL = `${SITE_URL}/?contact=1`;
 
 export const escapeHtml = (value: string): string =>
   value
