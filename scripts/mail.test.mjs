@@ -92,6 +92,15 @@ test("Hostinger SMTP configuration is complete or disabled, never partial", () =
   );
 });
 
+test("legacy VOLT sender name is normalized to Afslank Injecties", () => {
+  const configuration = resolveMailConfiguration({
+    ...configuredEnvironment,
+    MAIL_FROM_NAME: "VOLT",
+  });
+
+  assert.equal(configuration.fromName, "Afslank Injecties");
+});
+
 test("Hostinger SMTP password supports strict transport-safe base64", () => {
   const password = " bestaand%mail-wachtwoord:2026!🔐 ";
   const standard = Buffer.from(password, "utf8").toString("base64");
@@ -222,10 +231,14 @@ test("order templates escape customer data and omit removed warning copy", () =>
         optionLabel: "4 mg & pen",
         qty: 2,
         slug: "semaglutide-4mg-pen",
-        lineTotalCents: 16900,
+        lineTotalCents: 33800,
       },
     ],
-    totalCents: 16900,
+    subtotalCents: 33800,
+    stackDiscountCents: 3380,
+    codeDiscountCents: 3042,
+    shippingCents: 0,
+    totalCents: 27378,
     address: {
       name: "<Noor>",
       street: "Test & Straat",
@@ -273,10 +286,15 @@ test("order templates escape customer data and omit removed warning copy", () =>
     assert.doesNotMatch(mail.htmlBody, /#f06423/i);
     assert.doesNotMatch(mail.htmlBody, /<style/i);
   }
-  assert.match(customer.textBody, /€\s*169,00/);
+  assert.match(customer.textBody, /€\s*338,00/);
+  assert.match(customer.textBody, /Subtotaal producten: €\s*338,00/);
+  assert.match(customer.textBody, /Stapelkorting: -€\s*33,80/);
+  assert.match(customer.textBody, /Kortingscode: -€\s*30,42/);
+  assert.match(customer.textBody, /Verzending: Gratis/);
+  assert.match(customer.textBody, /Totaal: €\s*273,78/);
   assert.match(customer.textBody, /Bestelnummer: MED-4000/);
   assert.match(customer.textBody, /Producten:/);
-  assert.match(customer.textBody, /Semaglutide <script>.*€\s*169,00/);
+  assert.match(customer.textBody, /Semaglutide <script>.*€\s*338,00/);
   assert.doesNotMatch(customer.textBody, /bedrag.*blijft leidend/i);
   assert.match(customer.textBody, /afslank-injecties\.nl\/registreren/);
   assert.doesNotMatch(customer.textBody, /veilige bevestigingslink/);
@@ -290,7 +308,12 @@ test("order templates escape customer data and omit removed warning copy", () =>
   assert.match(customer.htmlBody, /max-width:600px/);
   assert.match(customer.htmlBody, /font-size:18px/);
   assert.match(customer.htmlBody, /href="https:\/\/afslank-injecties\.nl"/);
-  assert.match(customer.htmlBody, /€\s*169,00/);
+  assert.match(customer.htmlBody, /€\s*338,00/);
+  assert.match(customer.htmlBody, /Subtotaal producten/);
+  assert.match(customer.htmlBody, /Stapelkorting/);
+  assert.match(customer.htmlBody, /Kortingscode/);
+  assert.match(customer.htmlBody, /Verzending/);
+  assert.match(customer.htmlBody, /€\s*273,78/);
   assert.match(
     customer.htmlBody,
     /src="https:\/\/afslank-injecties\.nl\/images\/producten\/semaglutide-4mg-pen__01__800\.webp"/,

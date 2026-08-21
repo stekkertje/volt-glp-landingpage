@@ -129,6 +129,45 @@ function infoCard(content: string, marginTop = 0): string {
   </table>`;
 }
 
+type OrderMailTotals = {
+  subtotalCents: number;
+  stackDiscountCents: number;
+  codeDiscountCents: number;
+  shippingCents: number;
+  totalCents: number;
+};
+
+function plainOrderTotals(totals: OrderMailTotals): string {
+  return [
+    `Subtotaal producten: ${formatEuro(totals.subtotalCents)}`,
+    totals.stackDiscountCents > 0
+      ? `Stapelkorting: -${formatEuro(totals.stackDiscountCents)}`
+      : null,
+    totals.codeDiscountCents > 0
+      ? `Kortingscode: -${formatEuro(totals.codeDiscountCents)}`
+      : null,
+    `Verzending: ${totals.shippingCents === 0 ? "Gratis" : formatEuro(totals.shippingCents)}`,
+    `Totaal: ${formatEuro(totals.totalCents)}`,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+}
+
+function htmlOrderTotals(totals: OrderMailTotals): string {
+  const row = (label: string, value: string, emphasized = false) =>
+    `<tr><td style="padding:${emphasized ? "12px 0 0" : "4px 0"};${emphasized ? "border-top:1px solid #e6e8ec;" : ""}font-size:${emphasized ? "15px" : "14px"};line-height:20px;${emphasized ? "font-weight:700;color:#0b0c0f" : "color:#5b6170"}">${escapeHtml(label)}</td><td align="right" style="padding:${emphasized ? "12px 0 0" : "4px 0"};${emphasized ? "border-top:1px solid #e6e8ec;" : ""}font-size:${emphasized ? "15px" : "14px"};line-height:20px;${emphasized ? "font-weight:700;color:#0b0c0f" : "color:#303642"};white-space:nowrap">${escapeHtml(value)}</td></tr>`;
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f8f9fb" style="width:100%;background:#f8f9fb;border-radius:10px">
+    <tr><td style="padding:14px 16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%">
+      ${row("Subtotaal producten", formatEuro(totals.subtotalCents))}
+      ${totals.stackDiscountCents > 0 ? row("Stapelkorting", `-${formatEuro(totals.stackDiscountCents)}`) : ""}
+      ${totals.codeDiscountCents > 0 ? row("Kortingscode", `-${formatEuro(totals.codeDiscountCents)}`) : ""}
+      ${row("Verzending", totals.shippingCents === 0 ? "Gratis" : formatEuro(totals.shippingCents))}
+      ${row("Totaal", formatEuro(totals.totalCents), true)}
+    </table></td></tr>
+  </table>`;
+}
+
 type OrderMailLine = {
   name: string;
   optionLabel: string;
@@ -198,6 +237,10 @@ export function orderCustomerConfirmationMail(input: {
   orderNumber: string;
   name: string;
   lines: readonly OrderMailLine[];
+  subtotalCents: number;
+  stackDiscountCents: number;
+  codeDiscountCents: number;
+  shippingCents: number;
   totalCents: number;
   address: OrderMailAddress;
   hasAccount?: boolean;
@@ -222,7 +265,7 @@ export function orderCustomerConfirmationMail(input: {
        </table>`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nBedankt voor je bestelling. We hebben deze goed ontvangen.\n\nBestelnummer: ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nTotaal bij bestelling: ${formatEuro(input.totalCents)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\n${accountText}\n\nHulp nodig? Neem contact met ons op voor vragen over je bestelling, verzending of producten:\n${CUSTOMER_SUPPORT_URL}\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
+    textBody: `Beste ${input.name},\n\nBedankt voor je bestelling. We hebben deze goed ontvangen.\n\nBestelnummer: ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nPrijsopbouw:\n${plainOrderTotals(input)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\n${accountText}\n\nHulp nodig? Neem contact met ons op voor vragen over je bestelling, verzending of producten:\n${CUSTOMER_SUPPORT_URL}\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: mailLayout(
       "Bedankt voor je bestelling",
       `<p style="margin:0 0 6px;font-size:15px;line-height:23px;color:#303642">Beste ${escapeHtml(input.name)},</p>
@@ -230,6 +273,8 @@ export function orderCustomerConfirmationMail(input: {
        ${orderSummaryCard(input.orderNumber, "Totaal", formatEuro(input.totalCents))}
        <h2 style="margin:0 0 14px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Producten</h2>
        ${htmlConfirmationOrderLines(input.lines)}
+       <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Prijsopbouw</h2>
+       ${htmlOrderTotals(input)}
        <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Bezorgadres</h2>
        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f8f9fb" style="width:100%;background:#f8f9fb;border-radius:10px">
          <tr><td style="padding:16px;font-size:14px;line-height:21px;color:#303642">${htmlAddress(input.address)}</td></tr>
@@ -245,6 +290,10 @@ export function orderOwnerConfirmationMail(input: {
   email: string;
   phone: string | null;
   lines: readonly OrderMailLine[];
+  subtotalCents: number;
+  stackDiscountCents: number;
+  codeDiscountCents: number;
+  shippingCents: number;
   totalCents: number;
   address: OrderMailAddress;
 }): RenderedMail {
@@ -252,13 +301,15 @@ export function orderOwnerConfirmationMail(input: {
   const phone = input.phone ? `\nTelefoon: ${input.phone}` : "";
   return {
     subject,
-    textBody: `Nieuwe bestelling ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nTotaal: ${formatEuro(input.totalCents)}\n\nKlantgegevens:\nE-mail: ${input.email}${phone}\n\nBezorgadres:\n${plainAddress(input.address)}`,
+    textBody: `Nieuwe bestelling ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nPrijsopbouw:\n${plainOrderTotals(input)}\n\nKlantgegevens:\nE-mail: ${input.email}${phone}\n\nBezorgadres:\n${plainAddress(input.address)}`,
     htmlBody: mailLayout(
       "Nieuwe bestelling ontvangen",
       `<p style="margin:0 0 22px;font-size:15px;line-height:23px;color:#303642">Er is een nieuwe bestelling geplaatst.</p>
        ${orderSummaryCard(input.orderNumber, "Totaal", formatEuro(input.totalCents))}
        <h2 style="margin:0 0 14px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Producten</h2>
        ${htmlConfirmationOrderLines(input.lines)}
+       <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Prijsopbouw</h2>
+       ${htmlOrderTotals(input)}
        <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Klantgegevens</h2>
        ${infoCard(`<strong>E-mail:</strong> ${escapeHtml(input.email)}${input.phone ? `<br><strong>Telefoon:</strong> ${escapeHtml(input.phone)}` : ""}`)}
        <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Bezorgadres</h2>
