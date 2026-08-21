@@ -93,7 +93,7 @@ jobs:
           working-directory: ${{ runner.temp }}/codex-review-worktree
           sandbox: read-only
           safety-strategy: drop-sudo
-          codex-args: '["--ephemeral", "--ignore-rules"]'
+          codex-args: '["--ephemeral"]'
           allow-users: stekkertje
 
   post-feedback:
