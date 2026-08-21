@@ -557,6 +557,24 @@ test("the contact dialog focuses the first field and restores its opener", async
   }
 });
 
+test("the email contact link opens the contact dialog", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/?contact=1`, { waitUntil: "networkidle" });
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute("name") === "name",
+    );
+
+    assert.equal(
+      await page.getByRole("dialog", { name: "Contact" }).isVisible(),
+      true,
+    );
+    assert.equal(new URL(page.url()).searchParams.has("contact"), false);
+  } finally {
+    await context.close();
+  }
+});
+
 test("contact validation exposes field errors to assistive technology", async () => {
   const { context, page } = await newPage();
   try {
