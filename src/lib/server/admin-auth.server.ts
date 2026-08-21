@@ -22,6 +22,10 @@ import {
   resolveAdminConfiguration,
 } from "@/lib/server/admin-policy.server";
 import { getRequestClientIdentifier } from "@/lib/server/request-client.server";
+import {
+  configuredHostingerPublicOrigin,
+  type ServerEnvironment,
+} from "@/lib/server/hostinger-proxy.server";
 
 export const ADMIN_COOKIE_NAME = "__Host-volt-admin-session";
 const ADMIN_SESSION_SECONDS = 4 * 60 * 60;
@@ -77,11 +81,15 @@ function originOf(value: string): string | null {
   }
 }
 
-export function isSameOriginMutationRequest(request: Request): boolean {
+export function isSameOriginMutationRequest(
+  request: Request,
+  environment: ServerEnvironment = process.env,
+): boolean {
   const fetchSite = request.headers.get("sec-fetch-site");
   if (fetchSite && fetchSite !== "same-origin") return false;
 
-  const expectedOrigin = new URL(request.url).origin;
+  const expectedOrigin =
+    configuredHostingerPublicOrigin(environment) ?? new URL(request.url).origin;
   const origin = request.headers.get("origin");
   if (origin && originOf(origin) !== expectedOrigin) return false;
 

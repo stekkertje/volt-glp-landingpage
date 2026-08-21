@@ -25,6 +25,7 @@ export function ContactDialog() {
   }>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
 
   useDialogFocus(open, close, panelRef, nameInputRef);
 
@@ -36,6 +37,7 @@ export function ContactDialog() {
       setErrors({});
       setSubmitError("");
       setSending(false);
+      idempotencyKeyRef.current = crypto.randomUUID();
     }
   }, [open]);
 
@@ -43,8 +45,11 @@ export function ContactDialog() {
 
   const validate = () => {
     const next: typeof errors = {};
-    if (!name.trim()) next.name = "Vul je naam in";
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (name.trim().length < 3) next.name = "Vul minimaal 3 tekens in";
+    if (
+      !email.trim() ||
+      !/^[^\s@]{2,}@[^\s@]+\.[A-Za-z]{2,}$/.test(email.trim())
+    ) {
       next.email = "Vul een geldig e-mailadres in";
     }
     if (!message.trim() || message.trim().length < 10) {
@@ -60,9 +65,19 @@ export function ContactDialog() {
     setSending(true);
     setSubmitError("");
     try {
-      await createContactMessage({ data: { name, email, message } });
+      await createContactMessage({
+        data: {
+          idempotencyKey: idempotencyKeyRef.current,
+          name,
+          email,
+          message,
+        },
+      });
       close();
-      pushToast("Bericht verstuurd", "We reageren binnen 24 uur op werkdagen.");
+      pushToast(
+        "Bericht ontvangen",
+        "Je krijgt een bevestiging per e-mail. We reageren binnen 48 uur op werkdagen.",
+      );
     } catch (error) {
       setSubmitError(
         rateLimitFeedback(error) ??
@@ -102,7 +117,7 @@ export function ContactDialog() {
                 Contact
               </h2>
               <p className="text-xs text-muted">
-                Reactie binnen 24 uur op werkdagen
+                Reactie binnen 48 uur op werkdagen
               </p>
             </div>
           </div>
@@ -142,6 +157,7 @@ export function ContactDialog() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              minLength={3}
               maxLength={120}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "contact-name-error" : undefined}
@@ -225,16 +241,6 @@ export function ContactDialog() {
               </p>
             )}
           </div>
-
-          <p className="text-[11px] text-dim leading-relaxed">
-            Of mail direct:{" "}
-            <a
-              href="mailto:support@voltperformance.nl"
-              className="font-medium text-primary hover:underline"
-            >
-              support@voltperformance.nl
-            </a>
-          </p>
 
           <div className="mt-auto flex flex-col gap-2 pt-1 sm:flex-row-reverse">
             <Button

@@ -23,17 +23,69 @@ function value(environment: Environment, key: string): string | null {
   return environment[key]?.trim() || null;
 }
 
+function invalidEncodedPassword(): AdminConfigurationError {
+  return new AdminConfigurationError(
+    "ADMIN_PASSWORD_BASE64 moet geldige base64 of base64url met UTF-8 bevatten.",
+  );
+}
+
+function decodeAdminPassword(encoded: string): string {
+  const standard = /^[A-Za-z0-9+/]+={0,2}$/.test(encoded);
+  const urlSafe = /^[A-Za-z0-9_-]+={0,2}$/.test(encoded);
+  if (!standard && !urlSafe) throw invalidEncodedPassword();
+
+  const unpadded = encoded.replace(/=+$/, "");
+  const paddingLength = encoded.length - unpadded.length;
+  if (
+    unpadded.length % 4 === 1 ||
+    (paddingLength > 0 && encoded.length % 4 !== 0)
+  ) {
+    throw invalidEncodedPassword();
+  }
+
+  const normalized = unpadded.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    "=",
+  );
+  const bytes = Buffer.from(padded, "base64");
+  if (bytes.toString("base64").replace(/=+$/, "") !== normalized) {
+    throw invalidEncodedPassword();
+  }
+
+  let password: string;
+  try {
+    password = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw invalidEncodedPassword();
+  }
+  const hasControlCharacter = /\p{Cc}/u.test(password);
+  if (!password || hasControlCharacter) {
+    throw invalidEncodedPassword();
+  }
+  return password;
+}
+
 export function resolveAdminConfiguration(
   environment: Environment,
 ): AdminConfiguration {
   const production = value(environment, "NODE_ENV") === "production";
-  const password = value(environment, "ADMIN_PASSWORD");
+  const rawPassword = value(environment, "ADMIN_PASSWORD");
+  const encodedPassword = value(environment, "ADMIN_PASSWORD_BASE64");
+  if (rawPassword && encodedPassword) {
+    throw new AdminConfigurationError(
+      "Stel ADMIN_PASSWORD of ADMIN_PASSWORD_BASE64 in, nooit beide.",
+    );
+  }
+  const password = encodedPassword
+    ? decodeAdminPassword(encodedPassword)
+    : rawPassword;
   const sessionSecret = value(environment, "ADMIN_SESSION_SECRET");
   if (Boolean(password) !== Boolean(sessionSecret)) {
     throw new AdminConfigurationError(
       password
         ? "ADMIN_SESSION_SECRET ontbreekt voor password-admin."
-        : "ADMIN_PASSWORD ontbreekt voor password-admin.",
+        : "ADMIN_PASSWORD of ADMIN_PASSWORD_BASE64 ontbreekt voor password-admin.",
     );
   }
   if (production && password && password.length < 16) {
@@ -53,7 +105,9 @@ export function resolveAdminConfiguration(
   }
 
   const adminEmails = new Set<string>();
-  for (const rawEmail of (value(environment, "ADMIN_EMAILS") ?? "").split(",")) {
+  for (const rawEmail of (value(environment, "ADMIN_EMAILS") ?? "").split(
+    ",",
+  )) {
     const email = rawEmail.trim().toLowerCase();
     if (!email) continue;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -98,10 +152,10 @@ export function hasConfiguredAdminAccess(
   }
   return Boolean(
     configuration.passwordLogin &&
-      verifyAdminSession(
-        viewer.sessionCookie,
-        configuration.passwordLogin.sessionSecret,
-        viewer.now,
-      ),
+    verifyAdminSession(
+      viewer.sessionCookie,
+      configuration.passwordLogin.sessionSecret,
+      viewer.now,
+    ),
   );
 }

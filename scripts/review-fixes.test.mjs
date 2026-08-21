@@ -6,14 +6,13 @@ import { createServer } from "vite";
 let vite;
 let ADMIN_COOKIE_NAME;
 let GUEST_ORDER_COOKIE;
+let guestOrderCookieName;
 let SITE;
 let canonicalCheckoutPayload;
 let checkoutIdempotencyKeyFromSeed;
-let consumeOrderRecoveryCode;
 let getAdminCapabilities;
 let isConflictServerError;
 let isSameOriginMutationRequest;
-let stageOrderRecoveryCode;
 
 const checkoutPayload = (overrides = {}) => ({
   name: "Noor de Vries",
@@ -41,14 +40,12 @@ before(async () => {
   });
   ({ ADMIN_COOKIE_NAME, getAdminCapabilities, isSameOriginMutationRequest } =
     await vite.ssrLoadModule("/src/lib/server/admin-auth.server.ts"));
-  ({ GUEST_ORDER_COOKIE } = await vite.ssrLoadModule(
+  ({ GUEST_ORDER_COOKIE, guestOrderCookieName } = await vite.ssrLoadModule(
     "/src/lib/server/orders.ts",
   ));
   ({ SITE } = await vite.ssrLoadModule("/src/lib/product.ts"));
   ({ canonicalCheckoutPayload, checkoutIdempotencyKeyFromSeed } =
     await vite.ssrLoadModule("/src/lib/checkout-idempotency.ts"));
-  ({ stageOrderRecoveryCode, consumeOrderRecoveryCode } =
-    await vite.ssrLoadModule("/src/lib/order-recovery-memory.ts"));
   ({ isConflictServerError } = await vite.ssrLoadModule(
     "/src/lib/server-error.ts",
   ));
@@ -61,6 +58,13 @@ after(async () => {
 test("shop cookies use the host-only prefix", () => {
   assert.equal(ADMIN_COOKIE_NAME, "__Host-volt-admin-session");
   assert.equal(GUEST_ORDER_COOKIE, "__Host-volt-order-access");
+  const first = "11111111-1111-4111-8111-111111111111";
+  const second = "22222222-2222-4222-8222-222222222222";
+  assert.equal(
+    guestOrderCookieName(first),
+    `__Host-volt-order-access-${first}`,
+  );
+  assert.notEqual(guestOrderCookieName(first), guestOrderCookieName(second));
 });
 
 test("checkout payload serialization is canonical and changes with order data", () => {
@@ -92,12 +96,6 @@ test("checkout keeps one seed-derived key until an attempt is resolved", async (
 
   assert.equal(retry, first);
   assert.notEqual(nextAttempt, first);
-});
-
-test("a staged recovery code is memory-only and consumed once", () => {
-  stageOrderRecoveryCode("order-review-test", "ABCD-EFGH");
-  assert.equal(consumeOrderRecoveryCode("order-review-test"), "ABCD-EFGH");
-  assert.equal(consumeOrderRecoveryCode("order-review-test"), null);
 });
 
 test("same-origin mutation checks ignore spoofable forwarded hosts", () => {
@@ -155,6 +153,58 @@ test("same-origin mutation checks ignore spoofable forwarded hosts", () => {
     isSameOriginMutationRequest(new Request(sameOriginUrl, { method: "POST" })),
     false,
   );
+
+  const hostingerProxyRequest = new Request("http://127.0.0.1:3000/_server", {
+    method: "POST",
+    headers: {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://afslank-injecties.nl/checkout",
+      "sec-fetch-site": "same-origin",
+    },
+  });
+  assert.equal(
+    isSameOriginMutationRequest(hostingerProxyRequest, {}),
+    false,
+    "forwarded headers blijven zonder expliciete Hostinger-trust buiten gebruik",
+  );
+  assert.equal(
+    isSameOriginMutationRequest(hostingerProxyRequest, {
+      NODE_ENV: "production",
+      TRUST_HOSTINGER_PROXY: "1",
+      VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+    }),
+    true,
+  );
+  for (const headers of [
+    {
+      origin: "https://evil.example.test",
+      referer: "https://afslank-injecties.nl/checkout",
+    },
+    {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://evil.example.test/checkout",
+    },
+    {
+      origin: "https://afslank-injecties.nl",
+      referer: "https://afslank-injecties.nl/checkout",
+      "sec-fetch-site": "cross-site",
+    },
+  ]) {
+    assert.equal(
+      isSameOriginMutationRequest(
+        new Request("http://127.0.0.1:3000/_server", {
+          method: "POST",
+          headers: { "sec-fetch-site": "same-origin", ...headers },
+        }),
+        {
+          NODE_ENV: "production",
+          TRUST_HOSTINGER_PROXY: "1",
+          VITE_PUBLIC_HOSTNAME: "afslank-injecties.nl",
+        },
+      ),
+      false,
+    );
+  }
 });
 
 test("broken admin configuration becomes a not-configured capability state", () => {
@@ -196,13 +246,17 @@ test("review documentation and recovery flow contain no stale demo or recovery s
       readFile("src/lib/server/admin-auth.server.ts", "utf8"),
     ]);
   assert.doesNotMatch(briefing, /checkout zijn DEMO|demo-submit|nep-success/i);
-  assert.match(account, /<GuestOrderAccess showLogin=\{!user\} \/>/);
-  assert.match(account, /user && !user\.isDevFallback && <SignedInOrders \/>/);
+  assert.match(account, /<GuestOrderClaimPanel email=/);
+  assert.match(account, /<SignedInAccount user=\{user\}/);
+  assert.doesNotMatch(account, /GuestOrderAccess|accessCode|Herstelcode/);
   assert.doesNotMatch(confirmation, /sessionStorage/);
   assert.match(checkout, /Deze bestelling is al geplaatst/);
-  assert.match(checkout, /name: "robots", content: "noindex, nofollow"/);
+  assert.match(
+    checkout,
+    /name: "robots", content: "noindex, nofollow, noarchive"/,
+  );
   assert.doesNotMatch(orderFunctions, /secure:\s*process\.env\.NODE_ENV/);
   assert.doesNotMatch(adminAuth, /secure:\s*productionCookie/);
-  assert.equal((orderFunctions.match(/secure:\s*true/g) ?? []).length, 2);
+  assert.equal((orderFunctions.match(/secure:\s*true/g) ?? []).length, 1);
   assert.equal((adminAuth.match(/secure:\s*true/g) ?? []).length, 2);
 });

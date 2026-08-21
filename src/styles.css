@@ -9,10 +9,10 @@
   --color-fg: #0b0c0f;
   --color-muted: #5b6170;
   --color-dim: #8b919e;
-  --color-primary: #ea580c;
+  --color-primary: #0e7484;
   --color-primary-fg: #ffffff;
-  --color-primary-soft: #f97316;
-  --color-primary-glow: color-mix(in srgb, #ea580c 26%, transparent);
+  --color-primary-soft: #14b4c4;
+  --color-primary-glow: color-mix(in srgb, #0e7484 26%, transparent);
   --color-border: #e6e8ec;
   --color-border-strong: #d0d4dc;
   --color-success: #059669;

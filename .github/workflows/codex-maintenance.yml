@@ -1,0 +1,189 @@
+name: Codex maintenance
+
+on:
+  schedule:
+    - cron: "17 2 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    if: >-
+      vars.CODEX_AUTOMATION_ENABLED == 'true' &&
+      (github.event_name == 'schedule' || github.actor == 'stekkertje')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
+    steps:
+      - name: Check out production branch
+        uses: actions/checkout@v6
+        with:
+          ref: hostinger-node-server
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Require the Codex API secret
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: test -n "$OPENAI_API_KEY"
+
+      - name: Find and fix safe internal maintenance issues
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/maintenance.md
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+          codex-args: '["--ephemeral"]'
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if test -z "$(git status --porcelain)"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check patch scope and whitespace
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/*.test.mjs|src/*.test.ts|src/*.test.tsx|tests/*) ;;
+              *) echo "::error file=$path::Automatisch onderhoud mag alleen regressietests wijzigen"; exit 1 ;;
+            esac
+          done < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+          git diff --check
+
+      - name: Run isolated tests
+        if: steps.changes.outputs.changed == 'true'
+        run: npm test
+
+      - name: Typecheck
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run typecheck
+
+      - name: Lint
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run lint
+
+      - name: Build without production migrations
+        if: steps.changes.outputs.changed == 'true'
+        run: npm run build:dev
+
+      - name: Recheck scope after executing repository tests
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/*.test.mjs|src/*.test.ts|src/*.test.tsx|tests/*) ;;
+              *) echo "::error file=$path::Testuitvoering heeft een bestand buiten de allowlist gewijzigd"; exit 1 ;;
+            esac
+          done < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+          git diff --check
+
+      - name: Run independent read-only maintenance review
+        if: steps.changes.outputs.changed == 'true'
+        id: independent-review
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/maintenance-review.md
+          sandbox: read-only
+          safety-strategy: drop-sudo
+          codex-args: '["--ephemeral"]'
+
+      - name: Require a clean independent review gate
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          REVIEW_RESULT: ${{ steps.independent-review.outputs.final-message }}
+        run: |
+          test "${REVIEW_RESULT%%$'\n'*}" = "GATE: CLEAN"
+
+      - name: Package the verified patch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add --all
+          git diff --cached --check
+          git diff --cached --binary --full-index > codex-maintenance.patch
+
+      - name: Upload the verified patch
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-maintenance-patch
+          path: codex-maintenance.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: maintain
+    if: needs.maintain.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out production branch
+        uses: actions/checkout@v6
+        with:
+          ref: hostinger-node-server
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the verified patch
+        uses: actions/download-artifact@v5
+        with:
+          name: codex-maintenance-patch
+
+      - name: Apply and recheck the verified patch
+        run: |
+          git apply --index codex-maintenance.patch
+          git diff --cached --check
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/*.test.mjs|src/*.test.ts|src/*.test.tsx|tests/*) ;;
+              *) echo "::error file=$path::Gepubliceerde onderhoudspatch valt buiten de testallowlist"; exit 1 ;;
+            esac
+          done < <(git diff --name-only HEAD)
+
+      - name: Publish a draft maintenance pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAINTENANCE_BRANCH: codex/maintenance-${{ github.run_id }}
+        run: |
+          git config user.name "codex-maintenance[bot]"
+          git config user.email "codex-maintenance[bot]@users.noreply.github.com"
+          git switch -c "$MAINTENANCE_BRANCH"
+          git commit -m "fix: prepare verified internal maintenance"
+          gh auth setup-git
+          git push origin "$MAINTENANCE_BRANCH"
+          gh pr create \
+            --draft \
+            --base hostinger-node-server \
+            --head "$MAINTENANCE_BRANCH" \
+            --title "Automatisch voorbereid intern onderhoud" \
+            --body-file .github/codex/maintenance-pr-body.md

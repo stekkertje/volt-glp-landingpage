@@ -1,11 +1,17 @@
-import { randomUUID } from "node:crypto";
-import { getSql } from "@/lib/db";
+import { createHash, randomUUID } from "node:crypto";
+import { getSql, withSqlTransaction } from "@/lib/db";
 import {
   contactMessageSchema,
   type ContactListInput,
   type ContactMessageInput,
 } from "@/lib/server/contact-schema";
 import { enforceContactCreationLimit } from "@/lib/server/abuse-protection.server";
+import { resolveMailOwnerAddress } from "@/lib/server/mail/config.server";
+import { queueTransactionalMail } from "@/lib/server/mail/outbox.server";
+import {
+  contactCustomerReceiptMail,
+  contactOwnerMail,
+} from "@/lib/server/mail/templates";
 
 export type ContactMessage = {
   id: string;
@@ -16,6 +22,15 @@ export type ContactMessage = {
   createdAt: string;
   handledAt: string | null;
 };
+
+export class ContactIdempotencyConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super("Deze contactaanvraag hoort bij andere gegevens.");
+    this.name = "ContactIdempotencyConflictError";
+  }
+}
 
 type ContactRow = {
   id: string;
@@ -28,7 +43,9 @@ type ContactRow = {
 };
 
 function iso(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 function toContactMessage(row: ContactRow): ContactMessage {
@@ -46,17 +63,77 @@ function toContactMessage(row: ContactRow): ContactMessage {
 export async function storeContactMessage(
   rawInput: ContactMessageInput,
   rateLimitKey: string,
-): Promise<void> {
+): Promise<{ id: string; replayed: boolean }> {
   const input = contactMessageSchema.parse(rawInput);
   await enforceContactCreationLimit(rateLimitKey);
-  const sql = await getSql();
-  await sql`
-    insert into contact_messages (id, name, email, message, handled, created_at)
-    values (${randomUUID()}, ${input.name}, ${input.email}, ${input.message}, false, now())
-  `;
+  const ownerAddress = resolveMailOwnerAddress(process.env);
+  const id = randomUUID();
+  const payloadHash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        name: input.name,
+        email: input.email,
+        message: input.message,
+      }),
+    )
+    .digest("hex");
+  return withSqlTransaction(async (sql) => {
+    const inserted = await sql<{ id: string }>`
+      insert into contact_messages (
+        id, idempotency_key, idempotency_payload_hash,
+        name, email, message, handled, created_at
+      ) values (
+        ${id}, ${input.idempotencyKey}, ${payloadHash},
+        ${input.name}, ${input.email}, ${input.message}, false, now()
+      )
+      on conflict (idempotency_key) do nothing
+      returning id
+    `;
+
+    if (!inserted[0]) {
+      const existing = await sql<{
+        id: string;
+        idempotency_payload_hash: string | null;
+      }>`
+        select id, idempotency_payload_hash
+        from contact_messages
+        where idempotency_key = ${input.idempotencyKey}
+        limit 1
+      `;
+      if (
+        !existing[0] ||
+        existing[0].idempotency_payload_hash !== payloadHash
+      ) {
+        throw new ContactIdempotencyConflictError();
+      }
+      return { id: existing[0].id, replayed: true };
+    }
+
+    const ownerMail = contactOwnerMail(input);
+    await queueTransactionalMail(sql, {
+      dedupeKey: `contact:${id}:owner`,
+      kind: "contact_owner",
+      to: ownerAddress,
+      replyTo: input.email,
+      contactMessageId: id,
+      ...ownerMail,
+    });
+    const customerMail = contactCustomerReceiptMail(input);
+    await queueTransactionalMail(sql, {
+      dedupeKey: `contact:${id}:customer`,
+      kind: "contact_customer",
+      to: input.email,
+      replyTo: ownerAddress,
+      contactMessageId: id,
+      ...customerMail,
+    });
+    return { id, replayed: false };
+  });
 }
 
-export async function listContactMessageRecords(input: ContactListInput): Promise<{
+export async function listContactMessageRecords(
+  input: ContactListInput,
+): Promise<{
   messages: ContactMessage[];
   page: number;
   pageSize: number;

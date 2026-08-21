@@ -528,7 +528,7 @@ test(
           },
           { timeoutMs: 250, pollIntervalMs: 25 },
         ),
-        /lock.*bezet|deployment.*later/i,
+        /lock.*bezet|deployment.*later|lock.*duurde te lang/i,
       );
       const elapsed = Date.now() - startedAt;
       assert.equal(contenderEntered, false);
