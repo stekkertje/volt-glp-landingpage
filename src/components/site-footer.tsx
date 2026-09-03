@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/brand-logo";
 import { useContactStore } from "@/lib/contact-store";
 import { authEnabled } from "@/lib/auth/client";
 import { SITE } from "@/lib/product";
@@ -10,13 +11,12 @@ export function SiteFooter() {
       <div className="container-max section-pad pt-10 pb-6 md:py-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-fg text-xs font-extrabold">
-                A
-              </span>
-              <span className="text-lg font-extrabold tracking-tight">
-                {SITE.brand}
-              </span>
+            <div>
+              <BrandLogo
+                variant="dark"
+                layout="full"
+                className="h-auto w-[11.5rem] max-w-full sm:w-[13.5rem]"
+              />
             </div>
             <p className="mt-3 max-w-xs text-sm text-bg/60">
               Afslanken met medicatie

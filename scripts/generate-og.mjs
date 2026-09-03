@@ -1,6 +1,18 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
+
+const dataUri = (relativePath, mime) => {
+  const bytes = readFileSync(new URL(relativePath, import.meta.url));
+  return `data:${mime};base64,${bytes.toString("base64")}`;
+};
+
+const logoUri = dataUri("../public/images/brand/logo-lockup-light.png", "image/png");
+const photoUri = dataUri(
+  "../public/images/producten/semaglutide-4mg-pen__01__800.webp",
+  "image/webp",
+);
 
 const browser = await chromium.launch({
   headless: true,
@@ -27,7 +39,7 @@ try {
             color: #0b0c0f;
             font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
             background:
-              radial-gradient(circle at 78% 35%, rgba(234, 88, 12, .18), transparent 35%),
+              radial-gradient(circle at 78% 35%, rgba(14, 116, 132, .18), transparent 35%),
               linear-gradient(135deg, #ffffff 0%, #f4f5f7 100%);
           }
           main {
@@ -40,28 +52,18 @@ try {
             padding: 64px 72px;
           }
           .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 14px;
-            margin-bottom: 42px;
-            font-size: 28px;
-            font-weight: 850;
-            letter-spacing: -.04em;
+            display: block;
+            margin-bottom: 36px;
           }
-          .mark {
-            display: grid;
-            width: 48px;
-            height: 48px;
-            place-items: center;
-            border-radius: 13px;
-            color: #fff;
-            background: #ea580c;
-            font-size: 21px;
+          .brand img {
+            display: block;
+            height: 56px;
+            width: auto;
           }
-          .dot, .accent { color: #ea580c; }
+          .dot, .accent { color: #0e7484; }
           .eyebrow {
             margin: 0 0 13px;
-            color: #ea580c;
+            color: #0e7484;
             font-size: 15px;
             font-weight: 800;
             letter-spacing: .16em;
@@ -105,7 +107,7 @@ try {
             width: 390px;
             height: 390px;
             border-radius: 50%;
-            background: rgba(234, 88, 12, .12);
+            background: rgba(14, 116, 132, .12);
             filter: blur(36px);
           }
           .photo {
@@ -125,8 +127,8 @@ try {
             padding: 14px 18px;
             border-radius: 16px;
             color: #fff;
-            background: #ea580c;
-            box-shadow: 0 16px 32px rgba(234, 88, 12, .28);
+            background: #0e7484;
+            box-shadow: 0 16px 32px rgba(14, 116, 132, .28);
             font-size: 16px;
             font-weight: 800;
           }
@@ -135,7 +137,7 @@ try {
       <body>
         <main>
           <section>
-            <div class="brand"><span class="mark">A</span> Afslank-injecties.nl</div>
+            <div class="brand"><img src="${logoUri}" alt="Afslank-injecties.nl" /></div>
             <p class="eyebrow">GLP-1 afvallen</p>
             <h1>Vial of <span class="accent">kant-en-klare pen.</span></h1>
             <p class="sub">Semaglutide, Tirzepatide en Retatrutide. Labgetest en discreet verzonden in NL en BE.</p>
@@ -149,7 +151,7 @@ try {
             <div class="halo"></div>
             <img
               class="photo"
-              src="http://127.0.0.1:8080/images/producten/semaglutide-4mg-pen__01__800.webp"
+              src="${photoUri}"
               alt=""
             />
             <div class="badge">Meest gekozen pen</div>

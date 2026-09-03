@@ -306,7 +306,10 @@ test("order templates escape customer data and omit removed warning copy", () =>
   assert.match(customer.htmlBody, /#0e7484/i);
   assert.match(customer.htmlBody, /role="presentation"/);
   assert.match(customer.htmlBody, /max-width:600px/);
-  assert.match(customer.htmlBody, /font-size:18px/);
+  assert.match(
+    customer.htmlBody,
+    /src="https:\/\/afslank-injecties\.nl\/images\/brand\/logo-mail-light\.png"/,
+  );
   assert.match(customer.htmlBody, /href="https:\/\/afslank-injecties\.nl"/);
   assert.match(customer.htmlBody, /€\s*338,00/);
   assert.match(customer.htmlBody, /Subtotaal producten/);

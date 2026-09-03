@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useCartStore, cartCount } from "@/lib/cart-store";
 import { cn } from "@/lib/utils";
 import { AnnounceBar } from "@/components/announce-bar";
+import { BrandLogo } from "@/components/brand-logo";
 import { SITE } from "@/lib/product";
 
 const LINKS = [
@@ -143,15 +144,15 @@ export function SiteHeader() {
           <div className="container-max section-pad flex h-16 items-center justify-between gap-4 md:h-[4.25rem]">
             <a
               href="/#top"
-              className="flex items-center gap-2.5 shrink-0"
+              className="flex min-w-0 shrink items-center"
+              aria-label={SITE.brand}
               onClick={() => setMenuOpen(false)}
             >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-fg text-xs font-extrabold tracking-tight sm:size-9 sm:text-sm">
-                A
-              </span>
-              <span className="max-w-[11.5rem] truncate text-[13px] font-extrabold tracking-tight text-fg sm:max-w-none sm:text-base lg:text-lg">
-                {SITE.brand}
-              </span>
+              <BrandLogo
+                layout="lockup"
+                alt=""
+                className="h-9 w-auto max-w-[min(100%,13rem)] sm:h-10 sm:max-w-[16.5rem] lg:h-11 lg:max-w-[18.5rem]"
+              />
             </a>
 
             <nav
