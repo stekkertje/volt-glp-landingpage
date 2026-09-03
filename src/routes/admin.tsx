@@ -22,6 +22,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 import { OrderDetails, OrderStatusBadge } from "@/components/order-details";
 import { Button } from "@/components/ui/button";
 import {
@@ -178,10 +179,12 @@ function AdminFrame({ children }: { children: ReactNode }) {
     <div className="min-h-dvh bg-bg-elevated text-fg">
       <header className="border-b border-border bg-surface">
         <div className="container-max section-pad flex min-h-16 items-center justify-between gap-4 py-3">
-          <Link to="/" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-fg">
-              A
-            </span>
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-2.5"
+            aria-label="Afslank-injecties.nl Beheer"
+          >
+            <BrandLogo layout="mark" alt="" className="h-9 w-auto shrink-0" />
             <span className="min-w-0 text-sm font-extrabold leading-tight tracking-tight sm:text-base">
               <span className="block truncate">Afslank-injecties.nl</span>
               <span className="block text-xs font-semibold text-muted">

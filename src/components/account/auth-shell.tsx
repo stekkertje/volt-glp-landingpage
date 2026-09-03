@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { BrandLogo } from "@/components/brand-logo";
 import { SITE } from "@/lib/product";
 
 export const authInputClass =
@@ -18,13 +19,16 @@ export function AuthShell({
     <main className="grid min-h-dvh place-items-center bg-bg px-5 py-12 text-fg">
       <div className="w-full max-w-md">
         <div className="text-center">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-extrabold text-primary-fg">
-              A
-            </span>
-            <span className="text-xl font-extrabold tracking-tight">
-              {SITE.brand}
-            </span>
+          <Link
+            to="/"
+            className="inline-flex justify-center"
+            aria-label={SITE.brand}
+          >
+            <BrandLogo
+              layout="stacked"
+              alt=""
+              className="mx-auto h-auto w-[12.5rem] max-w-full sm:w-[14.5rem]"
+            />
           </Link>
           <h1 className="mt-6 text-2xl font-extrabold tracking-tight">
             {title}

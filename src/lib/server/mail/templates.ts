@@ -28,16 +28,9 @@ export function mailLayout(
         <td align="center" style="padding:24px 12px">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e6e8ec;border-radius:14px;overflow:hidden">
             <tr>
-              <td style="padding:0;border-bottom:1px solid #e6e8ec">
-                <a href="${SITE_URL}" style="display:block;padding:20px 24px;color:#0b0c0f;text-decoration:none">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                    <tr>
-                      <td width="42" valign="middle" style="width:42px">
-                        <div style="width:34px;height:34px;line-height:34px;border-radius:8px;background:#0e7484;color:#ffffff;font-size:14px;font-weight:700;text-align:center">A</div>
-                      </td>
-                      <td valign="middle" style="font-size:18px;line-height:24px;font-weight:700;color:#0b0c0f">Afslank-injecties.nl</td>
-                    </tr>
-                  </table>
+              <td style="padding:0;border-bottom:3px solid #0e7484">
+                <a href="${SITE_URL}" style="display:block;padding:18px 24px;color:#0b0c0f;text-decoration:none">
+                  <img src="${SITE_URL}/images/brand/logo-mail-light.png" width="200" height="45" alt="Afslank-injecties.nl" style="display:block;width:200px;height:auto;border:0">
                 </a>
               </td>
             </tr>
@@ -51,12 +44,9 @@ export function mailLayout(
               <td bgcolor="#0b0c0f" style="padding:18px 24px;background:#0b0c0f">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                   <tr>
-                    <td width="40" valign="middle" style="width:40px">
-                      <div style="width:30px;height:30px;line-height:30px;border-radius:7px;background:#0e7484;color:#ffffff;font-size:12px;font-weight:700;text-align:center">A</div>
-                    </td>
                     <td valign="middle">
-                      <div style="font-size:13px;line-height:18px;font-weight:700;color:#ffffff">Afslank-injecties.nl</div>
-                      <div style="font-size:11px;line-height:16px;color:#b9c0ca">Afslanken met injecties</div>
+                      <img src="${SITE_URL}/images/brand/logo-mail-dark.png" width="168" height="37" alt="Afslank-injecties.nl" style="display:block;width:168px;height:auto;border:0">
+                      <div style="margin-top:6px;font-size:11px;line-height:16px;color:#b9c0ca">Afslanken met injecties</div>
                     </td>
                     <td valign="middle" align="right" style="padding-left:10px">
                       <a href="${SITE_URL}" style="display:inline-block;border:1px solid #38404a;border-radius:7px;color:#ffffff;padding:8px 11px;text-decoration:none;font-size:11px;line-height:15px;font-weight:700;white-space:nowrap">Bezoek website</a>
