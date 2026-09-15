@@ -5,6 +5,7 @@ import {
   Pill,
   Clock3,
   ShieldCheck,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,6 +16,7 @@ const MAP: Record<string, LucideIcon> = {
   capsule: Pill,
   clock: Clock3,
   shield: ShieldCheck,
+  flask: FlaskConical,
 };
 
 export function BenefitIcon({ name, className }: { name: string; className?: string }) {

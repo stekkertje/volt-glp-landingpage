@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 
 const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
 
+function metaDescription(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 export const Route = createFileRoute("/product/$slug")({
   component: ProductRoute,
   loader: ({ params }) => {
@@ -20,7 +24,7 @@ export const Route = createFileRoute("/product/$slug")({
       ? `${product.name} kopen | ${SITE.brand}`
       : `Product | ${SITE.brand}`;
     const description = product
-      ? `${product.shortPitch} Labgetest. Discrete verzending NL en BE.`
+      ? `${metaDescription(product.shortPitch)} Labgetest. Discrete verzending NL en BE.`
       : SITE.shortPitch;
     const productUrl =
       product && host ? `https://${host}/product/${product.slug}` : undefined;

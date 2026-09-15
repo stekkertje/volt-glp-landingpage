@@ -1,10 +1,18 @@
-# VOLT GLP-1 shop
+# Afslank-injecties.nl webshop
 
 Nederlandse webshop voor Semaglutide, Tirzepatide en Retatrutide. Elke stof als vial of kant-en-klare pen.
 
-Checkout en contact schrijven naar de database. Betaling en e-mailafhandeling blijven handmatig.
+Checkout en contact schrijven naar de database. Transactionele e-mail,
+klantaccounts, adrescontrole en MyParcel-verzending zijn in de backend
+opgenomen. Betaling blijft handmatig.
 
-Agent-briefing (eerst lezen als je hieraan werkt): [`GROK.md`](./GROK.md)
+AI-beheer:
+
+- Codex: [`AGENTS.override.md`](./AGENTS.override.md) en
+  [`docs/WEBSITE-OPERATIONS.md`](./docs/WEBSITE-OPERATIONS.md)
+- Grok: [`GROK.md`](./GROK.md)
+- Review: [`docs/REVIEW-CHECKLIST.md`](./docs/REVIEW-CHECKLIST.md)
+- Duurzame beslissingen: [`docs/DECISIONS.md`](./docs/DECISIONS.md)
 
 ## Stack
 
@@ -19,7 +27,8 @@ npm run lint
 npm test
 ```
 
-Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
+Deploy-targets: Vercel SSR als standaard en Hostinger Cloud Node.js via de
+aparte `build:hostinger`-build. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
 
 ## Productie en beheer
 
@@ -28,9 +37,11 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
   `DATABASE_URL_UNPOOLED`) is daarnaast verplicht voor deploymigraties en moet
   de directe/unpooled PostgreSQL-URL met een expliciete niet-lege gebruiker en
   wachtwoord zijn. De migrator gebruikt nooit de OS-gebruiker of `~/.pgpass`
-  als credentialfallback. De runtime mag een pooled
-  `DATABASE_URL` gebruiken; de migrator weigert bekende pooler-URL's omdat zijn
-  session advisory lock één vaste databaseverbinding nodig heeft. Bij Neon
+  als credentialfallback. Gebruik voor de Hostinger/Neon-runtime een directe,
+  unpooled `DATABASE_URL`: de app pint `search_path=public` bij het verbinden en
+  Neons transaction-pooler accepteert die startupoptie niet. De migrator
+  weigert bekende pooler-URL's omdat zijn session advisory lock één vaste
+  databaseverbinding nodig heeft. Bij Neon
   moeten runtime- en migratie-URL aantoonbaar dezelfde branch en database
   aanwijzen; een afzonderlijke migratierol/gebruikersnaam is wel toegestaan.
   Zet de database altijd in het URL-pad (`/...`) zoals `pg` dat werkelijk
@@ -67,15 +78,39 @@ Deploy-target: Vercel SSR. Geen Hostinger shared hosting zonder extra export.
 - Draai dit geheim veilig door eerst de nieuwe waarde in
   `ORDER_ACCESS_TOKEN_SECRET` te zetten en de vorige waarde tijdelijk op te
   nemen in `ORDER_ACCESS_TOKEN_PREVIOUS_SECRETS` (kommagescheiden). Laat oude
-  waarden minimaal 72 uur staan. Een replay versleutelt een geldige code
-  automatisch opnieuw met de actuele sleutel zonder die code in te trekken.
+  waarden minimaal 72 uur staan. Een replay versleutelt een geldig gastbewijs
+  automatisch opnieuw met de actuele sleutel zonder het bewijs in te trekken.
   Roteer je `BETTER_AUTH_SECRET` terwijl dit ook de fallback voor besteltoegang
   is, neem dan de vorige authwaarde tijdelijk in diezelfde previous-secretslijst
   op of stel vooraf een aparte ordersleutel in.
 - Admin via Better Auth: zet `ADMIN_EMAILS` op een kommagescheiden allowlist.
-- Admin via wachtwoord: zet zowel `ADMIN_PASSWORD` als `ADMIN_SESSION_SECRET`.
+- Google/X OAuth is in productie expliciet opt-in via
+  `VITE_OAUTH_ENABLED=true` plus beide server-only waarden
+  `GROK_AUTH_CLIENT_ID` en `GROK_AUTH_CLIENT_SECRET`. Zonder die configuratie
+  gebruikt de shop alleen e-mail/wachtwoord; de Grok-previewclient is nooit een
+  fallback voor het publieke domein.
+- Admin via wachtwoord: zet `ADMIN_SESSION_SECRET` en exact één van
+  `ADMIN_PASSWORD` of `ADMIN_PASSWORD_BASE64`. Gebruik op Hostinger bij voorkeur
+  base64/base64url, zodat speciale tekens transportveilig blijven; het
+  ingevoerde wachtwoord zelf verandert niet.
 - In productie is het wachtwoord minimaal 16 tekens en het sessiegeheim minimaal 32 tekens.
 - Beide adminmethoden kunnen naast elkaar bestaan. Geen van deze variabelen is client-side.
+
+### Hostinger Cloud
+
+- Gebruik Node.js 22 en `npm ci --include=dev`. Zet
+  `NPM_CONFIG_INCLUDE=dev`, omdat de buildtoolchain ook onder
+  `NODE_ENV=production` nodig is.
+- Build met `npm run build:hostinger`; dit selecteert Nitro `node-server` en
+  voert daarna de databasemigraties uit.
+- Start met `npm start` (`.output/server/index.mjs`).
+- Hostinger gebruikt een externe PostgreSQL-database. Voor deze deployment is
+  dat Neon; Hostinger MySQL is niet compatibel met deze PostgreSQL-code.
+- Houd de testsite uit zoekmachines met zowel `VITE_NO_INDEX=1` als
+  `NO_INDEX=1`. De eerste levert de robots-meta tijdens de build, de tweede de
+  globale `X-Robots-Tag` tijdens runtime.
+- De volledige configuratie en live checklist staan in
+  [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
 
 ### Database-upgradecontrole
 
@@ -96,14 +131,14 @@ historische orderregels.
 
 ## Catalogus
 
-| Product | Vorm | Prijs |
-| --- | --- | ---: |
-| Semaglutide 2 mg | vial | €85,00 |
-| Semaglutide 4 mg | pen | €169,00 |
-| Tirzepatide 10 mg | vial | €94,00 |
-| Tirzepatide 20 mg | pen | €190,00 |
+| Product           | Vorm |             Prijs |
+| ----------------- | ---- | ----------------: |
+| Semaglutide 2 mg  | vial |            €85,00 |
+| Semaglutide 4 mg  | pen  |           €169,00 |
+| Tirzepatide 10 mg | vial |            €94,00 |
+| Tirzepatide 20 mg | pen  |           €190,00 |
 | Retatrutide 10 mg | vial | €77,60 (weekdeal) |
-| Retatrutide 20 mg | pen | €199,00 |
+| Retatrutide 20 mg | pen  |           €199,00 |
 
 - Gratis verzending vanaf €100, anders €4,95
 - NL en BE, 1-2 werkdagen, discreet, track & trace
@@ -113,25 +148,28 @@ historische orderregels.
 
 ## Belangrijkste bestanden
 
-| Bestand | Rol |
-| --- | --- |
-| `src/components/landing-page.tsx` | Homepage + catalogus |
-| `src/components/product-page.tsx` | Productdetail |
-| `src/lib/product.ts` | Productdata, FAQ, reviews |
-| `src/lib/cart-store.ts` | Winkelwagen (client, demo) |
-| `src/components/pack-selector.tsx` | Extra's, aantal, CTA |
-| `src/components/mobile-sticky-bar.tsx` | Mobiele koopbalk |
-| `src/components/cart-drawer.tsx` | Winkelwagen-drawer |
-| `public/images/producten/` | Productfoto's |
-| `scripts/storefront.test.mjs` | Browserregressies |
+| Bestand                                | Rol                        |
+| -------------------------------------- | -------------------------- |
+| `src/components/landing-page.tsx`      | Homepage + catalogus       |
+| `src/components/product-page.tsx`      | Productdetail              |
+| `src/lib/product.ts`                   | Productdata, FAQ, reviews  |
+| `src/lib/cart-store.ts`                | Winkelwagen (client, demo) |
+| `src/components/pack-selector.tsx`     | Extra's, aantal, CTA       |
+| `src/components/mobile-sticky-bar.tsx` | Mobiele koopbalk           |
+| `src/components/cart-drawer.tsx`       | Winkelwagen-drawer         |
+| `public/images/producten/`             | Productfoto's              |
+| `scripts/storefront.test.mjs`          | Browserregressies          |
 
 ## Backendroutes
 
-- `/checkout`: gastbestelling met serverprijzen en idempotency.
-- `/bestelling/$id`: beveiligde bevestiging via eigenaar, admin of tijdelijk gastbewijs.
-- `/account`: eigen orders na login of gasttoegang met herstelcode.
-- `/admin`: dagelijkse order- en contactafhandeling.
+- `/checkout`: gast- of accountbestelling met serverprijzen, adrescontrole en idempotency.
+- `/bestelling/$id`: beveiligde bevestiging via account, admin of de eigen
+  host-only HttpOnly-gastcookie van die checkout.
+- `/account`: klantaccount met bestelgeschiedenis, adres, tracking en veilige e-mailclaim van eerdere gastorders.
+- `/admin`: dagelijkse order-, contact-, mail- en MyParcel-afhandeling.
 
 ## Bewust handmatig
 
-Er is nog geen betaalprovider, automatische e-mail, voorraadbeheer, refundflow of verzendkoppeling.
+Er is nog geen betaalprovider, voorraadbeheer of refundflow. Transactionele
+e-mail loopt via de database-outbox. MyParcel-concepten, A6-labels en tracking
+zijn beheeracties; een label wordt nooit stil tijdens checkout aangemaakt.

@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -15,6 +16,8 @@ let browser;
 let devServer;
 let serverOutput = "";
 let viteCacheDir;
+let addressApiServer;
+let addressApiBaseUrl;
 const TEST_DATABASE_SOURCE_MARKER =
   "[app-builder] verified database source: pglite";
 
@@ -97,6 +100,60 @@ async function stopDevServer() {
   }
 }
 
+async function startDevServer() {
+  serverOutput = "";
+  devServer = spawn(
+    "npm",
+    [
+      "run",
+      "dev",
+      "--",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      new URL(BASE_URL).port,
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATABASE_URL: "",
+        MIGRATION_DATABASE_URL: "",
+        DATABASE_URL_UNPOOLED: "",
+        VERCEL: "",
+        NETLIFY: "",
+        REQUIRE_DATABASE: "",
+        PGLITE_PREVIEW: "",
+        NODE_ENV: "test",
+        npm_lifecycle_event: "test",
+        VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
+        VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
+        ADMIN_EMAILS: "allowlisted-admin@example.test",
+        ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
+        ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
+        ADDRESS_VALIDATION_TOKEN_SECRET:
+          "storefront-address-validation-secret-with-at-least-32-characters",
+        APICHECK_API_KEY: "storefront-test-key",
+        APICHECK_BASE_URL: addressApiBaseUrl,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    },
+  );
+  for (const stream of [devServer.stdout, devServer.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      serverOutput = `${serverOutput}${chunk}`.slice(-20_000);
+    });
+  }
+  await waitForServer();
+}
+
+async function restartDevServerWithFreshDatabase() {
+  await stopDevServer();
+  await startDevServer();
+}
+
 async function within(promise, milliseconds, message) {
   let timer;
   try {
@@ -136,42 +193,36 @@ function serializedServerProperty(node, key) {
 }
 
 before(async () => {
+  addressApiServer = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const number = url.searchParams.get("number") ?? "12";
+    const addition = url.searchParams.get("numberAddition") ?? "";
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        data: {
+          street: "Teststraat",
+          number,
+          numberAddition: addition,
+          postalcode: url.searchParams.get("postalcode") ?? "1234AB",
+          city: "Utrecht",
+        },
+      }),
+    );
+  });
+  await new Promise((resolve, reject) => {
+    addressApiServer.once("error", reject);
+    addressApiServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = addressApiServer.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Adresmock kon niet worden gestart.");
+  }
+  addressApiBaseUrl = `http://127.0.0.1:${address.port}`;
   const port = await availablePort();
   BASE_URL = `http://127.0.0.1:${port}`;
   viteCacheDir = await mkdtemp(join(tmpdir(), "volt-storefront-vite-"));
-  devServer = spawn(
-    "npm",
-    ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port)],
-    {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        DATABASE_URL: "",
-        MIGRATION_DATABASE_URL: "",
-        DATABASE_URL_UNPOOLED: "",
-        VERCEL: "",
-        NETLIFY: "",
-        REQUIRE_DATABASE: "",
-        PGLITE_PREVIEW: "",
-        NODE_ENV: "test",
-        npm_lifecycle_event: "test",
-        VOLT_TEST_EXPECT_DB_SOURCE: "pglite",
-        VOLT_TEST_VITE_CACHE_DIR: viteCacheDir,
-        ADMIN_EMAILS: "allowlisted-admin@example.test",
-        ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
-        ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
-    },
-  );
-  for (const stream of [devServer.stdout, devServer.stderr]) {
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => {
-      serverOutput = `${serverOutput}${chunk}`.slice(-20_000);
-    });
-  }
-  await waitForServer();
+  await startDevServer();
   browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
@@ -185,6 +236,9 @@ after(async () => {
     await stopDevServer();
     if (viteCacheDir) {
       await rm(viteCacheDir, { recursive: true, force: true });
+    }
+    if (addressApiServer?.listening) {
+      await new Promise((resolve) => addressApiServer.close(() => resolve()));
     }
   }
 });
@@ -244,7 +298,7 @@ test("a related product card always adds one item", async () => {
 
     const related = page
       .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
+      .filter({ hasText: "Andere variant" });
     await related
       .getByRole("button", { name: "In winkelwagen" })
       .first()
@@ -267,7 +321,7 @@ test("related products stay within the current compound", async () => {
     });
     const related = page
       .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
+      .filter({ hasText: "Andere variant" });
     const text = await related.innerText();
 
     assert.doesNotMatch(text, /Tirzepatide/);
@@ -348,36 +402,44 @@ test("checkout recovers from a persisted server-invalid discount code", async ()
     await fillCheckout(page, `inactive-code-${randomUUID()}@example.test`);
     await placeOrder.click();
     await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
   } finally {
     await context.close();
   }
 });
 
-test("the PDP sticky bar stays bound to the current product", async () => {
+test("the mobile sticky bar shows the cart summary", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    const related = page
-      .locator("section")
-      .filter({ hasText: "Andere sterkte / vorm" });
-    await related
-      .getByRole("button", { name: "In winkelwagen" })
-      .first()
+    await page
+      .locator("#prijzen")
+      .getByRole("button", { name: /^In winkelwagen/ })
       .click();
     await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
-    await related.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(350);
 
     const sticky = page.locator("div.fixed").filter({
-      has: page.getByRole("button", { name: "Kopen" }),
+      has: page.getByRole("button", { name: "Mandje" }),
     });
     await sticky.waitFor({ state: "visible" });
-    assert.match(await sticky.innerText(), /Semaglutide 2mg/);
+    const text = await sticky.innerText();
+    assert.match(text, /Winkelwagen/);
+    assert.match(text, /€\s?85,00/);
+
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    const [footerBox, stickyBox] = await Promise.all([
+      page.locator("footer").boundingBox(),
+      sticky.boundingBox(),
+    ]);
+    assert.ok(footerBox && stickyBox);
+    assert.ok(
+      footerBox.y + footerBox.height <= stickyBox.y,
+      "De vaste mobiele winkelwagenbalk mag de footer niet bedekken.",
+    );
   } finally {
     await context.close();
   }
@@ -389,13 +451,19 @@ test("the PDP keeps its product-specific document title", async () => {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    assert.equal(await page.title(), "Semaglutide 2mg kopen | VOLT");
+    assert.equal(
+      await page.title(),
+      "Semaglutide 2mg kopen | Afslank-injecties.nl",
+    );
 
     await page
       .getByRole("button", { name: /^In winkelwagen/ })
       .first()
       .click();
-    assert.equal(await page.title(), "(1) Semaglutide 2mg kopen | VOLT");
+    assert.equal(
+      await page.title(),
+      "(1) Semaglutide 2mg kopen | Afslank-injecties.nl",
+    );
   } finally {
     await context.close();
   }
@@ -429,6 +497,15 @@ test("the cart drawer moves focus inside and restores its opener", async () => {
       await page.evaluate(() => document.body.style.overflow),
       "hidden",
     );
+    assert.equal(
+      await page.evaluate(() => document.body.style.position),
+      "fixed",
+    );
+    await page.mouse.wheel(0, 1_000);
+    const closeButtonBox = await page
+      .getByRole("button", { name: "Winkelwagen sluiten" })
+      .boundingBox();
+    assert.ok(closeButtonBox && closeButtonBox.y >= 0);
     await page.keyboard.press("Escape");
     assert.equal(
       await opener.evaluate((element) => element === document.activeElement),
@@ -480,6 +557,24 @@ test("the contact dialog focuses the first field and restores its opener", async
   }
 });
 
+test("the email contact link opens the contact dialog", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/?contact=1`, { waitUntil: "networkidle" });
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute("name") === "name",
+    );
+
+    assert.equal(
+      await page.getByRole("dialog", { name: "Contact" }).isVisible(),
+      true,
+    );
+    assert.equal(new URL(page.url()).searchParams.has("contact"), false);
+  } finally {
+    await context.close();
+  }
+});
+
 test("contact validation exposes field errors to assistive technology", async () => {
   const { context, page } = await newPage();
   try {
@@ -502,24 +597,31 @@ test("contact validation exposes field errors to assistive technology", async ()
   }
 });
 
-test("vial cards ask the shopper to choose required injection extras", async () => {
+test("vial cards add the default option from the catalog", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    const vialCard = page.locator("#producten article").first();
-    await vialCard.getByRole("link", { name: "Kies extra's" }).waitFor({
+    const vialCard = page
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 2mg" });
+    await vialCard.getByRole("link", { name: "Bekijk" }).waitFor({
       state: "visible",
     });
+    await vialCard.getByRole("button", { name: "In winkelwagen" }).click();
+    const state = await cartState(page);
     assert.equal(
-      await vialCard.getByRole("button", { name: "In winkelwagen" }).count(),
+      await vialCard.getByRole("link", { name: "Kies extra's" }).count(),
       0,
     );
+    assert.deepEqual(state.lines, [
+      { slug: "semaglutide-2mg", optionId: "none", qty: 1 },
+    ]);
   } finally {
     await context.close();
   }
 });
 
-test("vial options state the extra cost before purchase", async () => {
+test("vial options state syringes are not included by default", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
@@ -528,7 +630,7 @@ test("vial options state the extra cost before purchase", async () => {
     const syringeOption = page.getByRole("radio", {
       name: /10 insulinespuiten/,
     });
-    assert.match(await syringeOption.innerText(), /\+ €\s?2,50/);
+    assert.match(await syringeOption.innerText(), /Niet standaard inbegrepen/);
   } finally {
     await context.close();
   }
@@ -584,21 +686,24 @@ test("the functional-cookie notice offers one unambiguous action", async () => {
   }
 });
 
-test("the home sticky product follows the active compound filter", async () => {
+test("the home sticky bar appears once the cart has items", async () => {
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     await page
-      .getByRole("button", { name: "Retatrutide", pressed: false })
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 4mg" })
+      .getByRole("button", { name: "In winkelwagen" })
       .click();
-    await page.locator("#faq").scrollIntoViewIfNeeded();
-    await page.waitForTimeout(350);
+    await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
 
     const sticky = page.locator("div.fixed").filter({
-      has: page.getByRole("link", { name: "Bekijk" }),
+      has: page.getByRole("button", { name: "Mandje" }),
     });
     await sticky.waitFor({ state: "visible" });
-    assert.match(await sticky.innerText(), /Retatrutide 10mg/);
+    const text = await sticky.innerText();
+    assert.match(text, /Winkelwagen/);
+    assert.match(text, /€\s?169,00/);
   } finally {
     await context.close();
   }
@@ -630,10 +735,71 @@ test("the delivery promise uses the next workday around weekends", async () => {
     assert.match(
       await page
         .locator("#prijzen")
-        .getByText(/Voor 23:00 besteld/)
+        .locator("div")
+        .filter({
+          hasText: "Bestel binnen:",
+        })
+        .first()
         .innerText(),
-      /maandag 24 augustus/i,
+      /Verzending:\s*maandag 24 aug/i,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("product previews and Retatrutide pen cards use the requested copy", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const preview = page
+      .locator("#producten article")
+      .filter({ hasText: "Semaglutide 2mg" });
+    const previewText = await preview.innerText();
+    assert.ok(
+      previewText.indexOf("Bio Amino Labs") <
+        previewText.indexOf("Semaglutide 2mg"),
+    );
+    assert.ok(
+      previewText.indexOf("Semaglutide 2mg") <
+        previewText.indexOf("SEMAGLUTIDE - VIAL"),
+    );
+    assert.match(previewText, /4\.5 33 beoordelingen/);
+    assert.doesNotMatch(previewText, /4\.5\s*·\s*33/);
+
+    await page.goto(`${BASE_URL}/product/retatrutide-20mg-pen`, {
+      waitUntil: "networkidle",
+    });
+    const composition = page
+      .getByRole("heading", { name: "Samenstelling" })
+      .locator("../..");
+    await composition.getByText("Retatrutide pen", { exact: true }).waitFor();
+    assert.equal(
+      await composition.getByText("Pennaalden", { exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await composition.getByText("Handleiding", { exact: true }).count(),
+      1,
+    );
+
+    const usage = page
+      .getByRole("heading", { name: "Gebruik" })
+      .locator("../..");
+    await usage
+      .getByText("Dosering en gebruiksfrequentie", { exact: true })
+      .waitFor();
+    await page
+      .getByText("Op voorraad - direct leverbaar", { exact: true })
+      .waitFor();
+    await page
+      .locator("#prijzen")
+      .getByText("1 – 2 werkdagen", { exact: true })
+      .waitFor();
+    const shippingLabel = page.locator("strong").filter({
+      hasText: /^Verzending:$/,
+    });
+    assert.equal(await shippingLabel.count(), 1);
   } finally {
     await context.close();
   }
@@ -719,6 +885,106 @@ test("the announcement marquee is decorative for screen readers", async () => {
   }
 });
 
+test("homepage keeps only the menu sticky and has no footer overscroll gap", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const marquee = page.locator(".announce-marquee").locator("../..");
+    const header = page.locator("header").first();
+    assert.equal(Math.round((await marquee.boundingBox()).y), 0);
+    assert.equal(Math.round((await header.boundingBox()).y), 36);
+    assert.equal(
+      await header.evaluate((element) => getComputedStyle(element).position),
+      "sticky",
+    );
+
+    const heroReviews = page.locator('a[href="#beoordelingen"]').first();
+    assert.doesNotMatch(await heroReviews.innerText(), /·/);
+    assert.equal(
+      await page
+        .locator("section")
+        .first()
+        .getByText("Weekdeal −20%", { exact: true })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await page
+        .getByRole("navigation", { name: "Hoofdmenu" })
+        .getByText("Reviews")
+        .count(),
+      1,
+    );
+
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.waitForFunction(() => window.scrollY >= 400);
+    assert.ok((await marquee.boundingBox()).y < 0);
+
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await page.waitForFunction(
+      () =>
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 1,
+    );
+    const footerGap = await page
+      .locator("footer")
+      .evaluate((footer) =>
+        Math.round(
+          document.documentElement.scrollHeight -
+            (footer.getBoundingClientRect().bottom + window.scrollY),
+        ),
+      );
+    assert.equal(Math.abs(footerGap), 0);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForFunction(() => window.scrollY === 0);
+    assert.equal(Math.round((await marquee.boundingBox()).y), 0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the header hides down and returns up or after scroll idle", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const header = page.locator("header").first();
+    const account = header.getByRole("link", { name: "Mijn account" });
+    await account.waitFor();
+
+    await page.evaluate(() => window.scrollTo(0, 700));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "true",
+    );
+    assert.match(await header.getAttribute("class"), /-translate-y-full/);
+
+    await page.evaluate(() => window.scrollBy(0, -120));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "false",
+    );
+    assert.doesNotMatch(
+      await header.getAttribute("class"),
+      /-translate-y-full/,
+    );
+
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "true",
+    );
+    await page.waitForFunction(
+      () => document.querySelector("header")?.dataset.scrollHidden === "false",
+      undefined,
+      { timeout: 1_500 },
+    );
+    await account.focus();
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
+  } finally {
+    await context.close();
+  }
+});
+
 test("cart quantities and discounts survive a reload", async () => {
   const { context, page } = await newPage();
   try {
@@ -797,6 +1063,41 @@ test("every catalog product route loads its gallery image", async () => {
   }
 });
 
+test("product gallery advances on a horizontal swipe", async () => {
+  const { context, page } = await newPage();
+  try {
+    await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
+      waitUntil: "networkidle",
+    });
+    await page
+      .getByRole("button", { name: "Begrepen" })
+      .click()
+      .catch(() => {});
+    const gallery = page.getByRole("region", { name: "Productfoto's" });
+    await gallery.waitFor({ state: "visible" });
+    const firstDot = page.getByRole("button", { name: "Afbeelding 1" });
+    const secondDot = page.getByRole("button", { name: "Afbeelding 2" });
+    assert.equal(await firstDot.getAttribute("aria-current"), "true");
+    const box = await gallery.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x + box.width * 0.82, box.y + box.height * 0.45);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.18, box.y + box.height * 0.45, {
+      steps: 14,
+    });
+    await page.mouse.up();
+    await page.waitForFunction(
+      (selector) =>
+        document.querySelector(selector)?.getAttribute("aria-current") ===
+        "true",
+      'button[aria-label="Afbeelding 2"]',
+    );
+    assert.equal(await secondDot.getAttribute("aria-current"), "true");
+  } finally {
+    await context.close();
+  }
+});
+
 test("unknown product routes return an HTTP 404", async () => {
   const { context, page } = await newPage();
   try {
@@ -839,8 +1140,18 @@ test("the mobile menu closes with Escape and navigates to a compound", async () 
   const { context, page } = await newPage({ width: 390, height: 844 });
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    const menu = page.getByRole("button", { name: "Menu openen" });
+    const header = page.locator("header").first();
+    const menu = page.locator('button[aria-controls="mobile-nav"]');
+    assert.equal(await menu.getAttribute("aria-label"), "Menu openen");
     await menu.click();
+    assert.equal(await menu.getAttribute("aria-expanded"), "true");
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
+    await page
+      .getByRole("navigation", { name: "Mobiel menu" })
+      .waitFor({ state: "visible" });
+    await page.waitForTimeout(350);
+    assert.equal(await menu.getAttribute("aria-expanded"), "true");
+    assert.equal(await header.getAttribute("data-scroll-hidden"), "false");
     await page.keyboard.press("Escape");
     assert.equal(await menu.getAttribute("aria-expanded"), "false");
 
@@ -862,7 +1173,6 @@ test("the mobile menu closes with Escape and navigates to a compound", async () 
 async function fillCheckout(page, email) {
   await page.getByLabel("Naam").fill("Noor de Vries");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Telefoon").fill("0612345678");
   await page.getByLabel("Straat").fill("Teststraat");
   await page.getByLabel("Huisnummer").fill("12 A");
   await page.getByLabel("Postcode").fill("1234 AB");
@@ -953,7 +1263,19 @@ test("direct checkout navigation and hard reload hydrate a persisted cart", asyn
     await page
       .getByRole("heading", { name: "Waar mogen we bezorgen?" })
       .waitFor();
-    await page.getByText("Semaglutide 4mg · Pen", { exact: true }).waitFor();
+    await page.getByText("Semaglutide 4mg - Pen", { exact: true }).waitFor();
+    await page
+      .getByText(
+        "We sturen na je bestelling handmatig een apart betaalverzoek naar je e-mailadres. Je betaalt hier nog niets.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(
+      await page
+        .getByText(/Betaalinformatie staat op de volgende pagina/)
+        .count(),
+      0,
+    );
     assert.equal(
       await page.getByText(/Switched to client rendering/).count(),
       0,
@@ -966,9 +1288,6 @@ test("direct checkout navigation and hard reload hydrate a persisted cart", asyn
 test("a product can be ordered and only its authorized guest sees confirmation", async () => {
   const { context, page } = await newPage();
   try {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-      origin: BASE_URL,
-    });
     await page.goto(`${BASE_URL}/product/semaglutide-4mg-pen`, {
       waitUntil: "networkidle",
     });
@@ -990,54 +1309,13 @@ test("a product can be ordered and only its authorized guest sees confirmation",
 
     const orderNumberHeading = page.getByRole("heading", {
       level: 1,
-      name: /^VOLT-[A-Z0-9]{8}$/,
+      name: /^MED-\d+$/,
     });
     await orderNumberHeading.waitFor();
     const orderNumber = (await orderNumberHeading.innerText()).trim();
-    assert.match(orderNumber, /^VOLT-[A-Z0-9]{8}$/);
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
-    const recoveryCode = (await page.locator("code").innerText()).trim();
-    await page.getByRole("button", { name: "Kopieer" }).click();
-    await page.getByRole("button", { name: "Gekopieerd" }).waitFor();
-    assert.equal(
-      await page.evaluate(() => navigator.clipboard.readText()),
-      recoveryCode,
-    );
-
-    const clipboardPageErrors = [];
-    const captureClipboardPageError = (error) => {
-      clipboardPageErrors.push(error.message);
-    };
-    page.on("pageerror", captureClipboardPageError);
-    await page.evaluate(() => {
-      Object.defineProperty(navigator.clipboard, "writeText", {
-        configurable: true,
-        value: () =>
-          new Promise((_, reject) => {
-            setTimeout(
-              () => reject(new DOMException("Geweigerd", "NotAllowedError")),
-              100,
-            );
-          }),
-      });
-    });
-    await page.getByRole("button", { name: "Gekopieerd" }).click();
-    const copyingButton = page.getByRole("button", { name: "Kopiëren…" });
-    await copyingButton.waitFor();
-    assert.equal(await copyingButton.isDisabled(), true);
-    await page.getByRole("button", { name: "Opnieuw kopiëren" }).waitFor();
-    await page
-      .getByRole("alert")
-      .getByText(
-        "Kopiëren is niet gelukt. Selecteer de code en kopieer deze handmatig.",
-        { exact: true },
-      )
-      .waitFor();
-    await page.waitForTimeout(0);
-    assert.deepEqual(clipboardPageErrors, []);
-    page.off("pageerror", captureClipboardPageError);
+    assert.match(orderNumber, /^MED-\d+$/);
+    assert.equal(await page.getByText(/herstelcode/i).count(), 0);
+    assert.equal(await page.locator("code").count(), 0);
     assert.deepEqual((await cartState(page)).lines, []);
     assert.deepEqual(
       await page.evaluate(() =>
@@ -1047,15 +1325,11 @@ test("a product can be ordered and only its authorized guest sees confirmation",
       ),
       [],
     );
-    const storedBrowserState = await page.evaluate(() =>
-      JSON.stringify({
-        local: Object.entries(localStorage),
-        session: Object.entries(sessionStorage),
-      }),
+    const orderId = decodeURIComponent(
+      new URL(page.url()).pathname.split("/").at(-1),
     );
-    assert.equal(storedBrowserState.includes(recoveryCode), false);
     const guestCookie = (await context.cookies()).find(
-      (cookie) => cookie.name === "__Host-volt-order-access",
+      (cookie) => cookie.name === `__Host-volt-order-access-${orderId}`,
     );
     assert.ok(guestCookie);
     assert.equal(guestCookie.secure, true);
@@ -1104,13 +1378,11 @@ test("a product can be ordered and only its authorized guest sees confirmation",
       await denied.page.goto(`${BASE_URL}/account`, {
         waitUntil: "networkidle",
       });
-      await denied.page.getByLabel("Bestelnummer").fill(orderNumber);
-      await denied.page.getByLabel("Herstelcode").fill(recoveryCode);
       await denied.page
-        .getByRole("button", { name: "Bestelling bekijken" })
-        .click();
-      await denied.page.waitForURL(/\/bestelling\/[^/]+$/);
-      await denied.page.getByRole("heading", { name: orderNumber }).waitFor();
+        .getByRole("heading", { name: "Log in om je bestellingen te bekijken" })
+        .waitFor();
+      assert.equal(await denied.page.getByLabel("Herstelcode").count(), 0);
+      assert.equal(await denied.page.getByText(orderNumber).count(), 0);
     } finally {
       await denied.context.close();
     }
@@ -1120,64 +1392,46 @@ test("a product can be ordered and only its authorized guest sees confirmation",
   }
 });
 
-test("order confirmation never carries a recovery code to another order", async () => {
+test("order confirmation never exposes a temporary recovery code", async () => {
   const { context, page } = await newPage();
   try {
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
     const [firstOrder, secondOrder] = await page.evaluate(async () => {
       const { createOrder } = await import("/src/lib/server/orders.ts");
-      const createTestOrder = (label) =>
-        createOrder({
+      const { validateCheckoutAddress } =
+        await import("/src/lib/server/address-validation.ts");
+      const createTestOrder = async (label) => {
+        const address = {
+          street: "Teststraat",
+          houseNumber: "12",
+          postcode: "1234 AB",
+          city: "Utrecht",
+          country: "NL",
+        };
+        const checked = await validateCheckoutAddress({ data: address });
+        if (!checked.validationToken) throw new Error("Adresbewijs ontbreekt.");
+        return createOrder({
           data: {
             name: `Routewissel ${label}`,
             email: `routewissel-${label}-${crypto.randomUUID()}@example.test`,
             phone: "0612345678",
-            street: "Teststraat",
-            houseNumber: "12",
-            postcode: "1234 AB",
-            city: "Utrecht",
-            country: "NL",
-            note: "Herstelcode mag niet naar een andere bestelling lekken.",
+            ...address,
+            addressValidationToken: checked.validationToken,
+            note: "Tijdelijke toegang mag niet naar de browser lekken.",
             lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
             idempotencyKey: crypto.randomUUID(),
           },
         });
+      };
       return Promise.all([createTestOrder("a"), createTestOrder("b")]);
     });
+    assert.equal("guestAccessToken" in firstOrder, false);
+    assert.equal("guestAccessToken" in secondOrder, false);
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
     await page.getByLabel("Beheerwachtwoord").fill(TEST_ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Inloggen" }).click();
     await page.getByRole("heading", { name: "Shopbeheer" }).waitFor();
-
-    const stagedCode = "ALLEEN-VOOR-BESTELLING-A";
-    await page.evaluate(
-      async ({ orderId, code }) => {
-        const { stageOrderRecoveryCode } =
-          await import("/src/lib/order-recovery-memory.ts");
-        stageOrderRecoveryCode(orderId, code);
-        await window.__TSR_ROUTER__.navigate({
-          to: "/bestelling/$id",
-          params: { id: orderId },
-        });
-      },
-      { orderId: firstOrder.order.id, code: stagedCode },
-    );
-    await page
-      .getByRole("heading", { name: firstOrder.order.orderNumber })
-      .waitFor();
-    await page.getByText(stagedCode, { exact: true }).waitFor();
-
-    await page.evaluate(async (orderId) => {
-      await window.__TSR_ROUTER__.navigate({
-        to: "/bestelling/$id",
-        params: { id: orderId },
-      });
-    }, secondOrder.order.id);
-    await page
-      .getByRole("heading", { name: secondOrder.order.orderNumber })
-      .waitFor();
-    assert.equal(await page.getByText(stagedCode, { exact: true }).count(), 0);
 
     await page.evaluate(async (orderId) => {
       await window.__TSR_ROUTER__.navigate({
@@ -1188,7 +1442,30 @@ test("order confirmation never carries a recovery code to another order", async 
     await page
       .getByRole("heading", { name: firstOrder.order.orderNumber })
       .waitFor();
-    assert.equal(await page.getByText(stagedCode, { exact: true }).count(), 0);
+    assert.equal(await page.locator("code").count(), 0);
+    assert.equal(await page.getByText(/herstelcode/i).count(), 0);
+
+    await page.evaluate(async (orderId) => {
+      await window.__TSR_ROUTER__.navigate({
+        to: "/bestelling/$id",
+        params: { id: orderId },
+      });
+    }, secondOrder.order.id);
+    await page
+      .getByRole("heading", { name: secondOrder.order.orderNumber })
+      .waitFor();
+    assert.equal(await page.locator("code").count(), 0);
+
+    await page.evaluate(async (orderId) => {
+      await window.__TSR_ROUTER__.navigate({
+        to: "/bestelling/$id",
+        params: { id: orderId },
+      });
+    }, firstOrder.order.id);
+    await page
+      .getByRole("heading", { name: firstOrder.order.orderNumber })
+      .waitFor();
+    assert.equal(await page.locator("code").count(), 0);
   } finally {
     await context.close();
   }
@@ -1213,7 +1490,12 @@ test("a checkout request failure keeps the cart intact", async () => {
     await placeOrder.waitFor({ state: "visible" });
 
     await page.route("**/*", async (route) => {
-      if (route.request().method() === "POST") {
+      const request = route.request();
+      const body = request.postData() ?? "";
+      if (
+        request.method() === "POST" &&
+        /checkout-v2-[a-f0-9]{64}/.test(body)
+      ) {
         await route.abort();
       } else {
         await route.continue();
@@ -1338,7 +1620,9 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
     page = await context.newPage();
     await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
     await fillCheckout(page, checkoutEmail);
-    await page.getByLabel("Straat").fill("Gewijzigde straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Gewijzigde gegevens voor de conflictcontrole.");
     const retryButton = await waitForCheckoutSubmit(page);
     assert.equal(
       await page.evaluate(async () => {
@@ -1382,7 +1666,9 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
         JSON.parse(storedAttempt).expiresAt,
     );
 
-    await page.getByLabel("Straat").fill("Teststraat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Browserregressie voor de checkout.");
     const replayResponse = page.waitForResponse((response) => {
       const body = response.request().postData() ?? "";
       return response.status() === 200 && body.includes(committedKey);
@@ -1401,16 +1687,13 @@ test("an ambiguous checkout response conflicts on changes and replays the exact 
     );
     const replayedOrderNumberHeading = page.getByRole("heading", {
       level: 1,
-      name: /^VOLT-[A-Z0-9]{8}$/,
+      name: /^MED-\d+$/,
     });
     await replayedOrderNumberHeading.waitFor();
     const replayedOrderNumber = (
       await replayedOrderNumberHeading.innerText()
     ).trim();
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
-    assert.ok((await page.locator("code").innerText()).trim().length >= 8);
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
     assert.equal(
       await page.evaluate(async () => {
         const { CHECKOUT_ATTEMPT_STORAGE_KEY } =
@@ -1521,7 +1804,9 @@ test("a 410 replay expiry becomes terminal without rotating or extending the att
     });
     assert.ok(attemptBefore410);
 
-    await page.getByLabel("Straat").fill("Gewijzigde straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Gewijzigde gegevens voor de 410-controle.");
     const expiredResponse = page.waitForResponse(
       (response) => response.status() === 410,
     );
@@ -1639,7 +1924,7 @@ test("an older checkout tab cannot overwrite a seed rotated after success", asyn
       );
     await olderTab
       .getByRole("alert")
-      .getByText(/verlopen of in een ander tabblad gewijzigd of afgerond/)
+      .getByText(/al geplaatst.*niet opnieuw worden verstuurd/)
       .waitFor({ timeout: 10_000 });
     assert.equal(observedKeys.length, 1);
     assert.equal(
@@ -1768,7 +2053,7 @@ test("checkout fails closed without Web Locks and while its storage lock is occu
       await page
         .getByRole("alert")
         .getByText(/veilige tabbladbeveiliging is niet beschikbaar of bezet/i)
-        .waitFor({ timeout: 8_000 });
+        .waitFor({ timeout: 15_000 });
       assert.equal(orderRequests, 0, scenario);
       assert.equal((await cartState(page)).lines.length, 1, scenario);
     } finally {
@@ -1805,20 +2090,6 @@ test("a contended success finalizer never withholds order recovery", async () =>
     committedKey = requestBody.match(/checkout-v2-[a-f0-9]{64}/)?.[0];
     const response = await route.fetch();
     assert.equal(response.status(), 200);
-    await page.evaluate(async () => {
-      const { CHECKOUT_STORAGE_LOCK_NAME } =
-        await import("/src/lib/checkout-idempotency.ts");
-      await new Promise((resolve) => {
-        void navigator.locks.request(CHECKOUT_STORAGE_LOCK_NAME, async () => {
-          globalThis.__voltCheckoutLockHeld = true;
-          resolve(undefined);
-          await new Promise((release) => {
-            globalThis.__releaseVoltCheckoutLock = release;
-          });
-        });
-      });
-    });
-    heldDuringFinalization = true;
     await route.fulfill({ response });
     markCommittedResponseReleased(undefined);
   };
@@ -1828,6 +2099,32 @@ test("a contended success finalizer never withholds order recovery", async () =>
     await addPenAndOpenCheckout(page);
     await fillCheckout(page, `lock-success-${randomUUID()}@example.test`);
     const placeOrder = await waitForCheckoutSubmit(page);
+    await page.evaluate(async () => {
+      const { COMPLETED_CART_EPOCH_STORAGE_KEY } =
+        await import("/src/lib/cart-lifecycle.ts");
+      const { CHECKOUT_STORAGE_LOCK_NAME } =
+        await import("/src/lib/checkout-idempotency.ts");
+      const storagePrototype = Storage.prototype;
+      const nativeSetItem = storagePrototype.setItem;
+      globalThis.__voltNativeStorageSetItem = nativeSetItem;
+      storagePrototype.setItem = function (key, value) {
+        const result = nativeSetItem.call(this, key, value);
+        if (
+          this === localStorage &&
+          key === COMPLETED_CART_EPOCH_STORAGE_KEY &&
+          !globalThis.__voltCheckoutFinalizerLockQueued
+        ) {
+          globalThis.__voltCheckoutFinalizerLockQueued = true;
+          void navigator.locks.request(CHECKOUT_STORAGE_LOCK_NAME, async () => {
+            globalThis.__voltCheckoutLockHeld = true;
+            await new Promise((release) => {
+              globalThis.__releaseVoltCheckoutLock = release;
+            });
+          });
+        }
+        return result;
+      };
+    });
     await page.route("**/*", holdLockAfterCommit);
     await placeOrder.click();
     await within(
@@ -1839,11 +2136,15 @@ test("a contended success finalizer never withholds order recovery", async () =>
       const cart = JSON.parse(localStorage.getItem("volt-cart") || "{}");
       return Array.isArray(cart.state?.lines) && cart.state.lines.length === 0;
     });
+    await page.waitForFunction(
+      () => globalThis.__voltCheckoutLockHeld === true,
+    );
+    heldDuringFinalization = await page.evaluate(
+      () => globalThis.__voltCheckoutLockHeld === true,
+    );
     assert.equal(heldDuringFinalization, true);
     assert.match(new URL(page.url()).pathname, /^\/bestelling\/[^/]+$/);
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
     assert.deepEqual((await cartState(page)).lines, []);
 
     const durableAttempt = await page.evaluate(async () => {
@@ -1874,9 +2175,7 @@ test("a contended success finalizer never withholds order recovery", async () =>
     await page.evaluate(() => globalThis.__releaseVoltCheckoutLock?.());
     await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
     assert.ok(Date.now() - releasedAt < 2_000);
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
     assert.equal(
       await page.evaluate(async () => {
         const { CHECKOUT_ATTEMPT_STORAGE_KEY } =
@@ -1888,7 +2187,12 @@ test("a contended success finalizer never withholds order recovery", async () =>
   } finally {
     await page.unroute("**/*", holdLockAfterCommit).catch(() => {});
     await page
-      .evaluate(() => globalThis.__releaseVoltCheckoutLock?.())
+      .evaluate(() => {
+        globalThis.__releaseVoltCheckoutLock?.();
+        if (globalThis.__voltNativeStorageSetItem) {
+          Storage.prototype.setItem = globalThis.__voltNativeStorageSetItem;
+        }
+      })
       .catch(() => {});
     await context.close();
   }
@@ -1937,9 +2241,7 @@ test("a cart persistence failure after commit cannot submit the order twice", as
     const placeOrder = await waitForCheckoutSubmit(page);
     await placeOrder.click();
     await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
     assert.equal(observedKeys.length, 1);
     assert.equal(
       await page.getByText(/Bestelling plaatsen is niet gelukt/).count(),
@@ -2022,7 +2324,7 @@ test("a stale cart tab cannot restore and resubmit a completed cart generation",
       timeout: 15_000,
     });
     await checkoutTab
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .getByRole("heading", { level: 1, name: /^MED-\d+$/ })
       .waitFor();
     assert.equal(observedKeys.length, 1);
     assert.equal(
@@ -2079,7 +2381,7 @@ test("a stale cart tab cannot restore and resubmit a completed cart generation",
     await freshSubmit.click();
     await staleTab.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
     await staleTab
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
+      .getByRole("heading", { level: 1, name: /^MED-\d+$/ })
       .waitFor();
     assert.equal(observedKeys.length, 2);
     assert.notEqual(observedKeys[1], observedKeys[0]);
@@ -2165,9 +2467,7 @@ test("a crash while confirmation navigation is pending safely replays the same o
     const replayButton = await waitForCheckoutSubmit(page);
     await replayButton.click();
     await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
-    await page
-      .getByRole("heading", { name: "Bewaar je herstelcode" })
-      .waitFor();
+    await page.getByRole("heading", { level: 1, name: /^MED-\d+$/ }).waitFor();
 
     assert.equal(observedKeys.length, 2);
     assert.equal(observedKeys[1], observedKeys[0]);
@@ -2192,7 +2492,6 @@ test("a navigation failure keeps the same order accessible after reload", async 
   const { context, page } = await newPage();
   const checkoutEmail = `navigate-fail-${randomUUID()}@example.test`;
   let orderRequests = 0;
-  let capturedRecoveryCode;
   const captureOrderResponse = async (route) => {
     const request = route.request();
     if (
@@ -2207,12 +2506,7 @@ test("a navigation failure keeps the same order accessible after reload", async 
         serializedServerProperty(serialized, "result"),
         "guestAccessToken",
       );
-      assert.equal(
-        tokenNode?.t,
-        1,
-        "De bevestigde response bevatte geen herstelcode",
-      );
-      capturedRecoveryCode = tokenNode.s;
+      assert.equal(tokenNode, undefined);
       await route.fulfill({ response, body: responseBody });
       return;
     }
@@ -2250,7 +2544,7 @@ test("a navigation failure keeps the same order accessible after reload", async 
       committedPath.split("/").at(-1),
     );
     const committedOrderNumber = (
-      await page.getByText(/^VOLT-[A-Z0-9]{8}$/).innerText()
+      await page.getByText(/^MED-\d+$/).innerText()
     ).trim();
     assert.equal(orderRequests, 1);
     assert.equal(
@@ -2258,19 +2552,7 @@ test("a navigation failure keeps the same order accessible after reload", async 
       0,
     );
     assert.equal((await cartState(page)).lines.length, 0);
-    await page
-      .getByText(/Open de bevestiging vóór je deze pagina herlaadt/i)
-      .waitFor();
-    assert.ok(capturedRecoveryCode?.length >= 8);
-    const browserStorage = await page.evaluate(() => ({
-      local: Object.entries(localStorage),
-      session: Object.entries(sessionStorage),
-    }));
-    const serializedBrowserStorage = JSON.stringify(browserStorage);
-    assert.equal(
-      serializedBrowserStorage.includes(capturedRecoveryCode),
-      false,
-    );
+    await page.getByText(/We sturen de orderbevestiging naar/i).waitFor();
 
     // Reload directly from the native fallback URL. No router link is allowed
     // to repair the navigation first, otherwise this would be a false-green.
@@ -2289,15 +2571,10 @@ test("a navigation failure keeps the same order accessible after reload", async 
       await page.getByText("Bestelling niet beschikbaar").count(),
       0,
     );
-    assert.equal(
-      await page
-        .getByRole("heading", { name: "Bewaar je herstelcode" })
-        .count(),
-      0,
-    );
-    await page.getByText(/Als gast kun je deze bestelling.*72 uur/i).waitFor();
+    assert.equal(await page.getByText(/herstelcode/i).count(), 0);
     const guestCookie = (await context.cookies()).find(
-      (cookie) => cookie.name === "__Host-volt-order-access",
+      (cookie) =>
+        cookie.name === `__Host-volt-order-access-${committedOrderId}`,
     );
     assert.equal(guestCookie?.httpOnly, true);
     assert.equal(orderRequests, 1);
@@ -2308,6 +2585,10 @@ test("a navigation failure keeps the same order accessible after reload", async 
 });
 
 test("successful checkout never reuses a seed when storage cleanup fails", async () => {
+  // This regression sends several order requests across four isolated browser
+  // contexts. Start it with a fresh in-memory rate-limit bucket so preceding
+  // checkout cases cannot turn its final scenario into an unrelated 429.
+  await restartDevServerWithFreshDatabase();
   const scenarios = [
     {
       name: "remove throws",
@@ -2405,10 +2686,15 @@ test("successful checkout never reuses a seed when storage cleanup fails", async
       }, scenario);
       await page.route("**/*", handleOrders);
 
-      await placeOrder.click();
-      await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+      await Promise.all([
+        page.waitForURL(/\/bestelling\/[^/]+$/, {
+          timeout: 30_000,
+          waitUntil: "commit",
+        }),
+        placeOrder.click(),
+      ]);
       await page
-        .getByRole("heading", { name: "Bewaar je herstelcode" })
+        .getByRole("heading", { level: 1, name: /^MED-\d+$/ })
         .waitFor();
       assert.equal(firstResponseStatus, 200, scenario.name);
       assert.equal(observedKeys.length, 1, scenario.name);
@@ -2564,7 +2850,9 @@ test("checkout replaces corrupt storage and keeps one key for an unresolved atte
     await page.getByText(/Je winkelwagen is bewaard/).waitFor();
     await placeOrder.click();
     await waitForObservedKeys(2);
-    await page.getByLabel("Straat").fill("Andere straat");
+    await page
+      .getByLabel(/Opmerking/)
+      .fill("Andere gegevens met dezelfde veilige poging.");
     await placeOrder.click();
     await waitForObservedKeys(3);
 
@@ -2632,7 +2920,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
     await addPenAndOpenCheckout(page);
     await fillCheckout(page, `pricing-race-${randomUUID()}@example.test`);
     const placeOrder = await waitForCheckoutSubmit(page);
-    await page.getByText("4 mg · 1 stuks", { exact: true }).waitFor();
+    await page.getByText("1 stuk", { exact: true }).waitFor();
     await page.route("**/*", holdFirstPricing);
 
     await page
@@ -2648,10 +2936,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
       .getByText("Actuele totalen berekenen…", { exact: true })
       .waitFor();
     assert.equal(await placeOrder.isDisabled(), true);
-    assert.equal(
-      await page.getByText("4 mg · 1 stuks", { exact: true }).count(),
-      0,
-    );
+    assert.equal(await page.getByText("1 stuk", { exact: true }).count(), 0);
     await page
       .locator("form")
       .first()
@@ -2670,7 +2955,7 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
       .getByRole("button", { name: "Aantal verhogen in winkelwagen" })
       .click();
     await page.getByRole("button", { name: "Winkelwagen sluiten" }).click();
-    await page.getByText("4 mg · 3 stuks", { exact: true }).waitFor();
+    await page.getByText("3 stuks", { exact: true }).waitFor();
     await waitForCheckoutSubmit(page);
     assert.equal(pricingRequests, 2);
 
@@ -2682,14 +2967,8 @@ test("checkout hides stale pricing immediately and ignores late responses", asyn
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
         ),
     );
-    assert.equal(
-      await page.getByText("4 mg · 3 stuks", { exact: true }).count(),
-      1,
-    );
-    assert.equal(
-      await page.getByText("4 mg · 2 stuks", { exact: true }).count(),
-      0,
-    );
+    assert.equal(await page.getByText("3 stuks", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("2 stuks", { exact: true }).count(), 0);
     assert.equal(await placeOrder.isDisabled(), false);
   } finally {
     clearTimeout(firstPricingTimeout);
@@ -2725,6 +3004,10 @@ test("checkout shows server-shared postcode feedback without clearing the cart",
 });
 
 test("checkout shows actionable idempotency conflict feedback without a guest account link", async () => {
+  // This file intentionally exercises the real public rate limit. Earlier
+  // checkout cases share one dev-server IP, so give this conflict regression a
+  // fresh in-memory test database instead of weakening or bypassing production.
+  await restartDevServerWithFreshDatabase();
   const { context, page } = await newPage();
   const checkoutEmail = `conflict-tweede-${Date.now()}@example.test`;
   try {
@@ -2733,19 +3016,33 @@ test("checkout shows actionable idempotency conflict feedback without a guest ac
       const { checkoutIdempotencyKeyFromSeed, initializeCheckoutAttemptSeed } =
         await import("/src/lib/checkout-idempotency.ts");
       const { createOrder } = await import("/src/lib/server/orders.ts");
+      const { validateCheckoutAddress } =
+        await import("/src/lib/server/address-validation.ts");
       const attempt = await initializeCheckoutAttemptSeed();
       if (!attempt) throw new Error("Checkoutpoging kon niet worden bewaard.");
       const fixedKey = await checkoutIdempotencyKeyFromSeed(attempt.seed);
+      const address = {
+        street: "Eerste straat",
+        houseNumber: "1",
+        postcode: "1234 AB",
+        city: "Utrecht",
+        country: "NL",
+      };
+      const checked = await validateCheckoutAddress({ data: address });
+      if (!checked.normalizedAddress || !checked.validationToken) {
+        throw new Error("Adresbewijs ontbreekt.");
+      }
       await createOrder({
         data: {
           name: "Eerste conflictbestelling",
           email: `conflict-eerste-${Date.now()}@example.test`,
           phone: "0612345678",
-          street: "Eerste straat",
-          houseNumber: "1",
-          postcode: "1234 AB",
-          city: "Utrecht",
-          country: "NL",
+          street: checked.normalizedAddress.street,
+          houseNumber: checked.normalizedAddress.houseNumber,
+          postcode: checked.normalizedAddress.postcode,
+          city: checked.normalizedAddress.city,
+          country: checked.normalizedAddress.country,
+          addressValidationToken: checked.validationToken,
           note: "Bestaande bestelling voor de echte RPC-conflicttest.",
           lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
           idempotencyKey: fixedKey,
@@ -2937,7 +3234,7 @@ async function verifyAdminNextOrderStatuses(context, page, orderNumber) {
     .getByLabel("Bericht")
     .fill("Nieuw open contact voor de dashboardtelling.");
   await shopper.getByRole("button", { name: "Verstuur bericht" }).click();
-  await shopper.getByText("Bericht verstuurd").waitFor();
+  await shopper.getByText("Bericht ontvangen").waitFor();
   await shopper.close();
 
   await page.getByRole("button", { name: "Vernieuwen" }).click();
@@ -2962,7 +3259,7 @@ test("contact is stored and only an authenticated admin can handle it", async ()
       .fill(`contact-${randomUUID()}@example.test`);
     await page.getByLabel("Bericht").fill(uniqueMessage);
     await page.getByRole("button", { name: "Verstuur bericht" }).click();
-    await page.getByText("Bericht verstuurd").waitFor();
+    await page.getByText("Bericht ontvangen").waitFor();
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Inloggen" }).waitFor();
@@ -3051,6 +3348,7 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
         try {
           await createContactMessage({
             data: {
+              idempotencyKey: crypto.randomUUID(),
               name: "Rate Limit Seeder",
               email: `rate-seed-${attempt}-${crypto.randomUUID()}@example.test`,
               message: "Dit bericht vult bewust de publieke contactlimiet.",
@@ -3096,6 +3394,51 @@ test("contact abuse protection returns 429 with retry feedback", async () => {
     )?.[1];
     assert.ok(retrySeconds);
     assert.equal(limitedResponse.headers()["retry-after"], retrySeconds);
+  } finally {
+    await context.close();
+  }
+});
+
+test("two guest orders keep independent temporary access", async () => {
+  await restartDevServerWithFreshDatabase();
+  const { context, page } = await newPage();
+  const placeGuestOrder = async (label) => {
+    await addPenAndOpenCheckout(page);
+    await fillCheckout(
+      page,
+      `two-orders-${label}-${randomUUID()}@example.test`,
+    );
+    const submit = await waitForCheckoutSubmit(page);
+    await submit.click();
+    await page.waitForURL(/\/bestelling\/[^/]+$/, { timeout: 15_000 });
+    const orderId = decodeURIComponent(
+      new URL(page.url()).pathname.split("/").at(-1),
+    );
+    const orderNumber = (
+      await page
+        .getByRole("heading", { level: 1, name: /^MED-\d+$/ })
+        .innerText()
+    ).trim();
+    return { id: orderId, number: orderNumber, url: page.url() };
+  };
+
+  try {
+    const first = await placeGuestOrder("eerste");
+    const second = await placeGuestOrder("tweede");
+    const cookieNames = (await context.cookies())
+      .map((cookie) => cookie.name)
+      .filter((name) => name.startsWith("__Host-volt-order-access-"));
+
+    assert.ok(cookieNames.includes(`__Host-volt-order-access-${first.id}`));
+    assert.ok(cookieNames.includes(`__Host-volt-order-access-${second.id}`));
+    assert.notEqual(first.id, second.id);
+
+    await page.goto(first.url, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { level: 1, name: first.number }).waitFor();
+    await page.goto(second.url, { waitUntil: "networkidle" });
+    await page
+      .getByRole("heading", { level: 1, name: second.number })
+      .waitFor();
   } finally {
     await context.close();
   }

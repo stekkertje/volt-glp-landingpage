@@ -6,11 +6,20 @@ import {
   contactMessageSchema,
 } from "@/lib/server/contact-schema";
 import { sameSiteMiddleware } from "@/lib/server/same-site-middleware";
-import { createPublicServerErrorMiddleware } from "@/lib/server-error";
+import {
+  createPublicServerErrorMiddleware,
+  type PublicServerErrorPolicy,
+} from "@/lib/server-error";
 
-const contactServerErrorMiddleware = createPublicServerErrorMiddleware({
+const CONTACT_SERVER_ERROR_POLICY = {
   fallbackMessage: "Het contactverzoek kon niet worden verwerkt.",
-});
+  allowedNames: new Set(["ContactIdempotencyConflictError"]),
+  statusByName: { ContactIdempotencyConflictError: 409 },
+} satisfies PublicServerErrorPolicy;
+
+const contactServerErrorMiddleware = createPublicServerErrorMiddleware(
+  CONTACT_SERVER_ERROR_POLICY,
+);
 
 export const createContactMessage = createServerFn({ method: "POST" })
   .middleware([contactServerErrorMiddleware, sameSiteMiddleware])
@@ -28,6 +37,8 @@ export const createContactMessage = createServerFn({ method: "POST" })
       applyRateLimitResponse(error);
       throw error;
     }
+    // Delivery runs from the persisted outbox worker. The message is already
+    // durably received even if SMTP is temporarily unavailable.
     return { success: true as const };
   });
 

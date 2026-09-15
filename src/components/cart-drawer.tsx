@@ -140,9 +140,9 @@ export function CartDrawer() {
       />
       <div
         ref={panelRef}
-        className="absolute inset-x-0 bottom-0 mx-auto flex h-[min(92vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:mx-0 sm:h-full sm:max-h-none sm:max-w-sm sm:rounded-none sm:rounded-l-2xl sm:border-y-0 sm:border-r-0"
+        className="absolute inset-x-0 bottom-0 mx-auto flex h-[min(92dvh,720px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:mx-0 sm:h-full sm:max-h-none sm:max-w-sm sm:rounded-none sm:rounded-l-2xl sm:border-y-0 sm:border-r-0"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border bg-surface px-5 py-4">
           <div className="flex items-center gap-2">
             <ShoppingBag className="size-5 text-primary" aria-hidden />
             <h2 className="text-lg font-bold tracking-tight">

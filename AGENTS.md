@@ -616,3 +616,24 @@ prompt:    often one line — expand into a full product
 never:     ask the user to run commands, open localhost, or QA your environment
 never:     delete or abandon /workspace/startup.sh
 ```
+
+---
+
+## Code Review Rules for this repository
+
+- Read `AGENTS.override.md` and `docs/WEBSITE-OPERATIONS.md` before reviewing
+  or changing this deployed webshop. Those files contain the current hosting,
+  security, review and authorization rules.
+- Report only concrete, reproducible defects and security or regression risks,
+  not personal style preferences.
+- Prioritize checkout and server prices, order integrity, authentication,
+  secrets/privacy, database migrations, Hostinger deployment, accessibility and
+  mobile user flows.
+- Internal fixes without noticeable customer or administrator impact may be
+  handled autonomously through a separate fix branch and a verified PR.
+- A fix that can be visible or noticeable, or may inconvenience customers or
+  the owner, must not be published or deployed until the owner has received a
+  concise impact explanation and explicitly replied `ja`.
+- Never bypass required checks, never edit `main` directly, and never change
+  products, prices, medical claims or historical order data as a side effect of
+  a technical fix.
