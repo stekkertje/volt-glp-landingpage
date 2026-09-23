@@ -1,13 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LandingPage } from "@/components/landing-page";
-
-const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
+import {
+  HOME_SEO_DESCRIPTION,
+  HOME_SEO_TITLE,
+  pageHead,
+} from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
-  head: () => ({
-    links: host ? [{ rel: "canonical", href: `https://${host}/` }] : [],
-  }),
+  head: () =>
+    pageHead({
+      title: HOME_SEO_TITLE,
+      description: HOME_SEO_DESCRIPTION,
+      path: "/",
+    }),
 });
 
 function HomePage() {

@@ -34,6 +34,10 @@ export type Product = {
   isNew?: boolean;
   images: { src: string; alt: string }[];
   shortPitch: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  whyHeading?: string;
+  simpleBreadcrumb?: boolean;
   highlights: string[];
   composition: { label: string; value: string }[];
   usageNote: string;
@@ -47,18 +51,18 @@ export type Product = {
 export const SYRINGE_PACK_COUNT = 10;
 
 export const SITE = {
-  brand: "VOLT",
-  category: "GLP-1 Afvallen",
-  tagline: "Semaglutide, Tirzepatide en Retatrutide",
+  brand: "Afslank-injecties.nl",
+  category: "Afvallen met medicatie",
+  tagline: "Semaglutide · Tirzepatide · Retatrutide",
+  headline: "Afvallen met injecties",
   shortPitch:
-    "Drie labgeteste GLP-1 producten. Vial of kant-en-klare pen. Discrete verzending naar NL en BE.",
+    "Semaglutide, Tirzepatide en Retatrutide. Vial of kant-en-klare pen.",
   rating: 4.8,
   reviewCount: 1024,
   shippingCents: 495,
   freeShippingCents: 10000,
   maxLineQuantity: 10,
   maxOrderQuantity: 90,
-  cutoffHour: 23,
 } as const;
 
 export const SUBCATS: { id: Subcat | "all"; label: string; hash: string }[] = [
@@ -85,19 +89,22 @@ const PRODUCT_LIST: Product[] = [
     subcat: "Retatrutide",
     form: "vial",
     unit: "10 mg",
-    priceCents: 7760,
-    compareAtCents: 9700,
+    priceCents: 9700,
     rating: 4.9,
     reviewCount: 211,
-    badges: ["Weekdeal −20%"],
-    weekdeal: true,
+    badges: [],
     images: imgs(
       "retatrutide-10mg",
       ["retatrutide-10mg__01__800.webp", "retatrutide-10mg__02__800.webp"],
       ["Retatrutide 10mg vial voorkant", "Retatrutide 10mg vial detail"],
     ),
+    seoTitle: "Retatrutide 10mg vial kopen | Afslanken met Retatrutide injecties",
+    seoDescription:
+      "Retatrutide 10mg vial bestellen | Één injectie per week | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Retatrutide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Nieuwste GLP-1 in vialvorm. Triple agonist voor wie een sterkere opvolger van Semaglutide of Tirzepatide zoekt.",
+      "Retatrutide 10mg in vial vorm. 3-dubbele werking: GLP-1, GIP en glucagon. Eén wekelijkse injectie, minder honger, rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Sneller metabolisme en minder eetlust",
       "Voor gebruikers die sterk willen afvallen",
@@ -105,8 +112,10 @@ const PRODUCT_LIST: Product[] = [
       "Tot 40% krachtiger dan Semaglutide en Tirzepatide",
     ],
     composition: [
-      { label: "Retatrutide", value: "10 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "10mg vial - 2ml water" },
+      { label: "Sterkte", value: "Retatrutide 10 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
     doseBeginner: "2,5 mg per week",
@@ -117,32 +126,30 @@ const PRODUCT_LIST: Product[] = [
       {
         id: "none",
         label: "Geen extra's",
-        priceCents: 7760,
-        compareAtCents: 9700,
+        priceCents: 9700,
       },
       {
         id: "syringes",
         label: "10 insulinespuiten",
-        priceCents: 7960,
-        compareAtCents: 9950,
+        priceCents: 9900,
       },
     ],
   },
   {
     id: 47,
     slug: "retatrutide-20mg-pen",
-    name: "Retatrutide 20mg · Pen",
+    name: "Retatrutide 20mg - Pen",
     listing: "Retatrutide 20mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Retatrutide",
     form: "pen",
     unit: "20 mg",
-    priceCents: 19900,
+    priceCents: 17600,
     compareAtCents: 22000,
     rating: 4.8,
     reviewCount: 59,
-    badges: ["Korting −10%", "Nieuw", "Bestseller"],
-    bestseller: true,
+    badges: ["Weekdeal −20%", "Nieuw"],
+    weekdeal: true,
     isNew: true,
     images: imgs(
       "retatrutide-20mg-pen",
@@ -161,8 +168,13 @@ const PRODUCT_LIST: Product[] = [
         "Retatrutide 20mg pen gebruiksklaar",
       ],
     ),
+    seoTitle: "Retatrutide 20mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Retatrutide 20mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Retatrutide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Kant-en-klare pen. Triple agonist (GLP-1, GIP en glucagon) zonder vials mengen.",
+      "Retatrutide kant-en-klare pen. 3-dubbele werking: GLP-1, GIP en glucagon. Vooraf gevuld, één wekelijkse klik.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Doorbreekt plateaus als andere middelen minder doen",
       "Drie hormoonpaden: GLP-1, GIP en glucagon",
@@ -170,12 +182,11 @@ const PRODUCT_LIST: Product[] = [
       "Pen, geen foutmarge bij mengen",
     ],
     composition: [
-      { label: "Merk", value: "Bio Amino Labs" },
-      { label: "Inhoud", value: "1 kant-en-klare pen" },
-      { label: "Dosering", value: "Retatrutide 20 mg" },
-      { label: "Toediening", value: "Subcutane injectie" },
+      { label: "Retatrutide pen", value: "20 mg" },
+      { label: "Pennaalden", value: "4 stuks" },
+      { label: "Handleiding", value: "Inbegrepen" },
     ],
-    usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
+    usageNote: "Aanbevolen dosering: 2,5 tot 5 mg per week.",
     doseBeginner: "2,5 mg per week",
     doseAdvanced: "5 mg per week",
     frequency: "1 injectie per week",
@@ -212,8 +223,13 @@ const PRODUCT_LIST: Product[] = [
         "Semaglutide 2mg inhoud",
       ],
     ),
+    seoTitle: "Semaglutide 2mg vial kopen | Afslanken met Semaglutide injecties",
+    seoDescription:
+      "Semaglutide 2mg vial bestellen | Één injectie per week | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Semaglutide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Instap-vial voor langdurig vetverlies, minder honger en een rustiger eetpatroon.",
+      "Semaglutide 2mg in vial vorm. Eén wekelijkse injectie, minder honger, rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Ondersteunt gewichtsverlies",
       "Minder hongergevoel",
@@ -221,10 +237,12 @@ const PRODUCT_LIST: Product[] = [
       "Eén wekelijkse injectie",
     ],
     composition: [
-      { label: "Semaglutide", value: "2 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "2mg vial - 2ml water" },
+      { label: "Sterkte", value: "Semaglutide 2 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
-    usageNote: "Aanbevolen bereik: 0,25 tot 0,75 mg per week.",
+    usageNote: "Aanbevolen dosering: 0,25 tot 0,75 mg per week.",
     doseBeginner: "0,25 mg per week",
     doseAdvanced: "0,75 mg per week",
     frequency: "1 injectie per week",
@@ -237,7 +255,7 @@ const PRODUCT_LIST: Product[] = [
   {
     id: 49,
     slug: "semaglutide-4mg-pen",
-    name: "Semaglutide 4mg · Pen",
+    name: "Semaglutide 4mg - Pen",
     listing: "Semaglutide 4 mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Semaglutide",
@@ -261,8 +279,13 @@ const PRODUCT_LIST: Product[] = [
         "Semaglutide 4mg pen naalden",
       ],
     ),
+    seoTitle: "Semaglutide 4mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Semaglutide 4mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Semaglutide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Meest gekozen pen. Vooraf gevuld, geen vials, één wekelijkse klik.",
+      "Kant-en-klare Semaglutide-pen. Vooraf gevuld, één wekelijkse klik.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Gewicht en eetlust in één ritme",
       "Geen mengen of afmeten uit een vial",
@@ -274,7 +297,7 @@ const PRODUCT_LIST: Product[] = [
       { label: "Pennaalden", value: "4 stuks" },
       { label: "Handleiding", value: "Inbegrepen" },
     ],
-    usageNote: "Aanbevolen bereik: 0,25 tot 1 mg per week.",
+    usageNote: "Aanbevolen dosering: 0,25 tot 1 mg per week.",
     doseBeginner: "0,25 mg per week",
     doseAdvanced: "1 mg per week",
     frequency: "1 injectie per week",
@@ -300,8 +323,13 @@ const PRODUCT_LIST: Product[] = [
       ["tirzepatide-10mg__01__800.webp", "tirzepatide-10mg__02__800.webp"],
       ["Tirzepatide 10mg vial voorkant", "Tirzepatide 10mg vial detail"],
     ),
+    seoTitle: "Tirzepatide 10mg vial kopen | Afslanken met Tirzepatide injecties",
+    seoDescription:
+      "Tirzepatide 10mg vial bestellen | Sterker dan Semaglutide vanwege de dubbele GLP-1 en GIP werking | Één injectie per week | Verzending naar NL en BE.",
+    whyHeading: "Waarom Tirzepatide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Dubbele werking (GLP-1 en GIP). Minder cravings, meer controle, vial van 10 mg.",
+      "Tirzepatide 10mg in vial vorm. Sterker dan Semaglutide vanwege de dubbele GLP-1 en GIP werking. Met slechts één wekelijkse injectie minder honger en een rustiger eetpatroon.\n\nBac water zit standaard bij de vial - Extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Effectief en duurzaam gewichtsverlies",
       "Minder eetlust en cravings",
@@ -309,8 +337,10 @@ const PRODUCT_LIST: Product[] = [
       "Vial plus 2 ml bac water",
     ],
     composition: [
-      { label: "Tirzepatide vial", value: "10 mg" },
-      { label: "Bac water", value: "2 ml" },
+      { label: "Merk", value: "Bio Amino Labs" },
+      { label: "Inhoud", value: "10mg vial - 2ml water" },
+      { label: "Sterkte", value: "Tirzepatide 10 mg" },
+      { label: "Toediening", value: "Subcutane injectie" },
     ],
     usageNote: "Bouw de dosering rustig op om bijwerkingen te beperken.",
     doseBeginner: "2,5 mg per week",
@@ -330,7 +360,7 @@ const PRODUCT_LIST: Product[] = [
   {
     id: 77,
     slug: "tirzepatide-20mg-pen",
-    name: "Tirzepatide 20mg · Pen",
+    name: "Tirzepatide 20mg - Pen",
     listing: "Tirzepatide 20mg · kant-en-klare pen",
     brand: "Bio Amino Labs",
     subcat: "Tirzepatide",
@@ -350,8 +380,13 @@ const PRODUCT_LIST: Product[] = [
       ],
       ["Tirzepatide 20mg pen voorkant", "Tirzepatide 20mg pen inhoud"],
     ),
+    seoTitle: "Tirzepatide 20mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Tirzepatide 20mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Tirzepatide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Hoogste dosering in penvorm. Dubbele agonist, vooraf gevuld, klaar voor gebruik.",
+      "Tirzepatide kant-en-klare pen. Vooraf gevuld en slechts één injectie per week. Dit product is voor gebruikers die een stapje verder willen dan Semaglutide. Vanwege de dubbele GLP-1 en GIP werking is deze extra sterk.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Hoogste dosering in deze lijn",
       "Krachtig gewichtsverlies in een vast ritme",
@@ -363,7 +398,7 @@ const PRODUCT_LIST: Product[] = [
       { label: "Pennaalden", value: "4 stuks" },
       { label: "Handleiding", value: "Inbegrepen" },
     ],
-    usageNote: "Aanbevolen bereik: 2,5 tot 10 mg per week.",
+    usageNote: "Aanbevolen dosering: 2,5 tot 10 mg per week.",
     doseBeginner: "2,5 mg per week",
     doseAdvanced: "5 mg per week",
     frequency: "1 injectie per week",
@@ -373,12 +408,12 @@ const PRODUCT_LIST: Product[] = [
 ];
 
 const CATALOG_ORDER: ProductSlug[] = [
-  "semaglutide-2mg",
   "semaglutide-4mg-pen",
-  "tirzepatide-10mg",
+  "semaglutide-2mg",
   "tirzepatide-20mg-pen",
-  "retatrutide-10mg",
+  "tirzepatide-10mg",
   "retatrutide-20mg-pen",
+  "retatrutide-10mg",
 ];
 
 export const PRODUCTS: Product[] = CATALOG_ORDER.map((slug) =>
@@ -392,6 +427,17 @@ export function getProduct(
 ): Product | undefined {
   if (!slug) return undefined;
   return PRODUCTS.find((p) => p.slug === slug);
+}
+
+export function orderLineSummary(
+  slug: string,
+  optionLabel: string,
+  qty: number,
+): string {
+  const quantity = `${qty} ${qty === 1 ? "stuk" : "stuks"}`;
+  return getProduct(slug)?.form === "pen"
+    ? quantity
+    : `${optionLabel} · ${quantity}`;
 }
 
 export function getDefaultOptionId(product: Product): string {
@@ -447,48 +493,47 @@ export const COMPOUNDS = [
     name: "Semaglutide",
     role: "GLP-1",
     detail:
-      "Eetlustremming en een vast wekelijks ritme. Instap via 2 mg vial of 4 mg pen.",
+      "De bekendste GLP-1. Minder honger, één keer per week, als vial of als pen.",
     count: 2,
   },
   {
     name: "Tirzepatide",
     role: "GLP-1 + GIP",
     detail:
-      "Dubbele agonist. Meer controle over cravings, als vial of als 20 mg pen.",
+      "Twee paden tegelijk. Extra grip op cravings, in vial of in de 20 mg pen.",
     count: 2,
   },
   {
     name: "Retatrutide",
     role: "GLP-1 + GIP + glucagon",
     detail:
-      "Triple agonist. Voor wie plateaus wil doorbreken, als weekdeal-vial of als pen.",
+      "De sterkste in deze lijn. Voor wie verder wil dan Semaglutide of Tirzepatide.",
     count: 2,
   },
 ] as const;
 
 export const BENEFITS = [
   {
+    title: "Keuze in sterkte",
+    description: "Drie verschillende stoffen met elk hun eigen kracht.",
+    icon: "gauge",
+  },
+  {
     title: "Wekelijks ritme",
     description: "Eén toediening per week. Geen dagelijkse capsules of poeder.",
     icon: "clock",
   },
   {
-    title: "Minder eetlust",
+    title: "Kant-en-klare pen",
     description:
-      "GLP-1 ondersteunt verzadiging zodat porties kleiner en rustiger worden.",
-    icon: "focus",
-  },
-  {
-    title: "Vial of pen",
-    description:
-      "Zelf mengen met bac water, of een kant-en-klare pen met naalden.",
+      "Vooraf gevuld, eenvoudig in gebruik en geen voorbereiding of mengwerk nodig.",
     icon: "capsule",
   },
   {
-    title: "Labgetest en discreet",
+    title: "Flexibel met een vial",
     description:
-      "Batchcontrole, verzending NL en BE, track en trace, neutrale verpakking.",
-    icon: "shield",
+      "Een veelzijdige variant voor wie meer controle en flexibiliteit wil.",
+    icon: "flask",
   },
 ] as const;
 
@@ -643,8 +688,8 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Bestellingen vóór 23:00: volgende werkdag verzonden",
-          "Levering: 1–2 werkdagen in NL en BE",
+          "Verzending nadat je overschrijving binnen is (meestal 24–48 uur), daarna 1–2 werkdagen",
+          "Levering: 1 – 2 werkdagen in NL en BE",
           "Discreet verpakt, volgnummer standaard",
           "Gratis verzending vanaf €100",
         ],
@@ -656,11 +701,11 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
     body: [
       {
         type: "p",
-        text: "Niet tevreden? Binnen 30 dagen na ontvangst kun je ongeopende verpakkingen kosteloos retourneren.",
+        text: "Vanwege de aard van de producten is retourneren in de regel niet mogelijk.",
       },
       {
         type: "p",
-        text: "Hulp nodig? Mail support@voltperformance.nl.",
+        text: "Hulp nodig? Mail info@afslank-injecties.nl.",
       },
     ],
   },

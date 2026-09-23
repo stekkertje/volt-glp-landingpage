@@ -71,6 +71,55 @@ test("a strong password-only configuration accepts its signed session", () => {
   );
 });
 
+test("strict base64 and base64url preserve the exact Hostinger login value", () => {
+  const password = "bestaand%beheer-wachtwoord-2026🔐";
+  for (const encoding of ["base64", "base64url"]) {
+    const config = resolveAdminConfiguration({
+      NODE_ENV: "production",
+      ADMIN_PASSWORD_BASE64: Buffer.from(password, "utf8").toString(encoding),
+      ADMIN_SESSION_SECRET: "s".repeat(48),
+    });
+    assert.equal(config.passwordLogin?.password, password, encoding);
+  }
+});
+
+test("password sources and encoded bytes fail closed when ambiguous or invalid", () => {
+  const common = {
+    NODE_ENV: "production",
+    ADMIN_SESSION_SECRET: "s".repeat(48),
+  };
+  assert.throws(
+    () =>
+      resolveAdminConfiguration({
+        ...common,
+        ADMIN_PASSWORD: "sterk-beheer-wachtwoord-2026",
+        ADMIN_PASSWORD_BASE64: Buffer.from(
+          "sterk-beheer-wachtwoord-2026",
+        ).toString("base64"),
+      }),
+    /nooit beide/i,
+  );
+  for (const encoded of [
+    "geen%base64",
+    "YQ=",
+    "_w",
+    "AA==",
+    Buffer.from(`sterk-beheer-${"x".repeat(16)}\u0085`, "utf8").toString(
+      "base64",
+    ),
+  ]) {
+    assert.throws(
+      () =>
+        resolveAdminConfiguration({
+          ...common,
+          ADMIN_PASSWORD_BASE64: encoded,
+        }),
+      /ADMIN_PASSWORD_BASE64/,
+      encoded,
+    );
+  }
+});
+
 test("partial or weak production password configuration fails closed", () => {
   assert.throws(
     () =>
@@ -116,10 +165,7 @@ test("expired password sessions are rejected", () => {
     ADMIN_SESSION_SECRET: "s".repeat(48),
   });
   const now = Date.now();
-  const expired = signAdminSession(
-    config.passwordLogin.sessionSecret,
-    now - 1,
-  );
+  const expired = signAdminSession(config.passwordLogin.sessionSecret, now - 1);
   assert.equal(
     hasConfiguredAdminAccess(
       { sessionCookie: expired, userEmail: null, now },
@@ -133,5 +179,6 @@ test("the environment template documents every admin mode", async () => {
   const template = await readFile(".env.example", "utf8");
   assert.match(template, /^ADMIN_EMAILS=$/m);
   assert.match(template, /^ADMIN_PASSWORD=$/m);
+  assert.match(template, /^ADMIN_PASSWORD_BASE64=$/m);
   assert.match(template, /^ADMIN_SESSION_SECRET=$/m);
 });

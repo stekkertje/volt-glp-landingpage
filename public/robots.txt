@@ -1,0 +1,18 @@
+# Afslank-injecties.nl
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /checkout
+Disallow: /account
+Disallow: /login
+Disallow: /registreren
+Disallow: /wachtwoord-vergeten
+Disallow: /wachtwoord-herstellen
+Disallow: /bevestigingsmail-opnieuw
+Disallow: /bestelling/
+Disallow: /cookies
+
+Sitemap: https://afslank-injecties.nl/sitemap.xml

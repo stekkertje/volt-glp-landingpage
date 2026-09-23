@@ -5,6 +5,7 @@ import {
   isValidCartEpoch,
   nextCartEpoch,
 } from "@/lib/cart-lifecycle";
+import { isKnownDiscountCode } from "@/lib/discount-codes";
 import {
   DEFAULT_PRODUCT_SLUG,
   PRODUCTS,
@@ -165,7 +166,7 @@ export const useCartStore = create<CartState>()(
       setDiscountCode: (code) => set({ discountCode: code }),
       applyDiscount: () => {
         const code = get().discountCode.trim().toUpperCase();
-        if (code === "VOLT10") {
+        if (isKnownDiscountCode(code)) {
           set({ discountCode: code, discountApplied: true });
           get().pushToast(
             "Kortingscode toegevoegd",
@@ -174,7 +175,7 @@ export const useCartStore = create<CartState>()(
           return true;
         }
         const alreadyApplied = get().discountApplied;
-        if (alreadyApplied) set({ discountCode: "VOLT10" });
+        if (alreadyApplied) set({ discountCode: get().discountCode });
         get().pushToast(
           "Code niet geldig",
           alreadyApplied

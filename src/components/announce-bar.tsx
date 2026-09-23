@@ -1,6 +1,6 @@
 const ITEMS = [
   "Gratis verzending vanaf €100",
-  "Voor 23:00 besteld, volgende werkdag verzonden",
+  "Verzending na ontvangst van je overschrijving",
   "Discreet verpakt",
 ] as const;
 
@@ -10,8 +10,8 @@ export function AnnounceBar() {
   return (
     <div className="relative overflow-hidden bg-fg text-bg">
       <p className="sr-only">
-        Gratis verzending vanaf €100. Voor 23:00 besteld, volgende werkdag
-        verzonden. Discreet verpakt.
+        Gratis verzending vanaf €100. Verzending na ontvangst van je
+        overschrijving. Discreet verpakt.
       </p>
       <div className="relative flex h-9 items-center">
         <div

@@ -3,6 +3,10 @@ name: Migration integration
 on:
   pull_request:
   push:
+    branches:
+      - main
+      - cursor/shop-backend
+      - hostinger-node-server
 
 permissions:
   contents: read
@@ -14,10 +18,10 @@ concurrency:
 jobs:
   migration-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: volt
           POSTGRES_PASSWORD: volt-test-password
@@ -44,7 +48,18 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        env:
+          NODE_ENV: production
+          NPM_CONFIG_INCLUDE: dev
+        run: npm ci --include=dev
+
+      - name: Install Chromium for browser regression tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the isolated application test suite
+        env:
+          TEST_MIGRATION_DATABASE_URL: ""
+        run: npm test
 
       - name: Run migration configuration and PostgreSQL lock tests
         run: >-
@@ -55,6 +70,30 @@ jobs:
 
       - name: Run the production migrator twice on PostgreSQL
         run: node --test scripts/migration-postgres-integration.test.mjs
+
+      - name: Test Hostinger deployment adapter and noindex headers
+        run: >-
+          node --test
+          scripts/hostinger-deploy.test.mjs
+          scripts/security-headers.test.mjs
+
+      - name: Build the Hostinger Node.js output on PostgreSQL
+        env:
+          DATABASE_URL: ${{ env.TEST_MIGRATION_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ env.TEST_MIGRATION_DATABASE_URL }}
+          VITE_AUTH_ENABLED: "false"
+          VITE_NO_INDEX: "1"
+          NO_INDEX: "1"
+          VITE_PUBLIC_HOSTNAME: afslank-injecties.nl
+          TRUST_HOSTINGER_PROXY: "1"
+          REQUIRE_DATABASE: "1"
+          REQUIRE_ADDRESS_VALIDATION: "1"
+          APICHECK_API_KEY: ci-apicheck-address-key-not-for-production
+          GOOGLE_ADDRESS_VALIDATION_API_KEY: ci-google-address-key-not-for-production
+        run: |
+          npm run build:hostinger
+          test -f .output/server/index.mjs
+          node scripts/hostinger-runtime-smoke.mjs
 
       - name: Typecheck
         run: npm run typecheck

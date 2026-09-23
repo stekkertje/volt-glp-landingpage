@@ -24,7 +24,7 @@ export function isSensitiveDocumentPath(pathname: string): boolean {
 
 export function securityHeadersForPath(
   pathname: string,
-  options: { development?: boolean; hsts?: boolean } = {},
+  options: { development?: boolean; hsts?: boolean; noIndex?: boolean } = {},
 ): Record<string, string> {
   const frameAncestors = isSensitiveDocumentPath(pathname)
     ? TRUSTED_PLATFORM_FRAME_ANCESTORS
@@ -50,9 +50,13 @@ export function securityHeadersForPath(
       "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
     "referrer-policy": "strict-origin-when-cross-origin",
     "x-content-type-options": "nosniff",
+    "x-frame-options": isSensitiveDocumentPath(pathname) ? "DENY" : "SAMEORIGIN",
   };
   if (options.hsts) {
     headers["strict-transport-security"] = "max-age=31536000";
+  }
+  if (options.noIndex) {
+    headers["x-robots-tag"] = "noindex, nofollow, noarchive";
   }
   if (isSensitiveDocumentPath(pathname)) {
     headers["cache-control"] = "no-store";
