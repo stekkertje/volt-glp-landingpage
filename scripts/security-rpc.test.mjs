@@ -209,6 +209,7 @@ test("checkout conflict keeps a stable discriminant and HTTP 409 across RPC", as
           email: `rpc-${unique}@example.test`,
           ...address,
           addressValidationToken: checked.validationToken,
+          termsAccepted: true,
           lines: [{ slug: "semaglutide-4mg-pen", optionId: "default", qty: 1 }],
           idempotencyKey: `rpc-conflict-${unique}`,
         };

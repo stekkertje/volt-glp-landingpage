@@ -19,7 +19,7 @@ export function SiteFooter() {
               />
             </div>
             <p className="mt-3 max-w-xs text-sm text-bg/60">
-              Afslanken met medicatie
+              Afvallen met injecties
             </p>
             <p className="mt-1 max-w-xs text-sm text-bg/60">{SITE.tagline}</p>
           </div>
@@ -64,13 +64,23 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-bg/60">
                 <li>
-                  <a href="/#faq" className="hover:text-bg">
-                    Veelgestelde vragen
+                  <a href="/verzending" className="hover:text-bg">
+                    Verzending
                   </a>
                 </li>
                 <li>
-                  <a href="/#beoordelingen" className="hover:text-bg">
-                    Reviews
+                  <a href="/betaling" className="hover:text-bg">
+                    Betaling
+                  </a>
+                </li>
+                <li>
+                  <a href="/privacy" className="hover:text-bg">
+                    Privacy
+                  </a>
+                </li>
+                <li>
+                  <a href="/voorwaarden" className="hover:text-bg">
+                    Voorwaarden
                   </a>
                 </li>
                 {authEnabled && (
@@ -96,7 +106,10 @@ export function SiteFooter() {
         <div className="mt-8 border-t border-white/10 pt-5 text-xs text-bg/40">
           <p>
             © {new Date().getFullYear()} Afslank-injecties.nl. Alle rechten
-            voorbehouden.
+            voorbehouden.{" "}
+            <a href="/cookies" className="hover:text-bg/70">
+              Cookies
+            </a>
           </p>
         </div>
       </div>

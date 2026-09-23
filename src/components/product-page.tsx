@@ -6,6 +6,7 @@ import {
   getDefaultOptionId,
   unitPriceCents,
   compareAtCents,
+  SITE,
 } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
 import { SiteShell } from "@/components/site-shell";
@@ -30,6 +31,54 @@ export function ProductPage({ product }: { product: Product }) {
   const compare = compareAtCents(product, selectedOptionId);
   const related = relatedProducts(product.slug, 3);
   const pitchParagraphs = product.shortPitch.split("\n\n").filter(Boolean);
+  const origin = import.meta.env.VITE_PUBLIC_HOSTNAME
+    ? `https://${import.meta.env.VITE_PUBLIC_HOSTNAME}`
+    : "https://afslank-injecties.nl";
+  const productUrl = `${origin}/product/${product.slug}`;
+  const productJsonLd =
+    product.seoTitle || product.simpleBreadcrumb
+      ? {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: `${origin}/`,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: product.name,
+                  item: productUrl,
+                },
+              ],
+            },
+            {
+              "@type": "Product",
+              name: product.name,
+              url: productUrl,
+              description:
+                product.seoDescription ?? pitchParagraphs[0] ?? product.shortPitch,
+              image: product.images[0]
+                ? `${origin}${product.images[0].src}`
+                : undefined,
+              brand: { "@type": "Brand", name: product.brand },
+              offers: {
+                "@type": "Offer",
+                url: productUrl,
+                priceCurrency: "EUR",
+                price: (product.priceCents / 100).toFixed(2),
+                availability: "https://schema.org/InStock",
+                seller: { "@type": "Organization", name: SITE.brand },
+              },
+            },
+          ],
+        }
+      : null;
 
   return (
     <SiteShell>
@@ -38,17 +87,6 @@ export function ProductPage({ product }: { product: Product }) {
           <nav className="mb-6 text-xs text-muted" aria-label="Broodkruimel">
             <a href="/#top" className="hover:text-fg">
               Home
-            </a>
-            <span className="mx-1.5">/</span>
-            <a href="/#producten" className="hover:text-fg">
-              GLP-1 Afvallen
-            </a>
-            <span className="mx-1.5">/</span>
-            <a
-              href={`/#${product.subcat.toLowerCase()}`}
-              className="hover:text-fg"
-            >
-              {product.subcat}
             </a>
             <span className="mx-1.5">/</span>
             <span className="text-fg">{product.name}</span>
@@ -107,7 +145,7 @@ export function ProductPage({ product }: { product: Product }) {
 
               <div className="mt-5">
                 <h2 className="text-base font-extrabold tracking-tight">
-                  Waarom dit product
+                  {product.whyHeading ?? "Waarom dit product"}
                 </h2>
                 <ul className="mt-3 space-y-2">
                   {product.highlights.map((h) => (
@@ -142,7 +180,7 @@ export function ProductPage({ product }: { product: Product }) {
 
               <ul className="mt-6 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 {[
-                  { icon: Truck, t: "1 – 2 werkdagen" },
+                  { icon: Truck, t: "1–2 werkdagen na betaling" },
                   { icon: MapPinned, t: "Track & trace code" },
                   { icon: Package, t: "Discreet verpakt" },
                   { icon: Headphones, t: "Persoonlijke support" },
@@ -230,6 +268,14 @@ export function ProductPage({ product }: { product: Product }) {
           </div>
         </section>
       )}
+      {productJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(productJsonLd),
+          }}
+        />
+      ) : null}
     </SiteShell>
   );
 }

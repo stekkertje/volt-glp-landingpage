@@ -1,3 +1,4 @@
+import { BANK, formatIban } from "@/lib/bank";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/order-status";
 import { getProduct } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
@@ -255,12 +256,21 @@ export function orderCustomerConfirmationMail(input: {
        </table>`;
   return {
     subject,
-    textBody: `Beste ${input.name},\n\nBedankt voor je bestelling. We hebben deze goed ontvangen.\n\nBestelnummer: ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nPrijsopbouw:\n${plainOrderTotals(input)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\n${accountText}\n\nHulp nodig? Neem contact met ons op voor vragen over je bestelling, verzending of producten:\n${CUSTOMER_SUPPORT_URL}\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
+    textBody: `Beste ${input.name},\n\nBedankt voor je bestelling. We hebben deze goed ontvangen.\n\nBestelnummer: ${input.orderNumber}\n\nBetaal via overschrijving:\nNaam: ${BANK.accountName}\nIBAN: ${formatIban(BANK.iban)}\nLand: ${BANK.country}\nOmschrijving: ${input.orderNumber}\n\nProducten:\n${plainDetailedOrderLines(input.lines)}\n\nPrijsopbouw:\n${plainOrderTotals(input)}\n\nBezorgadres:\n${plainAddress(input.address)}\n\n${accountText}\n\nHulp nodig? Neem contact met ons op voor vragen over je bestelling, verzending of producten:\n${CUSTOMER_SUPPORT_URL}\n\nMet vriendelijke groet,\nAfslank-injecties.nl`,
     htmlBody: mailLayout(
       "Bedankt voor je bestelling",
       `<p style="margin:0 0 6px;font-size:15px;line-height:23px;color:#303642">Beste ${escapeHtml(input.name)},</p>
-       <p style="margin:0 0 22px;font-size:15px;line-height:23px;color:#303642">We hebben je bestelling goed ontvangen.</p>
+       <p style="margin:0 0 22px;font-size:15px;line-height:23px;color:#303642">We hebben je bestelling goed ontvangen. Betaal via overschrijving met je bestelnummer als omschrijving.</p>
        ${orderSummaryCard(input.orderNumber, "Totaal", formatEuro(input.totalCents))}
+       <h2 style="margin:0 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Betalen</h2>
+       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f8f9fb" style="width:100%;background:#f8f9fb;border-radius:10px;margin-bottom:22px">
+         <tr><td style="padding:16px;font-size:14px;line-height:21px;color:#303642">
+           Naam: ${escapeHtml(BANK.accountName)}<br>
+           IBAN: ${escapeHtml(formatIban(BANK.iban))}<br>
+           Land: ${escapeHtml(BANK.country)}<br>
+           Omschrijving: ${escapeHtml(input.orderNumber)}
+         </td></tr>
+       </table>
        <h2 style="margin:0 0 14px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Producten</h2>
        ${htmlConfirmationOrderLines(input.lines)}
        <h2 style="margin:26px 0 10px;font-size:17px;line-height:23px;font-weight:700;color:#0b0c0f">Prijsopbouw</h2>

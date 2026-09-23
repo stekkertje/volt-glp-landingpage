@@ -124,6 +124,11 @@ export const createOrderDraftSchema = withValidPostcode(createOrderBaseSchema);
 export const createOrderSchema = withValidPostcode(
   createOrderBaseSchema.extend({
     addressValidationToken: addressValidationTokenSchema,
+    termsAccepted: z
+      .boolean({ message: "Ga akkoord met de voorwaarden om je bestelling te plaatsen." })
+      .refine((value) => value === true, {
+        message: "Ga akkoord met de voorwaarden om je bestelling te plaatsen.",
+      }),
   }),
 );
 

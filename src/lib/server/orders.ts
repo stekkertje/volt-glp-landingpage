@@ -113,7 +113,17 @@ export const createOrder = createServerFn({ method: "POST" })
       applyRateLimitResponse(error);
       throw error;
     }
-    const result = await createOrderRecord(data, { userId: context.userId });
+    const sessionEmail = String(context.userEmail ?? "")
+      .trim()
+      .toLowerCase();
+    const orderEmail = String(data.email ?? "")
+      .trim()
+      .toLowerCase();
+    const linkedUserId =
+      context.userId && sessionEmail && sessionEmail === orderEmail
+        ? context.userId
+        : null;
+    const result = await createOrderRecord(data, { userId: linkedUserId });
     setCookie(
       guestOrderCookieName(result.order.id),
       guestOrderCookieValue(result.order.id, result.guestAccessToken),

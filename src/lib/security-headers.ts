@@ -50,6 +50,7 @@ export function securityHeadersForPath(
       "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
     "referrer-policy": "strict-origin-when-cross-origin",
     "x-content-type-options": "nosniff",
+    "x-frame-options": isSensitiveDocumentPath(pathname) ? "DENY" : "SAMEORIGIN",
   };
   if (options.hsts) {
     headers["strict-transport-security"] = "max-age=31536000";

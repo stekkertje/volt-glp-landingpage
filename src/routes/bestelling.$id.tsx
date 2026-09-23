@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { authEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getOrderForViewer } from "@/lib/server/orders";
+import { BankTransferDetails } from "@/components/bank-transfer-details";
+import { formatEuro } from "@/lib/utils";
 
 type ViewerOrder = Awaited<ReturnType<typeof getOrderForViewer>>;
 type ClientOrderLookup = {
@@ -142,11 +144,19 @@ function OrderConfirmationPage() {
                     {order.orderNumber}
                   </h1>
                   <p className="mt-2 text-sm text-muted">
-                    We sturen handmatig een betaalverzoek naar {order.email}. Er
-                    is nog geen online betaling gedaan.
+                    Maak het bedrag over naar de rekening hieronder. Gebruik{" "}
+                    {order.orderNumber} als omschrijving. Bevestiging gaat naar{" "}
+                    {order.email}.
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-5">
+              <BankTransferDetails
+                orderNumber={order.orderNumber}
+                totalLabel={formatEuro(order.totalCents)}
+              />
             </div>
 
             <div className="mt-8 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2">

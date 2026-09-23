@@ -61,3 +61,12 @@ export async function enforcePricingPreviewLimit(
     windowMs: TEN_MINUTES_MS,
   });
 }
+
+export async function enforceAuthPostLimit(requestIp: string): Promise<void> {
+  await consumeRateLimit({
+    scope: "auth-post-ip",
+    identifier: requestIp,
+    limit: 30,
+    windowMs: FIFTEEN_MINUTES_MS,
+  });
+}

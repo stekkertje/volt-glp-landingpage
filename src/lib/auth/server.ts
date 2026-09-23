@@ -130,7 +130,10 @@ const baseURL = explicitBaseURL ?? {
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
 const trustedOrigins: string[] = explicitBaseURL
-  ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
+  ? [
+      explicitBaseURL,
+      ...(process.env.NODE_ENV === "production" ? [] : LOCAL_DEV_ORIGINS),
+    ]
   : [
       // Host wildcards (matched against Origin's host)
       ...previewAllowedHosts,
@@ -200,6 +203,11 @@ export const auth = betterAuth({
   // See `trustedOrigins` construction above — must cover live preview hosts AND
   // local loopback variants, or clients get "Invalid origin".
   trustedOrigins,
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 20,
+  },
 
   // Encrypt broker-issued OAuth tokens at rest, and treat the broker's upstreams
   // as trusted first-party identities. The broker owns identity and X emails are

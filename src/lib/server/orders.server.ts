@@ -1091,7 +1091,7 @@ async function createNewOrder(
       stack_discount_cents, code_discount_cents, shipping_cents, total_cents,
       discount_code, note, address_validation_provider,
       address_validation_status, address_validation_fingerprint,
-      address_validated_at, created_at, updated_at
+      address_validated_at, terms_accepted_at, created_at, updated_at
     ) values (
       ${orderId}, ${orderNumber}, ${input.idempotencyKey}, ${payloadHash},
       ${viewerHash}, ${customer.id}, ${userId}, ${input.email}, ${input.name},
@@ -1101,7 +1101,7 @@ async function createNewOrder(
       ${pricing.codeDiscountCents}, ${pricing.shippingCents},
       ${pricing.totalCents}, ${pricing.discountCode}, ${input.note ?? null},
       ${addressValidation.provider}, 'valid', ${addressValidation.fingerprint},
-      ${addressValidation.validatedAt.toISOString()}, now(), now()
+      ${addressValidation.validatedAt.toISOString()}, now(), now(), now()
     )
   `;
 

@@ -709,40 +709,16 @@ test("the home sticky bar appears once the cart has items", async () => {
   }
 });
 
-test("the delivery promise uses the next workday around weekends", async () => {
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-  });
-  await context.addInitScript(() => {
-    const RealDate = Date;
-    const fixed = new RealDate("2026-08-21T22:00:00.000Z").getTime();
-    globalThis.Date = class extends RealDate {
-      constructor(...args) {
-        super(...(args.length ? args : [fixed]));
-      }
-
-      static now() {
-        return fixed;
-      }
-    };
-    localStorage.setItem("volt-cookie-consent", "accepted");
-  });
-  const page = await context.newPage();
+test("the delivery promise explains bank transfer then shipping", async () => {
+  const { context, page } = await newPage();
   try {
     await page.goto(`${BASE_URL}/product/semaglutide-2mg`, {
       waitUntil: "networkidle",
     });
-    assert.match(
-      await page
-        .locator("#prijzen")
-        .locator("div")
-        .filter({
-          hasText: "Bestel binnen:",
-        })
-        .first()
-        .innerText(),
-      /Verzending:\s*maandag 24 aug/i,
-    );
+    const text = await page.locator("#prijzen").innerText();
+    assert.match(text, /Verzending na ontvangst betaling/i);
+    assert.match(text, /Overschrijving duurt meestal 24–48 uur/i);
+    assert.doesNotMatch(text, /23:00/);
   } finally {
     await context.close();
   }
@@ -790,16 +766,12 @@ test("product previews and Retatrutide pen cards use the requested copy", async 
       .getByText("Dosering en gebruiksfrequentie", { exact: true })
       .waitFor();
     await page
-      .getByText("Op voorraad - direct leverbaar", { exact: true })
+      .getByText("Op voorraad · verzending na ontvangst betaling")
       .waitFor();
     await page
       .locator("#prijzen")
-      .getByText("1 – 2 werkdagen", { exact: true })
+      .getByText("1–2 werkdagen na betaling", { exact: true })
       .waitFor();
-    const shippingLabel = page.locator("strong").filter({
-      hasText: /^Verzending:$/,
-    });
-    assert.equal(await shippingLabel.count(), 1);
   } finally {
     await context.close();
   }
@@ -874,7 +846,7 @@ test("the announcement marquee is decorative for screen readers", async () => {
     assert.equal(
       await page
         .getByText(
-          "Gratis verzending vanaf €100. Voor 23:00 besteld, volgende werkdag verzonden. Discreet verpakt.",
+          "Gratis verzending vanaf €100. Verzending na ontvangst van je overschrijving. Discreet verpakt.",
           { exact: true },
         )
         .count(),
@@ -1417,6 +1389,7 @@ test("order confirmation never exposes a temporary recovery code", async () => {
             phone: "0612345678",
             ...address,
             addressValidationToken: checked.validationToken,
+            termsAccepted: true,
             note: "Tijdelijke toegang mag niet naar de browser lekken.",
             lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
             idempotencyKey: crypto.randomUUID(),
@@ -3043,6 +3016,7 @@ test("checkout shows actionable idempotency conflict feedback without a guest ac
           city: checked.normalizedAddress.city,
           country: checked.normalizedAddress.country,
           addressValidationToken: checked.validationToken,
+          termsAccepted: true,
           note: "Bestaande bestelling voor de echte RPC-conflicttest.",
           lines: [{ slug: "semaglutide-2mg", optionId: "none", qty: 1 }],
           idempotencyKey: fixedKey,

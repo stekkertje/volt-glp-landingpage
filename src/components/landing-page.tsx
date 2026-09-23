@@ -21,6 +21,7 @@ import {
   RATING_BREAKDOWN,
   DEFAULT_PRODUCT_SLUG,
   productsBySubcat,
+  type FaqBlock,
   type Subcat,
 } from "@/lib/product";
 import { formatEuro, cn } from "@/lib/utils";
@@ -36,6 +37,53 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useCartStore } from "@/lib/cart-store";
+
+function faqText(body: FaqBlock[]) {
+  return body
+    .map((block) => (block.type === "p" ? block.text : block.items.join(" ")))
+    .join(" ");
+}
+
+function homepageJsonLd(origin: string) {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: SITE.brand,
+        url: `${origin}/`,
+        logo: `${origin}/images/brand/logo-dark.png`,
+      },
+      {
+        "@type": "WebSite",
+        name: SITE.brand,
+        url: `${origin}/`,
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${origin}/`,
+          },
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: FAQS.map((item) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: faqText(item.body),
+          },
+        })),
+      },
+    ],
+  };
+}
 
 const PRODUCT_HASHES = new Set([
   "semaglutide",
@@ -105,6 +153,9 @@ export function LandingPage() {
           <div className="grid items-center gap-10 md:grid-cols-2 md:gap-12">
           <div className="order-1 space-y-6 min-w-0">
             <div className="space-y-3">
+              <nav className="text-xs text-muted" aria-label="Broodkruimel">
+                <span className="text-fg">Home</span>
+              </nav>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 {SITE.brand}
               </p>
@@ -337,9 +388,9 @@ export function LandingPage() {
             Waarom deze lijn
           </p>
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Drie stoffen.
+            3 producten.
             <br />
-            Zes mogelijkheden.
+            6 varianten.
           </h2>
           <p className="mt-3 text-muted">
             Semaglutide, Tirzepatide en Retatrutide, elk verkrijgbaar als pen én
@@ -381,7 +432,7 @@ export function LandingPage() {
               Vial vs pen
             </p>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-bg">
-              Kies de vorm die bij je past
+              Kies de variant die bij je past
             </h2>
           </div>
           <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
@@ -596,6 +647,18 @@ export function LandingPage() {
           </div>
         </div>
       </section>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            homepageJsonLd(
+              import.meta.env.VITE_PUBLIC_HOSTNAME
+                ? `https://${import.meta.env.VITE_PUBLIC_HOSTNAME}`
+                : "https://afslank-injecties.nl",
+            ),
+          ),
+        }}
+      />
     </SiteShell>
   );
 }

@@ -23,6 +23,7 @@ function validOrder(overrides = {}) {
     discountCode: "",
     idempotencyKey: "0123456789abcdef",
     addressValidationToken: "address-validation-token-placeholder-long-enough",
+    termsAccepted: true,
     ...overrides,
   };
 }
@@ -102,6 +103,17 @@ test("order validation normalizes and validates Dutch postcodes", () => {
       invalid.error.issues.some((issue) => issue.path[0] === "postcode"),
     );
   }
+});
+
+test("final order validation requires accepted terms", () => {
+  const missing = createOrderSchema.safeParse(
+    validOrder({ termsAccepted: undefined }),
+  );
+  assert.equal(missing.success, false);
+  const declined = createOrderSchema.safeParse(
+    validOrder({ termsAccepted: false }),
+  );
+  assert.equal(declined.success, false);
 });
 
 test("final order validation requires a server-issued address proof", () => {

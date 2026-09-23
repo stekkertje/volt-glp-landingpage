@@ -51,6 +51,7 @@ function orderInput(overrides = {}) {
         },
         provider: input.country.toUpperCase() === "NL" ? "apicheck" : "google",
       }),
+    termsAccepted: overrides.termsAccepted ?? true,
   };
 }
 

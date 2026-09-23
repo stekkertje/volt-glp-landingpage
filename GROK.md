@@ -91,7 +91,7 @@ Hostinger shared hosting. Zie [`DEPLOY-HOSTINGER.md`](./DEPLOY-HOSTINGER.md).
 | `src/components/announce-bar.tsx`      | Altijd zichtbare marquee (niet sluitbaar)              |
 | `src/components/cart-drawer.tsx`       | Winkelwagen-drawer                                     |
 | `src/components/contact-dialog.tsx`    | Contactformulier dat berichten in de backend opslaat   |
-| `src/components/delivery-promise.tsx`  | Countdown tot 23:00                                    |
+| `src/components/delivery-promise.tsx`  | Verzending na ontvangst overschrijving                 |
 | `src/components/product-gallery.tsx`   | Productafbeeldingen en thumbnails                      |
 | `src/components/mobile-sticky-bar.tsx` | Mobiele sticky koopbalk                                |
 | `src/styles.css`                       | Design tokens, licht thema                             |

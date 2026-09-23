@@ -48,6 +48,7 @@ function orderInput() {
       address,
       provider: "apicheck",
     }),
+    termsAccepted: true,
   };
 }
 

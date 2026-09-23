@@ -21,10 +21,11 @@ export const Route = createFileRoute("/product/$slug")({
   head: ({ params }) => {
     const product = getProduct(params.slug);
     const title = product
-      ? `${product.name} kopen | ${SITE.brand}`
+      ? (product.seoTitle ?? `${product.name} kopen | ${SITE.brand}`)
       : `Product | ${SITE.brand}`;
     const description = product
-      ? `${metaDescription(product.shortPitch)} Labgetest. Discrete verzending NL en BE.`
+      ? (product.seoDescription ??
+        `${metaDescription(product.shortPitch)} Labgetest. Discrete verzending NL en BE.`)
       : SITE.shortPitch;
     const productUrl =
       product && host ? `https://${host}/product/${product.slug}` : undefined;

@@ -22,6 +22,7 @@ import { createOrder, getPricingPreview } from "@/lib/server/orders";
 import { isConflictServerError, rateLimitFeedback } from "@/lib/server-error";
 import { orderLineSummary } from "@/lib/product";
 import { formatEuro } from "@/lib/utils";
+import { BankTransferDetails } from "@/components/bank-transfer-details";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
@@ -310,6 +311,12 @@ function CheckoutPage() {
     setFormError("");
     setFieldErrors({});
     const form = event.currentTarget;
+    if (form.terms && !(form.terms as HTMLInputElement).checked) {
+      setFormError("Ga akkoord met de voorwaarden om je bestelling te plaatsen.");
+      requestAnimationFrame(() => errorRef.current?.focus());
+      setSubmitting(false);
+      return;
+    }
     const fields = new FormData(form);
     const validation = createOrderDraftSchema.safeParse({
       name: String(fields.get("name") ?? ""),
@@ -481,6 +488,7 @@ function CheckoutPage() {
           ...chosenAddress,
           addressValidationToken,
           idempotencyKey,
+          termsAccepted: true,
         },
       });
     } catch (error) {
@@ -612,11 +620,12 @@ function CheckoutPage() {
               <strong className="text-fg">{confirmedOrder.orderNumber}</strong>
             </p>
             <p className="mt-2 text-sm text-muted">
-              We sturen de orderbevestiging naar {confirmedOrder.email}. Je kunt
-              deze bestelling op dit apparaat tot 72 uur na plaatsing openen.{" "}
-              {authEnabled &&
-                "Maak een account met hetzelfde e-mailadres of log in om je bestelgeschiedenis veilig te bewaren. "}
+              We sturen de orderbevestiging naar {confirmedOrder.email}. Maak het
+              bedrag over met je bestelnummer als omschrijving.
             </p>
+            <div className="mt-5">
+              <BankTransferDetails orderNumber={confirmedOrder.orderNumber} />
+            </div>
             <Button asChild size="lg" className="mt-6">
               <Link to="/bestelling/$id" params={{ id: confirmedOrder.id }}>
                 Open de bevestiging
@@ -858,11 +867,26 @@ function CheckoutPage() {
                   )}
                 </label>
 
+                <label className="flex items-start gap-2 text-sm text-muted">
+                  <input type="checkbox" name="terms" className="mt-1" required />
+                  <span>
+                    Ik ga akkoord met de{" "}
+                    <a
+                      href="/voorwaarden"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-primary underline"
+                    >
+                      algemene voorwaarden
+                    </a>{" "}
+                    en betaal via bankoverschrijving.
+                  </span>
+                </label>
                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
                   <p className="flex items-start gap-2 text-sm font-semibold text-fg">
                     <LockKeyhole className="mt-0.5 size-4 shrink-0 text-primary" />
-                    We sturen na je bestelling handmatig een apart betaalverzoek
-                    naar je e-mailadres. Je betaalt hier nog niets.
+                    Je betaalt via overschrijving. Na het plaatsen zie je IBAN en
+                    je bestelnummer als omschrijving.
                   </p>
                 </div>
 

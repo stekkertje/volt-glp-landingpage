@@ -108,11 +108,7 @@ function LoginPage() {
         callbackURL: redirectTo,
       });
       if (result.error) {
-        setError(
-          result.error.code === "EMAIL_NOT_VERIFIED"
-            ? "Bevestig eerst je e-mailadres via de link in je inbox."
-            : "E-mailadres of wachtwoord is onjuist.",
-        );
+        setError("E-mailadres of wachtwoord is onjuist.");
         return;
       }
       // Better Auth verwerkt de veilige callbackURL en navigeert na succes.

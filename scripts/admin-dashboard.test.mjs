@@ -34,6 +34,7 @@ function orderInput() {
       address: input,
       provider: "apicheck",
     }),
+    termsAccepted: true,
   };
 }
 

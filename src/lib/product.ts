@@ -34,6 +34,10 @@ export type Product = {
   isNew?: boolean;
   images: { src: string; alt: string }[];
   shortPitch: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  whyHeading?: string;
+  simpleBreadcrumb?: boolean;
   highlights: string[];
   composition: { label: string; value: string }[];
   usageNote: string;
@@ -50,16 +54,15 @@ export const SITE = {
   brand: "Afslank-injecties.nl",
   category: "Afvallen met medicatie",
   tagline: "Semaglutide · Tirzepatide · Retatrutide",
-  headline: "Afslanken met injecties.",
+  headline: "Afvallen met injecties",
   shortPitch:
-    "Keuze uit de drie sterkste en meest populaire producten. Veilige en discrete verzending naar NL en BE.",
+    "Semaglutide, Tirzepatide en Retatrutide. Vial of kant-en-klare pen.",
   rating: 4.8,
   reviewCount: 1024,
   shippingCents: 495,
   freeShippingCents: 10000,
   maxLineQuantity: 10,
   maxOrderQuantity: 90,
-  cutoffHour: 23,
 } as const;
 
 export const SUBCATS: { id: Subcat | "all"; label: string; hash: string }[] = [
@@ -95,8 +98,13 @@ const PRODUCT_LIST: Product[] = [
       ["retatrutide-10mg__01__800.webp", "retatrutide-10mg__02__800.webp"],
       ["Retatrutide 10mg vial voorkant", "Retatrutide 10mg vial detail"],
     ),
+    seoTitle: "Retatrutide 10mg vial kopen | Afslanken met Retatrutide injecties",
+    seoDescription:
+      "Retatrutide 10mg vial bestellen | Één injectie per week | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Retatrutide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Nieuwste GLP-1 in vialvorm. Triple agonist voor wie een sterkere opvolger van Semaglutide of Tirzepatide zoekt.\n\nJe mengt zelf met het bijgeleverde bac water en zet één keer per week. Extra grip op eetlust, stofwisseling en vetverbranding, zonder kant-en-klare pen.",
+      "Retatrutide 10mg in vial vorm. 3-dubbele werking: GLP-1, GIP en glucagon. Eén wekelijkse injectie, minder honger, rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Sneller metabolisme en minder eetlust",
       "Voor gebruikers die sterk willen afvallen",
@@ -160,8 +168,13 @@ const PRODUCT_LIST: Product[] = [
         "Retatrutide 20mg pen gebruiksklaar",
       ],
     ),
+    seoTitle: "Retatrutide 20mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Retatrutide 20mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Retatrutide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Kant-en-klare pen. Triple agonist (GLP-1, GIP en glucagon) zonder vials mengen.\n\nDe pen is vooraf gevuld: geen afmeten, geen mengfout. Eén wekelijkse injectie, met naalden en handleiding in de doos.",
+      "Retatrutide kant-en-klare pen. 3-dubbele werking: GLP-1, GIP en glucagon. Vooraf gevuld, één wekelijkse klik.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Doorbreekt plateaus als andere middelen minder doen",
       "Drie hormoonpaden: GLP-1, GIP en glucagon",
@@ -210,8 +223,13 @@ const PRODUCT_LIST: Product[] = [
         "Semaglutide 2mg inhoud",
       ],
     ),
+    seoTitle: "Semaglutide 2mg vial kopen | Afslanken met Semaglutide injecties",
+    seoDescription:
+      "Semaglutide 2mg vial bestellen | Één injectie per week | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Semaglutide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Instap-vial voor langdurig vetverlies, minder honger en een rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
+      "Semaglutide 2mg in vial vorm. Eén wekelijkse injectie, minder honger, rustiger eetpatroon.\n\nJe start laag en bouwt op in een wekelijks ritme. Bac water zit bij de vial; extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Ondersteunt gewichtsverlies",
       "Minder hongergevoel",
@@ -261,8 +279,13 @@ const PRODUCT_LIST: Product[] = [
         "Semaglutide 4mg pen naalden",
       ],
     ),
+    seoTitle: "Semaglutide 4mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Semaglutide 4mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Semaglutide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Meest gekozen pen. Vooraf gevuld, geen vials, één wekelijkse klik.\n\nHandig als je net begint: vaste dosering, 4 pennaalden en een handleiding in de doos. Geen mengen of zelf afmeten.",
+      "Kant-en-klare Semaglutide-pen. Vooraf gevuld, één wekelijkse klik.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Gewicht en eetlust in één ritme",
       "Geen mengen of afmeten uit een vial",
@@ -300,8 +323,13 @@ const PRODUCT_LIST: Product[] = [
       ["tirzepatide-10mg__01__800.webp", "tirzepatide-10mg__02__800.webp"],
       ["Tirzepatide 10mg vial voorkant", "Tirzepatide 10mg vial detail"],
     ),
+    seoTitle: "Tirzepatide 10mg vial kopen | Afslanken met Tirzepatide injecties",
+    seoDescription:
+      "Tirzepatide 10mg vial bestellen | Sterker dan Semaglutide vanwege de dubbele GLP-1 en GIP werking | Één injectie per week | Verzending naar NL en BE.",
+    whyHeading: "Waarom Tirzepatide",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Dubbele werking (GLP-1 en GIP). Minder cravings, meer controle, vial van 10 mg.\n\nJe doseert zelf uit de vial. Extra grip op eetlust en bloedsuiker, met bac water in de verpakking.",
+      "Tirzepatide 10mg in vial vorm. Sterker dan Semaglutide vanwege de dubbele GLP-1 en GIP werking. Met slechts één wekelijkse injectie minder honger en een rustiger eetpatroon.\n\nBac water zit standaard bij de vial - Extra insulinespuiten kies je erbij als je die nodig hebt.",
     highlights: [
       "Effectief en duurzaam gewichtsverlies",
       "Minder eetlust en cravings",
@@ -352,8 +380,13 @@ const PRODUCT_LIST: Product[] = [
       ],
       ["Tirzepatide 20mg pen voorkant", "Tirzepatide 20mg pen inhoud"],
     ),
+    seoTitle: "Tirzepatide 20mg pen kopen | Kant-en-klare pen | Afslank injecties",
+    seoDescription:
+      "Tirzepatide 20mg pen bestellen | Één wekelijkse injectie | Discrete en veilige verzending naar Nederland en België.",
+    whyHeading: "Waarom Tirzepatide pen",
+    simpleBreadcrumb: true,
     shortPitch:
-      "Hoogste dosering in penvorm. Dubbele agonist, vooraf gevuld, klaar voor gebruik.\n\nVoor wie verder wil dan Semaglutide: één wekelijkse injectie, 4 naalden en handleiding bij de pen. Geen vials of mengwerk.",
+      "Tirzepatide kant-en-klare pen. Vooraf gevuld en slechts één injectie per week. Dit product is voor gebruikers die een stapje verder willen dan Semaglutide. Vanwege de dubbele GLP-1 en GIP werking is deze extra sterk.\n\nOnze pen-variant is geschikt voor beginners en ervaren gebruikers: vaste dosering, 4 pennaalden en een handleiding in de doos.",
     highlights: [
       "Hoogste dosering in deze lijn",
       "Krachtig gewichtsverlies in een vast ritme",
@@ -655,7 +688,7 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
       {
         type: "ul",
         items: [
-          "Bestellingen vóór 23:00: volgende werkdag verzonden",
+          "Verzending nadat je overschrijving binnen is (meestal 24–48 uur), daarna 1–2 werkdagen",
           "Levering: 1 – 2 werkdagen in NL en BE",
           "Discreet verpakt, volgnummer standaard",
           "Gratis verzending vanaf €100",
@@ -668,7 +701,7 @@ export const FAQS: { q: string; body: FaqBlock[] }[] = [
     body: [
       {
         type: "p",
-        text: "Niet tevreden? Binnen 30 dagen na ontvangst kun je ongeopende verpakkingen kosteloos retourneren.",
+        text: "Vanwege de aard van de producten is retourneren in de regel niet mogelijk.",
       },
       {
         type: "p",

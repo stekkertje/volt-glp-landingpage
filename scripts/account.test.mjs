@@ -40,6 +40,7 @@ function checkoutInput(email, overrides = {}) {
         address: input,
         provider: input.country === "NL" ? "apicheck" : "google",
       }),
+    termsAccepted: overrides.termsAccepted ?? true,
   };
 }
 
