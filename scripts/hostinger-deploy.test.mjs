@@ -84,6 +84,16 @@ test("the Hostinger environment contract keeps noindex and required integrations
   assert.match(addressConfig, /REQUIRE_ADDRESS_VALIDATION/);
 });
 
+test("the contact route redirects to a literal contact=1 query", async () => {
+  const [route, shell] = await Promise.all([
+    read("src/routes/contact.tsx"),
+    read("src/components/site-shell.tsx"),
+  ]);
+  assert.match(route, /href:\s*["']\/\?contact=1["']/);
+  assert.doesNotMatch(route, /search:\s*\{[^}]*contact:\s*["']1["']/);
+  assert.match(shell, /params\.get\("contact"\)\s*!==\s*"1"/);
+});
+
 test("the Hostinger build requires its database on both build stages", async () => {
   const packageJson = JSON.parse(await read("package.json"));
   assert.equal(
