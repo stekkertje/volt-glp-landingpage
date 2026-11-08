@@ -118,7 +118,13 @@ heeft gedraaid.
    databaseverbinding en slaan de sessie-insert over zodra dat localhost
    is, terwijl het HTTPS-verzoek het publieke IP houdt. Een tunnel breekt
    daarmee juist de Paid- en Shipped-notificaties, tenzij dat mechanisme
-   eerst apart wordt aangepast en getest.
+   eerst apart wordt aangepast en getest. Hetzelfde geldt voor een
+   overlaynetwerk zoals Tailscale (staat al op de Mac): prima voor SSH-
+   en paneeltoegang in plaats van een thuis-IP in de firewall, maar voor
+   het scriptpad verandert het database-bron-IP naar het overlay-adres
+   terwijl de API-call het publieke IP houdt. Tailscale voor de scripts
+   kan dus pas na een aparte, geslaagde test met een testorder, en hoort
+   niet als vanzelfsprekende oplossing in de switch.
 7. Backups: dagelijks bestanden plus database naar externe opslag, buiten
    Hostinger en buiten de VPS zelf, met een geteste terugzetting.
 
@@ -145,7 +151,19 @@ Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
 
 1. In de OpenCart-admin: exacte versie, PHP-info (versie, extensies,
    memory_limit, max_execution_time, uploadlimieten, tijdzone) en de
-   mailinstellingen per store exporteren of fotograferen.
+   mailinstellingen per store exporteren of fotograferen. Een eerdere
+   serveraudit van 2 oktober 2026 noemt versie 3.0.5.1; dat is een
+   aanwijzing, geen bewijs, en de admin blijft de bron.
+1b. Bestanden buiten `public_html` inventariseren: één map boven de
+   webroot en in de storage-map zelf. Er kunnen daar losse eindpunten
+   en geheime bestanden staan (een lokale review van 28 september
+   2026 beschrijft een chat-eindpunt met een sleutel in platte tekst).
+   Alles wat daar staat gaat op de overzetlijst of expliciet niet,
+   en de sleutels erin worden bij de rotatiestap meegenomen. Ook
+   vaststellen welke andere websites op hetzelfde Hostinger-account
+   draaien (er zijn lokaal in elk geval mappen voor janoshik.co en
+   purity-pharmaceuticals.nl): Hostinger opzeggen kan pas als voor
+   elk van die sites een onderkomen is besloten.
 2. `config.php` en `admin/config.php` uitlezen: alle `DIR_`-paden
    (vooral `DIR_STORAGE`, cache, download, sessie), databasehost en
    poort, en of de database lokaal op de Hostinger-account draait.
@@ -275,7 +293,10 @@ Per domein/zone, shop blijft volledig op Hostinger:
    scriptverkeer naar `index.php?route=api/` vanaf het eigen thuis-IP,
    en het n8n-dripverkeer naar
    `index.php?route=extension/total/spcoupon/drip` op store 3 vanuit
-   n8n Cloud. Bot Fight Mode op die paden uitzonderen of uit.
+   n8n Cloud. Bot Fight Mode gaat op het gratis Cloudflare-plan
+   volledig UIT: die stand kan met skip-regels niet per pad worden
+   uitgezonderd, dus "uitzonderen of uit" is geen keuze, alleen uit
+   werkt.
 4. Cache-uitsluitingen: URL's met checkout, cart, account, admin en api
    in pad of querystring altijd bypass.
 5. Nameservers omzetten naar Cloudflare en wachten tot de zone actief
@@ -366,15 +387,33 @@ real_ip_recursive on;
    OCMods actief zijn en het maatwerk (shopmail, trackingbadge,
    non-www redirect) werkt.
 6. Scripttests tegen de testomgeving: het bestaande testscript van de
-   MyParcel-afronding draaien en één handmatige test van de
-   API-notificatie (order op Paid zetten voor de testorder) om te
-   bewijzen dat databasepad, APIpad en bron-IP-controle werken.
-   Hosts-verwijzing daarna direct weer verwijderen.
+   MyParcel-afronding draaien (`myparcel_afronding.py --dry-run` en
+   `opencart_client.test_connection()` bestaan daarvoor), plus één
+   handmatige test van de API-notificatie (order op Paid zetten voor
+   de testorder) om te bewijzen dat databasepad, APIpad en
+   bron-IP-controle werken. Hosts-verwijzing daarna direct weer
+   verwijderen.
+7. OCMod-waarschuwing: klik tijdens en na de overzet niet op Refresh
+   bij Modifications voordat is vastgesteld hoe de inhoud van
+   `storage/modification/` tot stand kwam. Die map kan met de hand
+   aangepaste bestanden bevatten die in geen enkele geregistreerde
+   modificatie terug te vinden zijn; een refresh bouwt de map opnieuw
+   op uit de geregistreerde modificaties en kan zulke patches
+   ongedaan maken. De inhoud gaat dus één op één mee en wordt vooraf
+   en achteraf vergeleken (verschilrapport bewaren).
 
 ## 9. Fase 4: Afschermen (volgorde is onderdeel van de beveiliging)
 
-1. Origin CA-certificaat aanmaken voor apex en wildcard en installeren
-   in CloudPanel.
+1. Certificaatstrategie eerst uitwerken, want er zit een constructie
+   in die niet kan: één Cloudflare Origin CA-certificaat voor namen
+   uit meerdere zones bestaat niet, een Origin CA-certificaat hoort
+   bij één zone. Tegelijk kan één CloudPanel-site maar één
+   certificaat laden terwijl de multistore-domeinen in meerdere
+   zones staan. Keuze vóór Fase 4, met test: of per zone een eigen
+   site in CloudPanel op dezelfde document root en database, of één
+   openbaar vertrouwd certificaat met alle namen erop via een
+   DNS-challenge. Origin CA-certificaat daarna per zone aanmaken
+   voor apex en wildcard en installeren in CloudPanel.
 2. Zone-level Authenticated Origin Pulls per Cloudflare-zone: eigen
    clientcertificaat uploaden, CA-bestand op de VPS plaatsen en in de
    Vhost eerst instellen op `ssl_verify_client optional;`. Via het
@@ -460,6 +499,11 @@ real_ip_recursive on;
 3. Dag 2 tot en met 7: Nginx- en PHP-foutlogs, OpenCart-foutlog,
    mailaflevering (steekproef per store), responstijden tegen de
    baseline, en een externe scantest op het kale IP herhalen.
+   Bij de mailsteekproef hoort ook de headercontrole: in de ontvangen
+   testmail (origineel weergeven) mag het fysieke VPS-IP niet in de
+   `Received:`-regels staan. SMTP-inlog vanaf de VPS kan dat IP
+   namelijk alsnog in de header zetten, ook als de verzendende
+   mailserver een andere is; dit is dus een meting, geen aanname.
 4. Pas daarna, en pas als de mailboxbeslissing is uitgevoerd en DNS
    stabiel is: Hostinger-webhosting opzeggen. Het mailproduct alleen
    opzeggen als de mailboxen aantoonbaar elders draaien.
