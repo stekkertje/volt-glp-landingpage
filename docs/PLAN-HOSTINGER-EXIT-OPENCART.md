@@ -74,11 +74,26 @@ heeft gedraaid.
    naar https, `/sitemap.xml` is dynamisch met image-sitemap,
    `/system/storage/` geeft 404, nameservers en MX staan bij Hostinger,
    SPF verwijst naar Hostinger, DMARC staat op `p=none`.
-10. Wat nog niet is vastgesteld omdat het alleen op de server zichtbaar is
+10. Read-only databasecontrole op 8 november 2026 (alleen gelezen,
+    transactie teruggedraaid, geen klantgegevens): MariaDB 11.8.9,
+    146 tabellen, circa 31 MB, 100% InnoDB. `oc_api_ip` voor de
+    API-gebruiker bevat 100 regels, passend bij de automatische
+    IP-registratie uit punt 6 van paragraaf 3. Betaalinstellingen in
+    de database: alleen `payment_bank_transfer` staat aan (1);
+    rembours, crypto en gratis checkout staan uit (0), precies zoals
+    de eigenaar aangaf. Verzendinstelling `shipping_spship` staat
+    aan. De versieconstante in de lokaal bewaarde shopbestanden is
+    OpenCart 3.0.5.1. Het echte web-origin-IP van het account is
+    193.160.67.43 (het A-record van anabolenkopen.nl wijst er direct
+    heen, de `ftp.`-records ook, en een directe HTTPS-test met de
+    shopnaam geeft daar 200); de databasehost van de scripts is een
+    andere machine. Die twee niet verwarren.
+11. Wat nog niet is vastgesteld omdat het alleen op de server zichtbaar is
     (Fase 0 maakt dit compleet): de echte paden uit `config.php` en
-    `admin/config.php` (waaronder `DIR_STORAGE`), de exacte OpenCart
-    puntversie in de admin, hPanel-cronjobs, PHP-extensies en instellingen
-    in detail, databasegrootte, en de DKIM-selector per domein.
+    `admin/config.php` (waaronder `DIR_STORAGE`), of het live
+    session.php nog identiek is aan de bewaarde kopie, hPanel-cronjobs,
+    PHP-extensies en instellingen in detail, de mailinstellingen per
+    store in het serverbestand, en de DKIM-selector per domein.
 
 ## 3. Doelarchitectuur
 
@@ -111,20 +126,20 @@ heeft gedraaid.
       het VPS-IP staat in mailheaders en de verzendreputatie begint op nul.
    Voorkeur: optie A, vanwege herkenbaarheid voor klanten en omdat het
    VPS-IP dan niet via mail lekt.
-6. Mac-keten blijft op de Mac draaien. Databasebereikbaarheid vanaf het
-   thuis-IP wordt beperkt ingericht (alleen dat IP, eigen
-   databasegebruiker). Poort 3306 gaat nooit publiek open. Een SSH-tunnel
-   als eindvorm is afgevallen: de scripts bepalen het API-bron-IP uit de
-   databaseverbinding en slaan de sessie-insert over zodra dat localhost
-   is, terwijl het HTTPS-verzoek het publieke IP houdt. Een tunnel breekt
-   daarmee juist de Paid- en Shipped-notificaties, tenzij dat mechanisme
-   eerst apart wordt aangepast en getest. Hetzelfde geldt voor een
-   overlaynetwerk zoals Tailscale (staat al op de Mac): prima voor SSH-
-   en paneeltoegang in plaats van een thuis-IP in de firewall, maar voor
-   het scriptpad verandert het database-bron-IP naar het overlay-adres
-   terwijl de API-call het publieke IP houdt. Tailscale voor de scripts
-   kan dus pas na een aparte, geslaagde test met een testorder, en hoort
-   niet als vanzelfsprekende oplossing in de switch.
+6. Mac-keten blijft op de Mac draaien. De API-sessiecontrole in deze
+   shop is maatwerk: het lokaal bewaarde shopbestand
+   `catalog/controller/startup/session.php` (back-up van 14 oktober
+   2026, zelf gelezen) valideert alleen of de API-sessie bestaat en
+   voegt het aankomende IP automatisch toe aan `oc_api_ip`. Er is dus
+   geen IP-vergelijking die stukgaat als de databaseverbinding via een
+   ander pad loopt dan de HTTPS-call. Daarmee is een overlaynetwerk
+   zoals Tailscale (staat al op de Mac) wél bruikbaar voor zowel
+   beheer (SSH, paneel) als de script-databaseverbinding, mits het
+   Tailscale-adres in de databasegebruiker en firewall is toegestaan.
+   Twee voorwaarden blijven staan: dit gepatchte session.php gaat
+   één op één mee en mag nooit door een standaard OpenCart-bestand
+   worden overschreven, en de combinatie wordt vóór de switch met een
+   testorder bewezen. Poort 3306 gaat nooit publiek open.
 7. Backups: dagelijks bestanden plus database naar externe opslag, buiten
    Hostinger en buiten de VPS zelf, met een geteste terugzetting.
 
@@ -147,7 +162,7 @@ heeft gedraaid.
 
 ## 5. Fase 0: Serverinventaris compleet maken (alleen kijken)
 
-Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
+Doel: de open punten uit paragraaf 2 punt 11 sluiten. Geen wijzigingen.
 
 1. In de OpenCart-admin: exacte versie, PHP-info (versie, extensies,
    memory_limit, max_execution_time, uploadlimieten, tijdzone) en de
@@ -412,16 +427,17 @@ real_ip_recursive on;
 
 ## 9. Fase 4: Afschermen (volgorde is onderdeel van de beveiliging)
 
-1. Certificaatstrategie eerst uitwerken, want er zit een constructie
-   in die niet kan: één Cloudflare Origin CA-certificaat voor namen
-   uit meerdere zones bestaat niet, een Origin CA-certificaat hoort
-   bij één zone. Tegelijk kan één CloudPanel-site maar één
-   certificaat laden terwijl de multistore-domeinen in meerdere
-   zones staan. Keuze vóór Fase 4, met test: of per zone een eigen
-   site in CloudPanel op dezelfde document root en database, of één
-   openbaar vertrouwd certificaat met alle namen erop via een
-   DNS-challenge. Origin CA-certificaat daarna per zone aanmaken
-   voor apex en wildcard en installeren in CloudPanel.
+1. Certificaatstrategie: de domeinen staan in meerdere Cloudflare-
+   zones en één CloudPanel-site kan maar één certificaat laden. De
+   gedocumenteerde oplossing is één gecombineerd Origin CA-
+   certificaat via de Cloudflare API met een eigen CSR: de API staat
+   hostnames uit meerdere zones van hetzelfde account op één
+   certificaat toe (dashboard doet dit per zone, de API niet). Dat
+   certificaat wordt via de gewone importfunctie van CloudPanel
+   ingeladen, zodat paneelacties het niet overschrijven. Alternatief
+   als dit in de test faalt: per zone een eigen site op dezelfde
+   document root en database. Het gecombineerde certificaat dekt
+   apex plus wildcard per domein.
 2. Zone-level Authenticated Origin Pulls per Cloudflare-zone: eigen
    clientcertificaat uploaden, CA-bestand op de VPS plaatsen en in de
    Vhost eerst instellen op `ssl_verify_client optional;`. Via het
