@@ -33,17 +33,28 @@ heeft gedraaid.
    contact) verstuurt OpenCart zelf. Instelling: `config_mail_engine = mail`,
    via Hostinger-sendmail (`/usr/sbin/hsendmail`). Er is geen n8n of Gmail
    in deze keten.
-5. n8n draait op n8n Cloud. De actieve workflows bedienen de Wix-kant van
-   Stacker Pro (dripcampagne en directe mail na betaling, contactformulier).
-   Alle OpenCart-varianten van die workflows staan uit. De lokale n8n op de
-   Mac is alleen een testinstantie.
+5. n8n draait op n8n Cloud. Drie workflows zijn actief: contactformulier,
+   directe mail na betaling en de dripcampagne. De eerste twee werken op de
+   Wix-gegevens van Stacker Pro. De actieve dripcampagne leest daarnaast
+   wél OpenCart store 3: hij POST naar
+   `https://www.stacker-pro.com/index.php?route=extension/total/spcoupon/drip`
+   met de acties `orders` en `coupons` en een eigen tokenheader. De extensie
+   `spcoupon` is daarmee een productiekoppeling. De workflows met OpenCart
+   in de naam staan uit. De lokale n8n op de Mac is alleen een
+   testinstantie. Stand van deze exports: oktober 2026; de actuele stand
+   in n8n Cloud moet voor uitvoering opnieuw read-only worden opgehaald.
 6. De ochtendketen draait op de Mac van de eigenaar: launchd-agent
    `com.stackerpro.ochtendketen`, doordeweeks vanaf 10:15 uur met
    herhaalpogingen. Keten: `ochtendketen.py` stuurt `daily_pro.py` aan;
    die matcht bankbetalingen over de OpenCart-stores en Wix, maakt exports
-   en zet orders op Paid. `myparcel_afronding.py` draait daarbinnen mee:
-   haalt MyParcel-zendingen op, zet betaalde orders op Shipped en triggert
-   de verzendmail.
+   en zet orders op Paid. Daarnaast draait dagelijks om 11:00 uur de
+   launchd-job `com.mpp.weekly-funnel` met directe databasequeries.
+   `myparcel_afronding.py` draait NIET automatisch mee: de keten gebruikt
+   alleen de MyParcel-ophaal functie als duplicaatfilter in de export.
+   De stap Paid naar Shipped plus verzendmail gebeurt door
+   `run_shipping_sync` handmatig te starten (eigen `main`, verder alleen
+   tests). Labels ontstaan via een werkblad en het MyParcel-portaal;
+   die menselijke stap hoort expliciet in de dagprocedure na de switch.
 7. De scripts werken op twee manieren tegen de shops:
    a. Rechtstreeks op de database, vanaf de Mac, via PyMySQL met de
       `OPENCART_DB_HOST/PORT/NAME/USER`-instellingen uit een `.env`
@@ -72,8 +83,11 @@ heeft gedraaid.
    deze verhuizing.
 2. Cloudflare (proxied) per zone: SSL uiteindelijk op Full (Strict),
    zone-level Authenticated Origin Pulls met eigen clientcertificaat,
-   www-naar-apex redirect behouden zoals live gemeten, geen caching op
-   checkout, winkelwagen, account, admin en API-paden.
+   canonical-redirect per store exact zoals live gemeten (die is niet
+   overal gelijk: afslank-injecties.nl stuurt www naar apex, maar
+   stacker-pro.com stuurt apex naar www en heeft ook www in de
+   store-instellingen), geen caching op checkout, winkelwagen, account,
+   admin en API-paden.
 3. VPS buiten de EU (keuze in Fase 1) met Ubuntu 24.04 LTS en CloudPanel
    (Nginx, PHP-FPM 8.3, MariaDB). Eén site voor de multistore-installatie
    met alle storedomeinen erop, één database, één site user.
@@ -95,8 +109,12 @@ heeft gedraaid.
    VPS-IP dan niet via mail lekt.
 6. Mac-keten blijft op de Mac draaien. Databasebereikbaarheid vanaf het
    thuis-IP wordt beperkt ingericht (alleen dat IP, eigen
-   databasegebruiker; een SSH-tunnel is de nette eindvorm). Poort 3306
-   gaat nooit publiek open.
+   databasegebruiker). Poort 3306 gaat nooit publiek open. Een SSH-tunnel
+   als eindvorm is afgevallen: de scripts bepalen het API-bron-IP uit de
+   databaseverbinding en slaan de sessie-insert over zodra dat localhost
+   is, terwijl het HTTPS-verzoek het publieke IP houdt. Een tunnel breekt
+   daarmee juist de Paid- en Shipped-notificaties, tenzij dat mechanisme
+   eerst apart wordt aangepast en getest.
 7. Backups: dagelijks bestanden plus database naar externe opslag, buiten
    Hostinger en buiten de VPS zelf, met een geteste terugzetting.
 
@@ -141,12 +159,31 @@ Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
    homepage per store.
 6. Databasefeiten: grootte, aantal orders/klanten/producten, hoogste
    `order_id`, en de tabellen die rond orders muteren (`oc_order`,
-   `oc_order_product`, `oc_order_total`, `oc_order_history`,
-   `oc_customer`, `oc_address`, `oc_return`, voorraad).
+   `oc_order_product`, `oc_order_option`, `oc_order_total`,
+   `oc_order_history`, `oc_customer`, `oc_address`, `oc_return`,
+   `oc_cart`, de sessietabel, `oc_api_ip`, `oc_api_session`,
+   coupon- en voucherhistorie en de voorraadkolom op `oc_product`).
+   Neem ook de deelbetalingstatus Partial Paid (17) mee: die zit in de
+   verwerkingsstatussen en kent in de keten een eigen marge en
+   markering, en moet na de switch aantoonbaar blijven werken.
 7. Mailbesluit nemen (optie A of B uit paragraaf 3.5) en, bij optie A,
    per store de SMTP-gegevens van de mailbox klaarleggen in de
-   wachtwoordmanager.
-8. Vastleggen wie de rollbackbeslissing mag nemen en bij welke fouten
+   wachtwoordmanager. Bij optie B horen als expliciete stappen in
+   Fase 2 en 3, dus vóór de eerste testmail: het VPS-adres aan de SPF
+   van ieder shopdomein toevoegen en DKIM publiceren, en daarna de
+   aflevering per store testen.
+8. Extensie-inventaris per store afmaken in de admin zelf, omdat de
+   export van oktober 2026 geen feed-extensies en alleen de settings
+   van store 0 en 3 bevatte: welke betaalmethoden echt aanstaan
+   (bankoverschrijving, rembours, crypto, gratis checkout), welke
+   verzendextensies, en de maatwerkextensies waaronder `spcoupon`.
+   Alleen wat aanstaat hoeft getest, maar dat moet wel bekend zijn.
+9. Credentialrotatie als eigen stap opnemen: in bestaande lokale
+   bestanden staan inloggegevens en sleutels in platte tekst (waarden
+   hier bewust niet herhaald). Admin-, API- en tokengeheimen worden
+   rond de verhuizing geroteerd en alleen nog in de wachtwoordmanager
+   bewaard.
+10. Vastleggen wie de rollbackbeslissing mag nemen en bij welke fouten
    (paragraaf 9).
 
 Uitkomst van Fase 0: een ingevulde inventarislijst. Pas dan is dit plan
@@ -187,14 +224,26 @@ Per domein/zone, shop blijft volledig op Hostinger:
    record-voor-record vergelijken met de export uit Fase 0. Mailrecords
    blijven DNS-only; er mag geen enkel TXT-, MX- of subdomeinrecord
    ontbreken.
-2. A-records voor apex en www proxied naar het huidige Hostinger-IP.
-   SSL-modus op Full. Nog niet op Full (Strict) en nog geen HSTS;
+2. A-records voor apex en www proxied naar de echte origin van de
+   Hostinger-account. Let op: de huidige DNS-antwoorden zijn
+   CDN-edgeadressen van Hostinger zelf (per domein wisselend hCDN of
+   LiteSpeed, meerdere A- en AAAA-antwoorden). Cloudflare naar een
+   andere CDN-edge laten wijzen geeft lus- en cacherisico; het echte
+   server-IP wordt uit hPanel gehaald en per domein bevestigd voordat
+   er iets proxied wordt gezet. De stacker-pro.com-zone wijkt extra af
+   (apex verwijst voor mail naar Google), dus die zone gaat record voor
+   record handmatig over. SSL-modus op Full. Nog niet op Full (Strict)
+   en nog geen HSTS;
    HSTS komt pas na bewezen stabiliteit omdat het niet terug te draaien
    is voor bezoekers die het hebben ontvangen.
-3. Redirects exact zoals live gemeten: www naar apex (301) en http naar
-   https. Bot- en beveiligingsregels zo instellen dat scriptverkeer
-   naar `index.php?route=api/` vanaf het eigen thuis-IP nooit een
-   challenge krijgt; Bot Fight Mode op die paden uitzonderen of uit.
+3. Redirects per store exact zoals live gemeten (Fase 0-baseline),
+   dus niet generiek www naar apex: voor stacker-pro.com is de
+   canonical juist www. Bot- en beveiligingsregels zo instellen dat
+   twee soorten productieverkeer nooit een challenge krijgen:
+   scriptverkeer naar `index.php?route=api/` vanaf het eigen thuis-IP,
+   en het n8n-dripverkeer naar
+   `index.php?route=extension/total/spcoupon/drip` op store 3 vanuit
+   n8n Cloud. Bot Fight Mode op die paden uitzonderen of uit.
 4. Cache-uitsluitingen: URL's met checkout, cart, account, admin en api
    in pad of querystring altijd bypass.
 5. Nameservers omzetten naar Cloudflare en wachten tot de zone actief
@@ -312,10 +361,17 @@ real_ip_recursive on;
    store: homepage, product, testbestelling, order zichtbaar in de
    nieuwe admin met echt klant-IP, klantmail ontvangen, sitemap laadt,
    www-redirect klopt, geen 5xx in de Nginx- en PHP-logs.
-5. Ketenacceptatie nog dezelfde nacht, handmatig gestart: één
-   ochtendketen-testcyclus met de testorders, inclusief Paid-zetten
-   via de API en een MyParcel-controle zonder echte labelaanmaak.
-   Pas daarna geldt de switch als technisch geslaagd.
+5. Ketenacceptatie nog dezelfde nacht, maar NOOIT door de echte
+   ochtendketen of `daily_pro.py` te draaien: een handmatige run zet
+   dagstempels en afsluitvlaggen en blokkeert daarmee de echte run van
+   die dag, en verwerkt bovendien een halve nachtbatch definitief.
+   In plaats daarvan: de bestaande testscripts draaien, plus per store
+   de Paid-notificatie uitsluitend op de eigen testorder aanroepen via
+   de losse scriptfunctie, inclusief een handmatige
+   `myparcel_afronding.py`-run zonder echte labelaanmaak. De eerste
+   echte ketenbewijsrun is de normale 10:15-run op de eerstvolgende
+   werkdag; bij een switch in het weekend schuift dat bewijs dus naar
+   maandag en blijft Hostinger tot dan onaangeroerd als terugval.
 6. Nacontrole na 10 minuten en de volgende ochtend vóór 10:15 uur:
    op de oude database vergelijken wat er vanaf de genoteerde
    starttijd is veranderd in de tabellen uit Fase 0.6. Ontbrekende
@@ -326,11 +382,15 @@ real_ip_recursive on;
    nieuw nummer en breekt de bankreferentie). Per overgezette order
    vastleggen of de klantmail al door de oude shop was verstuurd.
 7. Rollback: zolang er op de nieuwe database geen echte orders staan,
-   is terugzetten alleen de A-records terugwijzigen. Zodra er echte
-   nieuwe orders zijn, is rollback een databasesamenvoeging en beslist
-   uitsluitend de in Fase 0 benoemde persoon, op basis van vooraf
-   benoemde fouten (shop onbereikbaar, checkout stuk, mail stuk,
-   keten stuk).
+   is terugzetten de A-records terugwijzigen én de scriptkant
+   terugzetten. De gedeelde `.env` (telegram-bot, weekly funnel en de
+   scripts lezen hetzelfde bestand en procesvariabelen gaan vóór op
+   het bestand) wordt tijdens de switch pas op het allerlaatste
+   moment omgezet, met de oude waarden bewaard, zodat terugdraaien
+   één handeling is. Zodra er echte nieuwe orders zijn, is rollback
+   een databasesamenvoeging en beslist uitsluitend de in Fase 0
+   benoemde persoon, op basis van vooraf benoemde fouten (shop
+   onbereikbaar, checkout stuk, mail stuk, keten stuk).
 
 ## 11. Fase 6: Eerste week en definitieve afronding
 
@@ -351,8 +411,9 @@ real_ip_recursive on;
 
 ## 12. Testmatrix per store (elke rij groen, anders geen livegang)
 
-Voor steroiden.com, anabolenkopen.nl, afslank-injecties.nl en, als
-store 3 actief meedraait, www.stacker-pro.com:
+Voor steroiden.com, anabolenkopen.nl, afslank-injecties.nl en
+www.stacker-pro.com (store 3 is verplicht in scope, want de actieve
+dripcampagne leest daar orders en coupons via de `spcoupon`-extensie):
 
 1. Homepage, categorie en product via SEO-URL geven 200; onbekende URL
    geeft 404; www en http redirecten exact zoals in de baseline.
@@ -364,12 +425,15 @@ store 3 actief meedraait, www.stacker-pro.com:
    juiste store en het juiste ordernummer.
 5. Klant ontvangt de bestelbevestiging van de nieuwe server, met de
    juiste huisstijl van die store.
-6. Testorder via de keten op Paid zetten geeft de betaald-mail; via de
-   MyParcel-afronding op Shipped zetten geeft de verzendmail met
-   Track & Trace-opmaak.
-7. Admin: inloggen, orderhistorie met trackingbadge, afbeelding
+6. Testorder via de losse scriptfunctie op Paid zetten geeft de
+   betaald-mail; daarna handmatig `myparcel_afronding.py` draaien zet
+   hem op Shipped en geeft de verzendmail met Track & Trace-opmaak.
+   Een deelbetaalde testorder (status 17) doorloopt dezelfde controle.
+7. Dripcampagne op store 3: het `spcoupon/drip`-endpoint antwoordt de
+   n8n-aanroep correct (orders en coupons), zonder Cloudflare-challenge.
+8. Admin: inloggen, orderhistorie met trackingbadge, afbeelding
    uploaden, OCMods actief.
-8. `/system/storage/` geeft 404 en templatebestanden zijn niet te
+9. `/system/storage/` geeft 404 en templatebestanden zijn niet te
    downloaden.
 
 ## 13. Bewust niet doen
