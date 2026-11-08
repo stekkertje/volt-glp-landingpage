@@ -167,6 +167,14 @@ Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
 2. `config.php` en `admin/config.php` uitlezen: alle `DIR_`-paden
    (vooral `DIR_STORAGE`, cache, download, sessie), databasehost en
    poort, en of de database lokaal op de Hostinger-account draait.
+   In dezelfde leesronde ook `catalog/controller/startup/session.php`
+   openen en vastleggen hoe de API-sessie daar wordt gevalideerd:
+   oudere OpenCart 3-code vergelijkt het verzoek-IP met `oc_api_ip`,
+   nieuwere code controleert alleen of de sessie bestaat. Twee
+   bronnen spreken elkaar hierover tegen, dus dit bestand beslist of
+   het scriptpad (paragraaf 3 punt 6) na de verhuizing zonder meer
+   werkt of eerst moet worden aangepast. Zonder die lezing blijft dit
+   een open risico en geen van beide uitkomsten wordt aangenomen.
 3. In hPanel: volledige bestands- en databasebackup downloaden naar de
    Mac en de download controleren op volledigheid (aantal bestanden,
    databasegrootte, uitleesbare dump). Cronjoblijst exporteren.
