@@ -7,6 +7,17 @@ Scope van deze audit: het aangeleverde OpenCart-migratieplan, de live shop op
 repository. Er is niets gekocht, geen DNS gewijzigd, geen server ingericht en
 geen productiehandeling gedaan.
 
+Herziening dezelfde dag, na toegang tot de Mac van de eigenaar: de paragrafen
+2B, 5 (B2, B3) en Fase 0 zijn daarna alsnog geverifieerd tegen de echte lokale
+bronnen: `/Users/mpp/payment-batch/` (ochtendketen, MyParcel-afronding,
+OpenCart-client), de OpenCart multistore-handover op het bureaublad, een
+read-only OpenCart-instellingenexport van 17 oktober 2026 en 24 geëxporteerde
+n8n-workflows (stand 4 november 2026, instance op n8n Cloud). Secrets,
+wachtwoorden, API-keys en klantgegevens zijn daarbij niet overgenomen; er is
+alleen gekeken naar structuur, hostnamen, schema's en instellingsnamen. Wat
+alleen op de Hostinger-server zelf te zien is (de echte `config.php`-paden,
+hPanel-cronjobs, actuele adminversie) blijft als open punt gemarkeerd.
+
 Een daadwerkelijke verhuizing is zichtbaar en merkbaar voor klanten en valt
 daarom onder de autorisatiegrens in `AGENTS.override.md`: pas uitvoeren na een
 korte impactsamenvatting en een expliciet `ja` van de eigenaar.
@@ -17,10 +28,12 @@ Het aangeleverde plan is **niet uitvoerbaar zoals het er staat**. De richting
 (Cloudflare ervoor, eigen VPS erachter, origin afschermen) klopt in grote
 lijnen, maar het plan bevat concrete technische fouten waardoor SEO-URL's
 breken, Nginx niet herlaadt of Cloudflare-verkeer juist wordt geweigerd.
-Daarnaast mist het plan de koppelingen die de eigenaar zelf noemde
-(`ochtendketen` en `myparcel_afronding` komen in het plan helemaal niet voor)
-en is een deel van de aannames niet verifieerbaar zonder toegang tot de echte
-shops, hPanel, n8n en MyParcel.
+Daarnaast mist het plan de koppelingen die de eigenaar zelf noemde. Die zijn
+inmiddels op de Mac geverifieerd (paragraaf 2B) en ze veranderen het plan op
+het belangrijkste punt: de orderbevestigingen komen **niet** uit n8n/Gmail,
+zoals het plan aanneemt, maar uit OpenCart zelf via Hostinger-sendmail. De
+vaste randvoorwaarde "de VPS verstuurt geen mail" is voor deze shops dus
+onwaar, tenzij de mailinstelling bewust wordt omgezet.
 
 De belangrijkste correcties:
 
@@ -38,9 +51,20 @@ De belangrijkste correcties:
 4. Hostinger na 7 dagen opzeggen kan de mailbox doden. Live wijzen MX, SPF en
    `autoconfig`/`autodiscover` naar Hostinger. Zonder apart besluit over de
    mailbox is "definitief opzeggen" een mailstoring, geen opruimactie.
-5. Er bestaan twee productiesystemen voor hetzelfde domein (zie paragraaf 3).
-   Zolang niet besloten is welk systeem de toekomst is, heeft verhuizen van
-   het verkeerde systeem geen zin.
+5. Dit is geen verhuizing van één shop. Het is één OpenCart 3.x
+   multistore-installatie met één gedeelde database voor steroiden.com,
+   anabolenkopen.nl en afslank-injecties.nl (plus store-id's voor
+   stacker-pro.com en onderliggende landingspagina's). Eén switch raakt alle
+   shops tegelijk (paragraaf 2B).
+6. De dagelijkse keten draait op de Mac zelf, niet op Hostinger: launchd start
+   doordeweeks de ochtendketen, die rechtstreeks met de OpenCart-database
+   praat en daarna via de shopdomeinen de OpenCart-API aanroept. Na de
+   verhuizing moeten database-toegang voor de Mac, het API-pad door
+   Cloudflare en het echte klant-IP in PHP allemaal opnieuw kloppen, anders
+   stopt de betaal- en verzendverwerking de ochtend erna (paragraaf 5, B10).
+7. Er bestaan twee productiesystemen voor het domein afslank-injecties.nl
+   (zie paragraaf 3). Zolang niet besloten is welk systeem de toekomst is,
+   heeft verhuizen van het verkeerde systeem geen zin.
 
 ## 2. Wat live is geverifieerd (read-only, 8 november 2026)
 
@@ -60,6 +84,28 @@ De belangrijkste correcties:
 
 Let op: dit bewijst de stand van één domein op één moment. PHP-versie,
 OpenCart-versie, extensies en cronjobs zijn vanaf buiten niet vast te stellen.
+
+## 2B. Wat op de Mac is geverifieerd (de echte inrichting)
+
+Bronnen: `/Users/mpp/payment-batch/`, de multistore-handover
+(`Desktop/Steroiden.com/opencart_multistore_handover.txt`), de read-only
+OpenCart-export van 17 oktober 2026
+(`Desktop/Stacker-pro/old/Stacker-Pro-Audit-2026-10-17/onderzoek/`) en de
+n8n-workflowexports van 4 november 2026. Alle vier de live shops zijn daarna
+nogmaals read-only vanaf internet gecontroleerd.
+
+| Onderdeel | Gevonden werkelijkheid | Gevolg voor de verhuizing |
+| --- | --- | --- |
+| OpenCart-installatie | Eén OpenCart 3.x multistore-installatie, primaire webroot onder steroiden.com, database met prefix `oc_`, MariaDB 11.8.9 (export oktober 2026), PHP 8.3.36 live op alle shops | Niet per shop verhuizen. Bestanden, database en configuratie verhuizen één keer, voor alle stores tegelijk |
+| Stores | Store 0 steroiden.com, 1 anabolenkopen.nl, 2 afslank-injecties.nl; in `opencart_client.py` ook store 3 `www.stacker-pro.com` en store-id's 4 tot en met 7 die technisch naar steroiden.com routeren (landingspagina's zoals winstrol-kopen.nl en dianabol-kopen.nl). Alle gecontroleerde domeinen geven live `OCSESSID` en PHP 8.3 op Hostinger | Cloudflare moet per domein/zone worden ingericht, maar de origin-switch is één moment voor alles. Testmatrix moet alle stores bevatten |
+| Aanpassingen in de shop | Eigen mailsysteem `catalog/model/account/shopmail.inc.php` en `shopmail.php`, trackingkolommen op `oc_order` en `oc_order_history`, aangepaste admin, en 3 actieve OCMods (multistore/canonical routing, thema-assets, non-www 301) | Bestanden kopiëren is niet genoeg: de OCMod-cache (`storage/modification`) moet mee of opnieuw worden opgebouwd, en de maatwerkbestanden moeten als aparte checklist worden overgezet en getest |
+| Winkelmail | `config_mail_engine = mail`, verzending via Hostinger sendmail (`/usr/sbin/hsendmail`) volgens de handover. Centrale alerts gaan naar een Gmail-inbox, maar de klantmail zelf verstuurt OpenCart | Het plan-uitgangspunt "VPS verstuurt geen mail, n8n doet dat" klopt niet. Op de VPS moet PHP-mail opnieuw worden ingericht (eigen sendmail/postfix betekent verzenden vanaf het VPS-IP met SPF/DKIM-gevolgen per shopdomein) of OpenCart moet per store op SMTP worden gezet. Dit is een ontwerpbesluit vóór de switch, geen detail erna |
+| n8n | Instance op n8n Cloud (host `stackerpro.app.n8n.cloud`). Van 24 geëxporteerde workflows waren er op 4 november 2026 drie actief: "Stacker Pro - Klantmails na betaling (drip)", "Stacker Pro - directe mail na betaling" en het contactformulier; die halen hun gegevens hoofdzakelijk uit de Wix-kant van stacker-pro.com. De OpenCart-varianten ("OpenCart winkelmail", "drip OpenCart [uit]", "directe mail na betaling [OpenCart uit]") staan expliciet uit | Voor de OpenCart-verhuizing hoeft n8n vrijwel zeker niets te veranderen, maar dat moet met één testorder per store worden bewezen in plaats van aangenomen. De lokale `~/.n8n` op de Mac is alleen een testinstantie met één Telegram-workflow en is niet de productie |
+| Ochtendketen | launchd-agent `com.stackerpro.ochtendketen` op deze Mac, doordeweeks vanaf 10:15 uur met herhaalpogingen. Start `ochtendketen.py`, die `daily_pro.py` aanstuurt: bankbetalingen matchen over de OpenCart-stores en Wix, exports maken, en via `opencart_client.py` orders op Paid zetten | De keten staat los van de webhost maar is volledig afhankelijk van database- en API-bereikbaarheid (zie hieronder). Een geslaagde webswitch met een gebroken keten betekent de volgende ochtend geen betaalverwerking |
+| Database-toegang scripts | `opencart_client.py` verbindt vanaf de Mac rechtstreeks met de OpenCart-database (PyMySQL, instellingen `OPENCART_DB_HOST/PORT/NAME/USER` uit een `.env` buiten de scriptsmap). De webshop zelf gebruikt volgens de handover MySQL op localhost | Op de VPS moet externe databasetoegang voor het Mac-IP worden ingericht (alleen dat IP, eigen gebruiker, bij voorkeur tunnel) of de scripts moeten anders gaan werken. Poort 3306 publiek openzetten is geen optie. De `.env` van de scripts moet mee in de switch-checklist |
+| Order-API notificaties | Na een databasemutatie roept het script per store `https://<shopdomein>/index.php?route=api/order/history` aan met een zelf ingevoegde `oc_api_session`. OpenCart controleert daarbij het bron-IP; het script schrijft het database-bron-IP vooraf in `oc_api_ip` | Achter Cloudflare ziet PHP standaard het Cloudflare-IP in plaats van het Mac-IP. Zonder correcte `real_ip`-configuratie (B4) en een Cloudflare-pad dat deze API-calls niet blokkeert (geen bot-challenge op dat pad, gebruikersagent van urllib doorlaten) mislukken de Paid- en Shipped-mails. Dit moet vóór de switch met een testorder per store zijn bewezen |
+| MyParcel-afronding | `myparcel_afronding.py`, aangeroepen vanuit `daily_pro.py`: haalt zendingen op bij `api.myparcel.nl`, zet betaalde OpenCart-orders op Shipped en triggert de verzendmail via dezelfde OpenCart-API. MyParcel-sleutel komt uit dezelfde `.env`; er is in de code geen IP-whitelist aan MyParcel-kant gezien | Geen Hostinger-cronjob, dus verhuist niet mee en breekt niet door Hostinger-opzegging. Breekt wel als database, domein-API of mail het na de switch niet doen |
+| Wat nog steeds niet lokaal te zien is | De echte `config.php` en `admin/config.php` (inclusief `DIR_STORAGE`) staan alleen op de server. Hetzelfde geldt voor hPanel-cronjobs, de exacte puntversie van OpenCart in de admin en eventuele Hostinger-specifieke PHP-instellingen | Fase 0 houdt een korte serverinventaris via hPanel/SSH. Zonder die gegevens blijft vooral het storage-pad een aanname |
 
 ## 3. De repository is een tweede, ander systeem voor hetzelfde domein
 
@@ -132,33 +178,39 @@ vergelijken in Cloudflare, inclusief alle subdomeinen en TXT-records, en pas
 dan nameservers omzetten. DKIM-selector opzoeken in hPanel of in de headers
 van een echte verzonden mail.
 
-### B2. De twee MyParcel-scripts ontbreken volledig in het plan
+### B2. De twee MyParcel-scripts ontbreken volledig in het plan (inmiddels geverifieerd)
 
-De eigenaar noemt `ochtendketen` en `myparcel_afronding` als dagelijkse
-scripts. Het plan behandelt ze nergens. Onbekend is: waar ze draaien
-(Hostinger cron, n8n, een lokale machine), hoe ze inloggen (domein-API of
-directe databaseverbinding), of de MyParcel API-sleutel een IP-whitelist
-heeft, en of ze idempotent zijn als ze een dag dubbel of helemaal niet
-draaien. Als ze op Hostinger cronjobs staan, stoppen ze zodra Hostinger weg
-is. Deze inventaris is een harde voorwaarde vóór de switch, geen nazorg.
+Het aangeleverde plan behandelt `ochtendketen` en `myparcel_afronding`
+nergens. Inmiddels is op de Mac vastgesteld hoe ze werken (paragraaf 2B):
+ze draaien lokaal onder launchd en vanuit `daily_pro.py`, niet als Hostinger
+cronjobs. Ze stoppen dus niet als Hostinger wordt opgezegd. Ze breken wel
+als na de switch de directe databaseverbinding vanaf de Mac, het API-pad
+over de shopdomeinen of de OpenCart-mail niet meer werkt. Die drie
+afhankelijkheden horen als acceptatietest in de ochtend na de switch: de
+keten moet één volledige cyclus groen draaien voordat de verhuizing als
+geslaagd telt.
 
-### B3. De n8n-koppeling moet op richting én op DNS worden gecontroleerd
+### B3. De n8n-richting is inmiddels bekend: winkelmail komt niet uit n8n
 
-De Codex-opmerking over de richting klopt en gaat verder dan testen:
+De Codex-opmerking "controleer de richting" was terecht, maar het antwoord
+is nu bekend en het is anders dan beide plannen aannamen. De OpenCart
+winkelmail (bestelbevestiging, betaald, verzonden, annulering, refund) wordt
+door OpenCart zelf verstuurd via PHP `mail` op Hostinger-sendmail, met de
+eigen templates in `shopmail.inc.php`. De actieve n8n-workflows bedienen de
+Wix-kant van stacker-pro.com; de OpenCart-varianten staan uit. Gevolgen:
 
-- Pusht OpenCart naar n8n (webhook uitgaand): na de switch verandert het
-  bron-IP van die calls. Controleer of n8n of Gmail-kant een IP-whitelist,
-  webhooksecret of handtekening gebruikt.
-- Pollt n8n via het domein: dan ziet n8n na de Cloudflare-A-recordwijziging
-  automatisch de nieuwe server. Test dat met één echte testorder, niet met
-  een handmatige webhook-replay.
-- Verbindt n8n direct met MySQL op 3306: poort 3306 openzetten op een verder
-  dichtgetimmerde VPS is het zwakste punt van het hele ontwerp. Alleen met
-  bron-IP-restrictie, een eigen databasegebruiker met minimale rechten en
-  bij voorkeur een SSH- of WireGuard-tunnel. Noteer dat Hostinger shared
-  hosting meestal helemaal geen externe 3306-toegang geeft; als dit nu al
-  werkt, is de huidige inrichting anders dan het plan aanneemt en moet dat
-  eerst worden uitgezocht.
+- Er hoeft in n8n voor deze verhuizing niets te worden omgezet, op één
+  testorder per store als bewijs na.
+- De mailverhuizing zit in de shop zelf: per store beslissen of de VPS zelf
+  gaat versturen (dan SPF en DKIM per shopdomein inrichten en deliverability
+  testen) of dat OpenCart per store op SMTP wordt gezet, bijvoorbeeld via de
+  bestaande Hostinger-mailbox zolang die blijft bestaan, of via Gmail.
+  Zolang dat besluit er niet is, is iedere "VPS verstuurt geen mail"-zin in
+  het plan onjuist.
+- Verbindt er in de toekomst toch iets direct met MySQL op 3306, dan geldt:
+  alleen met bron-IP-restrictie, een eigen databasegebruiker met minimale
+  rechten en bij voorkeur een tunnel. Dat geldt nu al voor de Mac-scripts
+  zelf; zie B10.
 
 ### B4. Echt klant-IP in OpenCart komt niet vanzelf mee
 
@@ -210,7 +262,7 @@ klopt, is de suggestie dat daarmee alles gedekt is:
 
 Een order die na de export op de oude server landt, heeft daar al een
 `order_id`, een betaalreferentie voor de klant en mogelijk al een
-bevestigingsmail via n8n. Die order handmatig opnieuw aanmaken in de nieuwe
+bevestigingsmail uit OpenCart zelf. Die order handmatig opnieuw aanmaken in de nieuwe
 admin geeft een **nieuw** nummer, kan voorraad en rapportages dubbel tellen
 en stuurt mogelijk een tweede bevestiging. Correct herstel:
 
@@ -221,7 +273,7 @@ en stuurt mogelijk een tweede bevestiging. Correct herstel:
    oorspronkelijke `order_id` en alle gekoppelde tabellen, en daarna de
    auto-increment van `oc_order` boven het hoogste overgezette nummer zetten.
 3. Per overgezette order expliciet vastleggen of de bevestigingsmail al door
-   de oude keten is verstuurd, zodat n8n hem niet opnieuw stuurt.
+   de oude shop is verstuurd, zodat hij niet opnieuw wordt verstuurd.
 4. Rollback na livegang op de nieuwe server is hiermee ook begrensd: zodra er
    op de nieuwe database echte orders staan, is "A-record terugzetten" geen
    volledige rollback meer. Leg vóór de switch vast wie beslist en op basis
@@ -259,7 +311,28 @@ expliciet te sluiten of te accepteren:
   staat dan wel in logs van derden. Onvermijdelijk bij deze architectuur;
   bewust accepteren.
 
-## 6. Gecorrigeerd runbook voor afslank-injecties.nl (OpenCart)
+### B10. De Mac-keten stelt harde eisen aan de nieuwe server
+
+Omdat de ochtendketen en de MyParcel-afronding vanaf deze Mac draaien, moet
+de nieuwe inrichting drie dingen aantoonbaar ondersteunen:
+
+1. Directe databasetoegang vanaf het thuis-IP van de Mac naar de nieuwe
+   MariaDB, beperkt tot dat ene IP en het liefst via een SSH-tunnel die het
+   script zelf opent, zodat poort 3306 niet permanent openstaat. De
+   `OPENCART_DB_*`-waarden in de bestaande `.env` moeten tijdens de switch
+   worden omgezet en de oude waarden moeten als terugval bewaard blijven
+   tot de eerste groene ketenrun.
+2. Een Cloudflare-pad voor `index.php?route=api/order/history` dat
+   scriptverkeer doorlaat: geen Managed Challenge of botregel op dat pad en
+   geen snelheidsblokkade op het thuis-IP. Testen met het echte script en
+   een testorder, niet met alleen een browser.
+3. Correct hersteld bron-IP in PHP (B4). De OpenCart-API vergelijkt het
+   verzoek-IP met de door het script ingevoegde sessie; ziet PHP een
+   Cloudflare-IP, dan weigert de API en blijven de Paid- en Shipped-mails
+   uit, terwijl de order in de database wel al is omgezet. Dat is precies
+   het soort halve storing dat pas de volgende ochtend opvalt.
+
+## 6. Gecorrigeerd runbook voor alle OpenCart-stores tegelijk
 
 Dit runbook vervangt het aangeleverde stappenplan. Het voert niets uit; het
 is de checklist voor het moment dat de eigenaar `ja` geeft.
@@ -275,15 +348,16 @@ is de checklist voor het moment dat de eigenaar `ja` geeft.
       domeinen, en per domein de store-instellingen (URL en SSL-URL) in
       OpenCart.
 - [ ] Volledige DNS-zone exporteren uit hPanel; DKIM-selector vinden.
-- [ ] Mailstromen tekenen: welke mail verstuurt OpenCart zelf, welke loopt
-      via n8n/Gmail, welk afzendadres en welke SPF/DKIM horen daarbij.
-      Dripcampagne: waar draait die en wat triggert hem.
-- [ ] n8n-richting vaststellen (push, poll via domein, of directe DB) en de
-      drie scenario's uit B3 doorlopen.
-- [ ] `ochtendketen` en `myparcel_afronding` inventariseren volgens B2:
-      draaiplaats, schema, inlogmethode, API-sleutels, IP-whitelists,
-      idempotentie, handmatige herstartprocedure.
-- [ ] Alle Hostinger cronjobs exporteren.
+- [x] Mailstromen vastgesteld (paragraaf 2B): winkelmail verstuurt OpenCart
+      zelf via sendmail; n8n bedient de Wix-kant van stacker-pro.com. Open
+      punt dat overblijft: het mailbesluit voor de VPS (zelf versturen met
+      SPF/DKIM per domein, of OpenCart per store op SMTP zetten).
+- [x] `ochtendketen` en `myparcel_afronding` geïnventariseerd (paragraaf
+      2B): draaien op de Mac onder launchd en vanuit `daily_pro.py`.
+      Overgebleven acties: `.env`-hostwaarden voor de switch klaarzetten en
+      de acceptatietest uit B10 inplannen.
+- [ ] Alle Hostinger cronjobs exporteren (staat los van de Mac-keten; nog
+      niet gecontroleerd).
 - [ ] Besluit over de mailbox: blijft er een Hostinger-mailproduct bestaan,
       verhuist de mailbox mee, of gaat alle mail definitief via Gmail. Zonder
       dit besluit wordt Hostinger niet opgezegd.
@@ -304,7 +378,7 @@ is de checklist voor het moment dat de eigenaar `ja` geeft.
       (controle uit paragraaf 2). Idem http naar https.
 - [ ] Nameservers omzetten en wachten tot Cloudflare het domein actief meldt.
 - [ ] Controle: shop, checkout-pagina, admin-login, sitemap en één
-      n8n-cyclus werken via Cloudflare. Registrarverhuizing los hiervan en
+      testbestelling inclusief klantmail werken via Cloudflare. Registrarverhuizing los hiervan en
       niet in dezelfde week.
 
 ### Fase 2. VPS inrichten (nog niets wijst ernaar)
@@ -423,7 +497,7 @@ ssl_verify_client optional;
 - [ ] A-records `@` en `www` in Cloudflare naar het VPS-IP zetten.
 - [ ] Directe acceptatietest vanaf een netwerk buiten het eigen huis:
       homepage, product, testbestelling, admin toont echt klant-IP, order
-      zichtbaar in nieuwe admin, n8n pikt de order op, bevestigingsmail komt
+      zichtbaar in nieuwe admin, bevestigingsmail komt uit de nieuwe server aan, de ochtendketen-test (handmatig gestart) verwerkt een testorder inclusief MyParcel-controle,
       aan, MyParcel-flow voor die testorder gecontroleerd, sitemap laadt.
 - [ ] Nacontrole volgens B7 na 10 minuten én de volgende ochtend; ontbrekende
       data als SQL overzetten met behoud van ID's, nooit handmatig
@@ -443,15 +517,14 @@ ssl_verify_client optional;
 - [ ] Na een week: scancontrole op het kale VPS-IP (443 zonder SNI, 80,
       8443) vanaf een extern netwerk herhalen.
 
-## 7. Wat voor de andere shops nog volledig onbekend is
+## 7. Reikwijdte: één systeem, meerdere voorkanten
 
-Voor iedere andere shop dan `afslank-injecties.nl` geldt dit runbook pas na
-dezelfde Fase 0-inventaris per shop. Niet aannemen: OpenCart-versie,
-multi-store of losse installaties, PHP-versie, waar de database draait, welke
-extensies eigen rewrites of cronjobs meebrengen, en of n8n en de
-MyParcel-scripts per shop of centraal draaien. "Websites" meervoud betekent
-in de praktijk: dit runbook per shop doorlopen, met één gedeelde VPS- en
-Cloudflare-inrichting maar aparte sites, databases en certificaten per zone.
+Inmiddels is vastgesteld dat de OpenCart-shops één multistore-systeem zijn
+(paragraaf 2B). Het runbook geldt dus één keer voor het hele systeem, met
+per domein een eigen Cloudflare-zone, certificaten en testbestelling. De
+losse landingspagina's buiten OpenCart (zoals winstrol-kopen.nl, dat al via
+Cloudflare loopt) en de Wix-kant van stacker-pro.com vallen buiten deze
+verhuizing en mogen er niet stilzwijgend in worden meegenomen.
 
 ## 8. Beslissingen die vóór uitvoering nodig zijn
 
