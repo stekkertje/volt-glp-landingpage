@@ -155,7 +155,26 @@ Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
    Domeinenlijst met alle aliassen en subdomeinen vastleggen.
 4. Per domein de volledige DNS-zone exporteren, inclusief MX, SPF,
    DMARC, DKIM-selector (via hPanel of via de header van een echte
-   verzonden winkelmail), verificatie-records en autodiscovery.
+   verzonden winkelmail), verificatie-records en autodiscovery. Ook de
+   bestaande subdomeinen vastleggen (live bestaan in elk geval
+   stacker.steroiden.com en stacker-preview.steroiden.com; welke
+   preview- en testsubdomeinen er verder zijn, komt uit de zone-export,
+   niet uit een veronderstelde lijst) en per subdomein beslissen of het
+   meeverhuist of bewust buiten scope blijft.
+- De werkelijke `.htaccess` per webroot downloaden en er een
+   redirecttabel per host van maken: per regel de bron-URL, het doel en
+   de statuscode zoals live gemeten. Er draaien hosts met eigen regels
+   (live bevestigd op stacker-pro.com: `/betaalgegevens` geeft 301 naar
+   `/betaalmethode` en `/shop` geeft 200, terwijl dezelfde paden op
+   steroiden.com 404 geven). Die tabel wordt in Fase 3 regel voor regel
+   naar Nginx vertaald en na de switch per regel getest. Alleen de
+   SEO-rewrite overnemen is dus niet genoeg.
+- DNSSEC controleren: staan er DS-records bij de registrar, dan gaan
+   die er vóór de nameserverwijziging af en pas erna bij Cloudflare
+   weer op. Live stonden er op 8 november 2026 geen DS-records op de
+   gecontroleerde domeinen, dus dit is vermoedelijk een controle van
+   een minuut, maar hij hoort erbij omdat een vergeten DS-record de
+   hele zone onbereikbaar maakt.
 5. Baseline per store vastleggen voor latere vergelijking: statuscodes
    en redirects van homepage, een categorie, een product, winkelwagen,
    checkout, admin-login, `robots.txt` en `sitemap.xml`; inhoud van
@@ -208,12 +227,18 @@ zonder aannames uitvoerbaar.
    kiezen, zonder shopdomein erin.
 3. CloudPanel installeren met de officiële installatieopdracht
    inclusief de door CloudPanel gepubliceerde sha256-controle van het
-   installatiescript, met MariaDB. Direct daarna: admingebruiker
+   installatiescript, met MariaDB uit dezelfde serie als de huidige
+   database (11.8; de patchversie op de VPS kan iets afwijken van
+   11.8.9 en dat is prima). Direct daarna: admingebruiker
    aanmaken, 2FA aanzetten, poort 8443 en 22 in de firewall beperken
    tot het eigen IP. De noodtoegang van de aanbieder (console) testen
    voordat hij nodig is.
 4. Externe backups koppelen en één testterugzetting uitvoeren op een
    lege testsite. Een backup die nooit is teruggezet telt niet.
+   Aanvullend feit voor de planning: CloudPanel maakt zelf al elke
+   nacht om 03:15 uur een lokale databasedump met 7 dagen retentie.
+   Dat is een vangnet op dezelfde schijf, geen vervanging van de
+   externe backups.
 5. Volledige poortinventaris op de kale VPS (`ss -tulpn` en
    `ufw status verbose`): iedere luisterende dienst expliciet
    toestaan voor de juiste bron of dichtzetten, inclusief IPv6-besluit
@@ -266,9 +291,20 @@ Per domein/zone, shop blijft volledig op Hostinger:
    aanwijst. Daarna rechten controleren als site user: mappen 755,
    bestanden 644, alleen storage, cache en uploadmappen schrijfbaar
    voor de PHP-FPM-gebruiker.
-2. Database importeren in de nieuwe MariaDB. `config.php` en
-   `admin/config.php` aanpassen: databasegegevens en alle paden.
-   Mailinstelling per store direct op de in Fase 0 gekozen optie zetten.
+2. Database importeren in de nieuwe MariaDB, via de commandline en
+   niet via phpMyAdmin (CloudPanel waarschuwt zelf dat phpMyAdmin een
+   database kan beschadigen bij import/export): als site user met
+   `clpctl db:import --databaseName=... --file=dump.sql.gz`, en de
+   exitstatus controleren. `config.php` en `admin/config.php`
+   aanpassen: databasegegevens en alle paden. Mailinstelling per store
+   direct op de in Fase 0 gekozen optie zetten. Ook de rest van de
+   maatwerklijst uit de handover hoort op de overzetchecklist, niet
+   alleen de twee shopmail-bestanden: `catalog/controller/mail/order.php`,
+   `catalog/controller/api/order.php`,
+   `catalog/model/checkout/order.php` en de aangepaste adminbestanden.
+   Daarna de redirecttabel uit Fase 0 punt 11 regel voor regel in
+   dezelfde Vhost vertalen en de vertaling bewaren voor de test in
+   Fase 5.
 3. Nginx-configuratie uitsluitend via de CloudPanel Vhost Editor (een
    handmatig gewijzigd bestand wordt door CloudPanel overschreven).
    De bestaande `location /` wordt vervangen, nooit aangevuld met een
@@ -304,7 +340,15 @@ location ~ /\.(?!well-known) {
    geïnstalleerde feed-extensie; bij afwijking geldt de route uit de
    eigen admin, niet dit voorbeeld.
 4. Echt bron-IP herstellen in dezelfde Vhost, zodat OpenCart en de API
-   het echte afzender-IP zien in plaats van een Cloudflare-IP:
+   het echte afzender-IP zien in plaats van een Cloudflare-IP. Let op
+   de wisselwerking met Fase 4: zodra real-IP het bezoekersadres
+   herschrijft, toetsen allow/deny-regels dat bezoekersadres in plaats
+   van het Cloudflare-peeradres (gedocumenteerd gedrag in Nginx en
+   gemeld in de CloudPanel-community). Na het aanzetten van real-IP
+   moet de "alleen Cloudflare"-controle dus opnieuw worden getest,
+   zowel via het domein als met een directe IP-poging; als ze elkaar
+   bijten, wordt de controle op het peer-adres ingericht in plaats van
+   de site-toggle en de toggle alleen te gebruiken:
 
 ```
 set_real_ip_from <alle actuele Cloudflare-ranges, IPv4 en IPv6>;
@@ -357,18 +401,25 @@ real_ip_recursive on;
 1. Venster kiezen: nacht, doordeweeks, zodat de ochtendketen van 10:15
    uur als natuurlijke eindtest dient. Starttijd en hoogste `order_id`
    noteren vóór de export.
-2. Laatste bestandssynchronisatie (alleen gewijzigde bestanden) en een
-   verse database-export van Hostinger; importeren op de VPS.
-   Steekproef: aantallen orders, klanten en producten oud tegen nieuw
-   gelijk.
-3. In Cloudflare per zone de A-records omzetten naar het VPS-IP.
+2. Voorafgaand aan de nacht: de ochtendketen stilzetten zodat er geen
+   bekende schrijver actief is tijdens het venster
+   (`launchctl unload` van de launchd-agent), en geen handmatige
+   adminwijzigingen meer doen. De keten wordt pas weer geladen na de
+   groene controles in stap 6.
+3. Laatste bestandssynchronisatie (alleen gewijzigde bestanden) en een
+   verse database-export van Hostinger; importeren op de VPS met
+   dezelfde `clpctl db:import`-route als in Fase 3, daarna de
+   SMTP-instellingen per store opnieuw controleren omdat de import de
+   database-instellingen van de proefomgeving terugzet. Steekproef:
+   aantallen orders, klanten en producten oud tegen nieuw gelijk.
+4. In Cloudflare per zone de A-records omzetten naar het VPS-IP.
    Omdat al het verkeer al via Cloudflare loopt, is dit aan de edge
    vrijwel direct actief; er is geen DNS-propagatie naar bezoekers.
-4. Directe acceptatietest vanaf een ander netwerk dan thuis, per
+5. Directe acceptatietest vanaf een ander netwerk dan thuis, per
    store: homepage, product, testbestelling, order zichtbaar in de
    nieuwe admin met echt klant-IP, klantmail ontvangen, sitemap laadt,
    www-redirect klopt, geen 5xx in de Nginx- en PHP-logs.
-5. Ketenacceptatie nog dezelfde nacht, maar NOOIT door de echte
+6. Ketenacceptatie nog dezelfde nacht, maar NOOIT door de echte
    ochtendketen of `daily_pro.py` te draaien: een handmatige run zet
    dagstempels en afsluitvlaggen en blokkeert daarmee de echte run van
    die dag, en verwerkt bovendien een halve nachtbatch definitief.
@@ -379,7 +430,7 @@ real_ip_recursive on;
    echte ketenbewijsrun is de normale 10:15-run op de eerstvolgende
    werkdag; bij een switch in het weekend schuift dat bewijs dus naar
    maandag en blijft Hostinger tot dan onaangeroerd als terugval.
-6. Nacontrole na 10 minuten en de volgende ochtend vóór 10:15 uur:
+7. Nacontrole na 10 minuten en de volgende ochtend vóór 10:15 uur:
    op de oude database vergelijken wat er vanaf de genoteerde
    starttijd is veranderd in de tabellen uit Fase 0.6. Ontbrekende
    rijen worden als SQL overgezet met behoud van het oorspronkelijke
@@ -388,7 +439,7 @@ real_ip_recursive on;
    een order met de hand overtypen in de nieuwe admin (dat geeft een
    nieuw nummer en breekt de bankreferentie). Per overgezette order
    vastleggen of de klantmail al door de oude shop was verstuurd.
-7. Rollback: zolang er op de nieuwe database geen echte orders staan,
+8. Rollback: zolang er op de nieuwe database geen echte orders staan,
    is terugzetten de A-records terugwijzigen én de scriptkant
    terugzetten. De gedeelde `.env` (telegram-bot, weekly funnel en de
    scripts lezen hetzelfde bestand en procesvariabelen gaan vóór op
