@@ -63,8 +63,12 @@ heeft gedraaid.
       `index.php?route=api/order/history`, met een zelf aangemaakte
       `oc_api_session`. OpenCart controleert daarbij het bron-IP; het
       script schrijft het database-bron-IP vooraf in `oc_api_ip`.
-8. Betalingen zijn handmatige bankoverschrijvingen (PayTail-matching in de
-   keten). Er zijn geen betaalprovider-webhooks.
+8. Betalingen zijn uitsluitend handmatige bankoverschrijvingen
+   (bevestigd door de eigenaar op 8 november 2026). Er is geen
+   betaalprovider, geen PSP-koppeling en dus ook geen betaalwebhook,
+   callback of terugboekingssignaal dat tijdens de verhuizing gemist
+   kan worden. De keten matcht de binnengekomen overboekingen achteraf
+   (PayTail-matching) en zet orders dan pas op Paid of Partial Paid.
 9. Live baseline van afslank-injecties.nl (gemeten 8 november 2026):
    homepage 200, SEO-URL's werken, www geeft 301 naar apex, http geeft 301
    naar https, `/sitemap.xml` is dynamisch met image-sitemap,
@@ -174,10 +178,13 @@ Doel: de open punten uit paragraaf 2.10 sluiten. Geen wijzigingen.
    aflevering per store testen.
 8. Extensie-inventaris per store afmaken in de admin zelf, omdat de
    export van oktober 2026 geen feed-extensies en alleen de settings
-   van store 0 en 3 bevatte: welke betaalmethoden echt aanstaan
-   (bankoverschrijving, rembours, crypto, gratis checkout), welke
-   verzendextensies, en de maatwerkextensies waaronder `spcoupon`.
-   Alleen wat aanstaat hoeft getest, maar dat moet wel bekend zijn.
+   van store 0 en 3 bevatte: welke verzendextensies aanstaan en welke
+   maatwerkextensies er draaien, waaronder `spcoupon`. Voor betalen
+   geldt het bevestigde uitgangspunt uit paragraaf 2 punt 8: alleen
+   handmatige overboeking. Er hoeft dus geen betaalextensie te worden
+   uitgezocht of getest; de enige betaalcontrole is dat de checkout na
+   de verhuizing dezelfde overboekingsinstructies toont als ervoor
+   (opgenomen in de testmatrix).
 9. Credentialrotatie als eigen stap opnemen: in bestaande lokale
    bestanden staan inloggegevens en sleutels in platte tekst (waarden
    hier bewust niet herhaald). Admin-, API- en tokengeheimen worden
@@ -420,7 +427,9 @@ dripcampagne leest daar orders en coupons via de `spcoupon`-extensie):
 2. `robots.txt` is identiek aan de baseline en `sitemap.xml` geeft de
    dynamische XML met producten.
 3. Winkelwagen vullen, checkout openen en een gemarkeerde
-   testbestelling plaatsen.
+   testbestelling plaatsen. De checkout toont daarbij alleen de
+   overboekingsinstructies, zoals vóór de verhuizing; er hoort geen
+   betaalprovider-stap of externe betaalpagina te verschijnen.
 4. Testorder verschijnt in de admin met het echte klant-IP, de
    juiste store en het juiste ordernummer.
 5. Klant ontvangt de bestelbevestiging van de nieuwe server, met de
